@@ -1,8 +1,13 @@
 import { createHash } from "node:crypto";
 import { computeConfigHash, type ExplanationConfig } from "./config-contract.js";
 import { groupChildrenDeterministically, type GroupingWarning } from "./child-grouping.js";
+import {
+  evaluatePostSummaryPolicy,
+  evaluatePreSummaryPolicy,
+  type ParentPolicyDiagnostics,
+} from "./pedagogical-policy.js";
 import type { ProviderClient } from "./openai-provider.js";
-import { generateParentSummary } from "./summary-pipeline.js";
+import { generateParentSummary, SummaryValidationError } from "./summary-pipeline.js";
 
 export interface LeafNodeInput {
   id: string;
@@ -25,6 +30,7 @@ export interface ExplanationTreeNode {
   whyTrueFromChildren?: string;
   newTermsIntroduced?: string[];
   evidenceRefs: string[];
+  policyDiagnostics?: ParentPolicyDiagnostics;
 }
 
 export interface GroupPlan {
@@ -49,6 +55,7 @@ export interface ExplanationTree {
   configHash: string;
   groupPlan: GroupPlan[];
   groupingDiagnostics: GroupingLayerDiagnostics[];
+  policyDiagnosticsByParent: Record<string, ParentPolicyDiagnostics>;
   maxDepth: number;
 }
 
@@ -59,7 +66,14 @@ export interface TreeBuildRequest {
 }
 
 export interface TreeValidationIssue {
-  code: "missing_root" | "missing_node" | "not_connected" | "leaf_not_preserved" | "branching_factor";
+  code:
+    | "missing_root"
+    | "missing_node"
+    | "not_connected"
+    | "leaf_not_preserved"
+    | "branching_factor"
+    | "policy_missing"
+    | "policy_violation";
   message: string;
   details?: Record<string, unknown>;
 }
@@ -67,6 +81,16 @@ export interface TreeValidationIssue {
 export interface TreeValidationResult {
   ok: boolean;
   issues: TreeValidationIssue[];
+}
+
+export class TreePolicyError extends Error {
+  public readonly diagnostics: ParentPolicyDiagnostics;
+
+  public constructor(message: string, diagnostics: ParentPolicyDiagnostics) {
+    super(message);
+    this.name = "TreePolicyError";
+    this.diagnostics = diagnostics;
+  }
 }
 
 export async function buildRecursiveExplanationTree(
@@ -79,6 +103,7 @@ export async function buildRecursiveExplanationTree(
   const leafById = new Map(leaves.map((leaf) => [leaf.id, leaf]));
   const groupPlan: GroupPlan[] = [];
   const groupingDiagnostics: GroupingLayerDiagnostics[] = [];
+  const policyDiagnosticsByParent: Record<string, ParentPolicyDiagnostics> = {};
 
   for (const leaf of leaves) {
     nodes[leaf.id] = {
@@ -100,6 +125,7 @@ export async function buildRecursiveExplanationTree(
       configHash: computeConfigHash(request.config),
       groupPlan,
       groupingDiagnostics,
+      policyDiagnosticsByParent,
       maxDepth: 0,
     };
 
@@ -154,34 +180,64 @@ export async function buildRecursiveExplanationTree(
 
       const children = groupNodeIds.map((nodeId) => {
         const node = nodes[nodeId];
+        const leafInput = leafById.get(node.id);
         return {
           id: node.id,
           statement: node.statement,
           complexity: node.complexityScore,
+          prerequisiteIds: leafInput?.prerequisiteIds,
         };
       });
 
-      const summaryResult = await generateParentSummary(provider, {
+      const preSummaryDecision = evaluatePreSummaryPolicy(children, request.config);
+      if (!preSummaryDecision.ok) {
+        throw new TreePolicyError("Pre-summary pedagogical policy failed.", {
+          depth,
+          groupIndex: index,
+          retriesUsed: 0,
+          preSummary: preSummaryDecision,
+          postSummary: {
+            ok: true,
+            violations: [],
+            metrics: {
+              complexitySpread: 0,
+              prerequisiteOrderViolations: 0,
+              introducedTermCount: 0,
+              evidenceCoverageRatio: 1,
+              vocabularyContinuityRatio: 1,
+              vocabularyContinuityFloor: 1,
+            },
+          },
+        });
+      }
+
+      const parentSummary = await generatePolicyCompliantParentSummary(
+        provider,
         children,
-        config: request.config,
-      });
+        request.config,
+        depth,
+        index,
+        preSummaryDecision,
+      );
 
       const parentId = buildParentNodeId(depth, index, groupNodeIds);
       const parentNode: ExplanationTreeNode = {
         id: parentId,
         kind: "parent",
-        statement: summaryResult.summary.parent_statement,
+        statement: parentSummary.summary.parent_statement,
         childIds: groupNodeIds.slice(),
         depth,
-        complexityScore: summaryResult.summary.complexity_score,
-        abstractionScore: summaryResult.summary.abstraction_score,
-        confidence: summaryResult.summary.confidence,
-        whyTrueFromChildren: summaryResult.summary.why_true_from_children,
-        newTermsIntroduced: summaryResult.summary.new_terms_introduced,
-        evidenceRefs: summaryResult.summary.evidence_refs,
+        complexityScore: parentSummary.summary.complexity_score,
+        abstractionScore: parentSummary.summary.abstraction_score,
+        confidence: parentSummary.summary.confidence,
+        whyTrueFromChildren: parentSummary.summary.why_true_from_children,
+        newTermsIntroduced: parentSummary.summary.new_terms_introduced,
+        evidenceRefs: parentSummary.summary.evidence_refs,
+        policyDiagnostics: parentSummary.policyDiagnostics,
       };
 
       nodes[parentId] = parentNode;
+      policyDiagnosticsByParent[parentId] = parentSummary.policyDiagnostics;
       nextLayerIds.push(parentId);
       groupPlan.push({
         depth,
@@ -202,6 +258,7 @@ export async function buildRecursiveExplanationTree(
     configHash: computeConfigHash(request.config),
     groupPlan,
     groupingDiagnostics,
+    policyDiagnosticsByParent,
     maxDepth: depth,
   };
 
@@ -248,6 +305,26 @@ export function validateExplanationTree(tree: ExplanationTree, maxChildrenPerPar
         message: "Parent node exceeds maxChildrenPerParent.",
         details: { nodeId, childCount: node.childIds.length, maxChildrenPerParent },
       });
+    }
+
+    if (node.kind === "parent") {
+      if (!node.policyDiagnostics) {
+        issues.push({
+          code: "policy_missing",
+          message: "Parent node is missing pedagogy policy diagnostics.",
+          details: { nodeId },
+        });
+      } else if (!node.policyDiagnostics.preSummary.ok || !node.policyDiagnostics.postSummary.ok) {
+        issues.push({
+          code: "policy_violation",
+          message: "Parent node contains failed pedagogical policy decisions.",
+          details: {
+            nodeId,
+            preSummaryViolations: node.policyDiagnostics.preSummary.violations.map((violation) => violation.code),
+            postSummaryViolations: node.policyDiagnostics.postSummary.violations.map((violation) => violation.code),
+          },
+        });
+      }
     }
 
     for (const childId of node.childIds) {
@@ -334,4 +411,101 @@ function computeDepthLimit(leafCount: number, maxChildrenPerParent: number): num
 
   const base = Math.max(2, maxChildrenPerParent);
   return Math.ceil(Math.log(leafCount) / Math.log(base)) + 2;
+}
+
+async function generatePolicyCompliantParentSummary(
+  provider: ProviderClient,
+  children: Array<{ id: string; statement: string; complexity?: number; prerequisiteIds?: string[] }>,
+  config: ExplanationConfig,
+  depth: number,
+  groupIndex: number,
+  preSummaryDecision: ParentPolicyDiagnostics["preSummary"],
+): Promise<{ summary: Awaited<ReturnType<typeof generateParentSummary>>["summary"]; policyDiagnostics: ParentPolicyDiagnostics }> {
+  const maxAttempts = 2;
+  let retriesUsed = 0;
+  let lastPostSummary = evaluatePostSummaryPolicy(children, emptySummary(children), config);
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      const result = await generateParentSummary(provider, {
+        children,
+        config,
+        systemPrompt:
+          attempt === 0
+            ? undefined
+            : [
+                "You are a proof-grounded summarizer.",
+                "Use only child-grounded vocabulary except declared new_terms_introduced.",
+                "Cite every child ID in evidence_refs.",
+                "Keep parent claims explicitly entailed by child statements.",
+                "Output strict JSON only.",
+              ].join(" "),
+      });
+
+      const postSummaryDecision = evaluatePostSummaryPolicy(children, result.summary, config);
+      lastPostSummary = postSummaryDecision;
+      if (postSummaryDecision.ok) {
+        retriesUsed = attempt;
+        return {
+          summary: result.summary,
+          policyDiagnostics: {
+            depth,
+            groupIndex,
+            retriesUsed,
+            preSummary: preSummaryDecision,
+            postSummary: postSummaryDecision,
+          },
+        };
+      }
+    } catch (error) {
+      if (error instanceof SummaryValidationError) {
+        lastPostSummary = {
+          ok: false,
+          violations: error.diagnostics.violations.map((violation) => ({
+            code: violation.code === "term_budget" ? "term_budget" : "vocabulary_continuity",
+            message: violation.message,
+            details: violation.details,
+          })),
+          metrics: {
+            complexitySpread: 0,
+            prerequisiteOrderViolations: 0,
+            introducedTermCount: 0,
+            evidenceCoverageRatio: 0,
+            vocabularyContinuityRatio: 0,
+            vocabularyContinuityFloor: 1,
+          },
+        };
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  throw new TreePolicyError("Failed to produce a policy-compliant parent summary after deterministic retries.", {
+    depth,
+    groupIndex,
+    retriesUsed: maxAttempts - 1,
+    preSummary: preSummaryDecision,
+    postSummary: lastPostSummary,
+  });
+}
+
+function emptySummary(children: Array<{ id: string }>): {
+  parent_statement: string;
+  why_true_from_children: string;
+  new_terms_introduced: string[];
+  complexity_score: number;
+  abstraction_score: number;
+  evidence_refs: string[];
+  confidence: number;
+} {
+  return {
+    parent_statement: "",
+    why_true_from_children: "",
+    new_terms_introduced: [],
+    complexity_score: 0,
+    abstraction_score: 0,
+    evidence_refs: children.map((child) => child.id),
+    confidence: 0,
+  };
 }

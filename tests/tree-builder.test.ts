@@ -3,6 +3,7 @@ import { normalizeConfig } from "../src/config-contract.js";
 import type { GenerateRequest, GenerateResult, ProviderClient } from "../src/openai-provider.js";
 import {
   buildRecursiveExplanationTree,
+  TreePolicyError,
   validateExplanationTree,
   type ExplanationTree,
 } from "../src/tree-builder.js";
@@ -27,6 +28,7 @@ describe("tree builder", () => {
     expect(tree.maxDepth).toBeGreaterThan(0);
     expect(tree.groupingDiagnostics.length).toBeGreaterThan(0);
     expect(tree.groupingDiagnostics.every((layer) => layer.complexitySpreadByGroup.every((spread) => spread <= 2))).toBe(true);
+    expect(Object.keys(tree.policyDiagnosticsByParent).length).toBeGreaterThan(0);
 
     const validation = validateExplanationTree(tree, config.maxChildrenPerParent);
     expect(validation.ok).toBe(true);
@@ -48,6 +50,7 @@ describe("tree builder", () => {
     expect(tree.maxDepth).toBe(0);
     expect(tree.groupPlan).toHaveLength(0);
     expect(tree.groupingDiagnostics).toHaveLength(0);
+    expect(tree.policyDiagnosticsByParent).toEqual({});
 
     const validation = validateExplanationTree(tree, config.maxChildrenPerParent);
     expect(validation.ok).toBe(true);
@@ -86,6 +89,7 @@ describe("tree builder", () => {
       configHash: "hash",
       groupPlan: [],
       groupingDiagnostics: [],
+      policyDiagnosticsByParent: {},
       maxDepth: 1,
       nodes: {
         p1: {
@@ -120,6 +124,21 @@ describe("tree builder", () => {
     expect(validation.issues.map((issue) => issue.code)).toContain("leaf_not_preserved");
     expect(validation.issues.map((issue) => issue.code)).toContain("not_connected");
   });
+
+  test("fails with policy error when parent cannot satisfy evidence coverage after retry", async () => {
+    const config = normalizeConfig({ maxChildrenPerParent: 2 });
+    const provider = nonCompliantEvidenceProvider();
+
+    await expect(
+      buildRecursiveExplanationTree(provider, {
+        config,
+        leaves: [
+          { id: "l1", statement: "Invariant holds at initialization." },
+          { id: "l2", statement: "Invariant is preserved by transition." },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(TreePolicyError);
+  });
 });
 
 function deterministicSummaryProvider(): ProviderClient {
@@ -153,4 +172,26 @@ function extractChildIds(request: GenerateRequest): string[] {
   const prompt = request.messages[1]?.content ?? "";
   const matches = [...prompt.matchAll(/id=([^\s]+)/g)];
   return matches.map((match) => match[1]).sort((a, b) => a.localeCompare(b));
+}
+
+function nonCompliantEvidenceProvider(): ProviderClient {
+  return {
+    generate: async () => ({
+      text: JSON.stringify({
+        parent_statement: "Parent(l1+l2)",
+        why_true_from_children: "l1 entails the claim.",
+        new_terms_introduced: [],
+        complexity_score: 3,
+        abstraction_score: 3,
+        evidence_refs: ["l1"],
+        confidence: 0.9,
+      }),
+      model: "mock",
+      finishReason: "stop",
+      raw: {},
+    }),
+    stream: async function* () {
+      return;
+    },
+  };
 }

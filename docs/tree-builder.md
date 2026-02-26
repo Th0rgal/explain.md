@@ -6,6 +6,7 @@ Issue: #9
 - Build a single-root explanation tree from normalized leaf nodes.
 - Use deterministic inductive grouping with `maxChildrenPerParent` as a hard branching cap.
 - Generate each parent node through the validated parent-summary pipeline.
+- Enforce pedagogical policy checks before and after each parent summary.
 - Validate structural invariants before returning the tree.
 
 ## Deterministic behavior
@@ -14,6 +15,7 @@ Issue: #9
 - Parent IDs are deterministic hashes of `(depth, groupIndex, childIds)`.
 - Parent generation runs in deterministic request order.
 - Grouping diagnostics are preserved per depth for auditability.
+- Policy diagnostics are attached per parent (`preSummary`, `postSummary`, `retriesUsed`).
 
 ## Tree validity checks
 `validateExplanationTree` enforces:
@@ -22,6 +24,20 @@ Issue: #9
 - All nodes are reachable from root (connected rooted DAG view).
 - Every declared leaf is reachable from root.
 - No parent exceeds `maxChildrenPerParent`.
+- Every parent includes policy diagnostics.
+- Every parent policy decision is successful (`preSummary.ok` and `postSummary.ok`).
+
+## Pedagogy policy integration (#25)
+- Pre-summary checks:
+  - sibling complexity spread must stay within `complexityBandWidth`
+  - in-group prerequisite ordering must remain topological
+- Post-summary checks:
+  - `evidence_refs` must cover all child IDs in the group
+  - `new_terms_introduced` must satisfy `termIntroductionBudget`
+  - vocabulary continuity ratio must satisfy deterministic audience/detail floor
+- Rewrite loop:
+  - the builder retries once with a stricter deterministic system prompt
+  - if still non-compliant, the builder fails with `TreePolicyError` and machine-readable diagnostics
 
 ## Degenerate and boundary cases
 - One leaf: returns that leaf as root with depth `0`.
@@ -39,3 +55,4 @@ Request shape:
 
 Output includes:
 - `rootId`, `leafIds`, `nodes`, `configHash`, `groupPlan`, `groupingDiagnostics`, `maxDepth`
+- `policyDiagnosticsByParent`
