@@ -12,6 +12,7 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #7: inductive child-grouping algorithm with deterministic prerequisite-aware scheduling and complexity-bounded sibling partitioning.
 - Issue #8: parent-summary generation pipeline with strict structured-output schema, deterministic prompting, and critic validation diagnostics.
 - Issue #9: recursive single-root tree builder with deterministic layering, structural validity checks, and leaf-preservation guarantees.
+- Issue #17: browser-triggered verification workflow core with deterministic queue/status lifecycle, reproducibility contracts, and canonical ledger persistence.
 
 ## Local checks
 ```bash
@@ -39,3 +40,4 @@ EXPLAIN_MD_LIVE_RPC_API_KEY=... npm run test:live:summary
 - [Inductive child grouping](docs/child-grouping.md)
 - [Parent summary pipeline](docs/summary-pipeline.md)
 - [Recursive tree builder](docs/tree-builder.md)
+- [Browser-triggered verification flow](docs/verification-flow.md)
