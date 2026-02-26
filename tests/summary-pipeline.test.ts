@@ -1,0 +1,207 @@
+import { describe, expect, test } from "vitest";
+import { normalizeConfig } from "../src/config-contract.js";
+import type { ProviderClient } from "../src/openai-provider.js";
+import { SummaryValidationError, buildSummaryPromptMessages, generateParentSummary } from "../src/summary-pipeline.js";
+
+describe("summary pipeline", () => {
+  test("generates validated parent summary", async () => {
+    const config = normalizeConfig({
+      complexityLevel: 3,
+      complexityBandWidth: 1,
+      termIntroductionBudget: 2,
+    });
+
+    const provider = mockProvider({
+      parent_statement: "Storage bounds are preserved after update operations.",
+      why_true_from_children: "c1 establishes bounds and c2 preserves bounds after updates.",
+      new_terms_introduced: ["preserved"],
+      complexity_score: 3,
+      abstraction_score: 3,
+      evidence_refs: ["c1", "c2"],
+      confidence: 0.88,
+    });
+
+    const result = await generateParentSummary(provider, {
+      config,
+      children: [
+        { id: "c2", statement: "Update operations preserve storage bounds for all keys." },
+        { id: "c1", statement: "Storage bounds are established by initialization." },
+      ],
+    });
+
+    expect(result.diagnostics.ok).toBe(true);
+    expect(result.summary.evidence_refs).toEqual(["c1", "c2"]);
+  });
+
+  test("rejects unknown evidence refs", async () => {
+    const config = normalizeConfig({});
+    const provider = mockProvider({
+      parent_statement: "Bounds remain stable.",
+      why_true_from_children: "This follows from c1 and x9.",
+      new_terms_introduced: [],
+      complexity_score: 3,
+      abstraction_score: 3,
+      evidence_refs: ["c1", "x9"],
+      confidence: 0.7,
+    });
+
+    await expect(
+      generateParentSummary(provider, {
+        config,
+        children: [{ id: "c1", statement: "Bound is established." }],
+      }),
+    ).rejects.toMatchObject({
+      name: "SummaryValidationError",
+      diagnostics: {
+        ok: false,
+      },
+    });
+  });
+
+  test("rejects outputs outside complexity band", async () => {
+    const config = normalizeConfig({ complexityLevel: 2, complexityBandWidth: 0 });
+    const provider = mockProvider({
+      parent_statement: "Bounds remain stable.",
+      why_true_from_children: "follows from c1.",
+      new_terms_introduced: [],
+      complexity_score: 4,
+      abstraction_score: 2,
+      evidence_refs: ["c1"],
+      confidence: 0.65,
+    });
+
+    const thrown = await captureError(() =>
+      generateParentSummary(provider, {
+        config,
+        children: [{ id: "c1", statement: "Bound is established." }],
+      }),
+    );
+
+    expect(thrown).toBeInstanceOf(SummaryValidationError);
+    expect((thrown as SummaryValidationError).diagnostics.violations.map((v) => v.code)).toContain("complexity_band");
+  });
+
+  test("rejects excess new terms over configured budget", async () => {
+    const config = normalizeConfig({ termIntroductionBudget: 1 });
+    const provider = mockProvider({
+      parent_statement: "Invariant monoid coherence is preserved.",
+      why_true_from_children: "c1 and c2 imply this.",
+      new_terms_introduced: ["invariant", "monoid"],
+      complexity_score: 3,
+      abstraction_score: 3,
+      evidence_refs: ["c1", "c2"],
+      confidence: 0.75,
+    });
+
+    await expect(
+      generateParentSummary(provider, {
+        config,
+        children: [
+          { id: "c1", statement: "State is preserved." },
+          { id: "c2", statement: "Transition preserves state." },
+        ],
+      }),
+    ).rejects.toMatchObject({
+      diagnostics: {
+        ok: false,
+      },
+    });
+  });
+
+  test("rejects low evidence-token coverage in parent statement", async () => {
+    const config = normalizeConfig({});
+    const provider = mockProvider({
+      parent_statement: "Quantum lattice harmonics optimize nebula entropy gradients.",
+      why_true_from_children: "c1 implies this.",
+      new_terms_introduced: [],
+      complexity_score: 3,
+      abstraction_score: 3,
+      evidence_refs: ["c1"],
+      confidence: 0.6,
+    });
+
+    const thrown = await captureError(() =>
+      generateParentSummary(provider, {
+        config,
+        children: [{ id: "c1", statement: "Storage bounds are preserved by updates." }],
+      }),
+    );
+    expect(thrown).toBeInstanceOf(SummaryValidationError);
+    expect((thrown as SummaryValidationError).diagnostics.violations.map((v) => v.code)).toContain("unsupported_terms");
+  });
+
+  test("extracts JSON from fenced block", async () => {
+    const config = normalizeConfig({});
+    const provider = {
+      generate: async () => ({
+        text: "```json\n" +
+          JSON.stringify({
+            parent_statement: "Storage bounds are preserved after each update.",
+            why_true_from_children: "c1 and c2 prove preservation.",
+            new_terms_introduced: ["preserved"],
+            complexity_score: 3,
+            abstraction_score: 3,
+            evidence_refs: ["c1", "c2"],
+            confidence: 0.8,
+          }) +
+          "\n```",
+        model: "test",
+        finishReason: "stop",
+        raw: {},
+      }),
+      stream: async function* () {
+        return;
+      },
+    } satisfies ProviderClient;
+
+    const result = await generateParentSummary(provider, {
+      config,
+      children: [
+        { id: "c1", statement: "Storage bounds are established." },
+        { id: "c2", statement: "Each update keeps bounds true." },
+      ],
+    });
+
+    expect(result.summary.parent_statement).toContain("preserved");
+  });
+
+  test("prompt builder is deterministic and sorted by child id", () => {
+    const config = normalizeConfig({});
+    const messages = buildSummaryPromptMessages(
+      [
+        { id: "c2", statement: "second" },
+        { id: "c1", statement: "first" },
+      ]
+        .slice()
+        .sort((a, b) => a.id.localeCompare(b.id)),
+      config,
+    );
+
+    expect(messages).toHaveLength(2);
+    const userPrompt = messages[1].content;
+    expect(userPrompt.indexOf("id=c1")).toBeLessThan(userPrompt.indexOf("id=c2"));
+  });
+});
+
+function mockProvider(payload: unknown): ProviderClient {
+  return {
+    generate: async () => ({
+      text: JSON.stringify(payload),
+      model: "test-model",
+      finishReason: "stop",
+      raw: payload,
+    }),
+    stream: async function* () {
+      return;
+    },
+  };
+}
+
+async function captureError(run: () => Promise<unknown>): Promise<unknown> {
+  try {
+    await run();
+    throw new Error("Expected rejection.");
+  } catch (error) {
+    return error;
+  }
+}
