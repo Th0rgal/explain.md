@@ -1,0 +1,22 @@
+{
+  "name": "explain-md",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:live": "npm run -s build && node scripts/live-provider-check.mjs",
+    "test:live:summary": "npm run -s build && node scripts/live-summary-check.mjs",
+    "bench:dependency-graph": "npm run -s build && node scripts/benchmark-dependency-graph.mjs",
+    "ingest:lean": "npm run -s build && node scripts/lean-ingest.mjs",
+    "eval:domain-adapters": "npm run -s build && node scripts/eval-domain-adapters.mjs",
+    "eval:tree-pipeline": "npm run -s build && node scripts/eval-tree-pipeline.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.4.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}
