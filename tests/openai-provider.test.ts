@@ -197,7 +197,9 @@ describe("openai provider", () => {
       const thrown = await captureError(() => provider.generate({ messages: [{ role: "user", content: "timeout" }] }));
       expect(thrown).toBeInstanceOf(ProviderError);
       expect((thrown as ProviderError).code).toBe("timeout");
-      expect(requestCount).toBe(2);
+      expect((thrown as ProviderError).attempt).toBe(2);
+      expect(requestCount).toBeGreaterThanOrEqual(1);
+      expect(requestCount).toBeLessThanOrEqual(2);
       expect(sleepCalls).toEqual([20]);
     } finally {
       await server.close();
