@@ -36,7 +36,7 @@ describe("config contract", () => {
     const config = normalizeConfig({
       maxChildrenPerParent: 1,
       language: "english",
-      modelProvider: { temperature: 2 },
+      modelProvider: { temperature: 2, timeoutMs: 100, maxRetries: 99 },
       audienceLevel: "expert",
       readingLevelTarget: "elementary",
     });
@@ -46,6 +46,8 @@ describe("config contract", () => {
     expect(result.errors.map((e) => e.path)).toContain("maxChildrenPerParent");
     expect(result.errors.map((e) => e.path)).toContain("language");
     expect(result.errors.map((e) => e.path)).toContain("modelProvider.temperature");
+    expect(result.errors.map((e) => e.path)).toContain("modelProvider.timeoutMs");
+    expect(result.errors.map((e) => e.path)).toContain("modelProvider.maxRetries");
     expect(result.errors.map((e) => e.path)).toContain("readingLevelTarget");
   });
 
