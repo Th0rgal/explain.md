@@ -129,7 +129,7 @@ describe("tree builder", () => {
     const config = normalizeConfig({ maxChildrenPerParent: 2 });
     const provider = nonCompliantEvidenceProvider();
 
-    await expect(
+    const thrown = await captureError(() =>
       buildRecursiveExplanationTree(provider, {
         config,
         leaves: [
@@ -137,7 +137,11 @@ describe("tree builder", () => {
           { id: "l2", statement: "Invariant is preserved by transition." },
         ],
       }),
-    ).rejects.toBeInstanceOf(TreePolicyError);
+    );
+
+    expect(thrown).toBeInstanceOf(TreePolicyError);
+    const diagnostics = (thrown as TreePolicyError).diagnostics;
+    expect(diagnostics.postSummary.violations.map((violation) => violation.code)).toContain("evidence_coverage");
   });
 
   test("builds when prerequisite order is topological but not lexical by id", async () => {
@@ -185,6 +189,19 @@ describe("tree builder", () => {
     expect(tree.rootId).toMatch(/^p_/);
     const validation = validateExplanationTree(tree, config.maxChildrenPerParent);
     expect(validation.ok).toBe(true);
+  });
+
+  test("rejects invalid maxChildrenPerParent before tree loop", async () => {
+    const badConfig = { ...normalizeConfig({}), maxChildrenPerParent: 0 };
+    await expect(
+      buildRecursiveExplanationTree(deterministicSummaryProvider(), {
+        config: badConfig,
+        leaves: [
+          { id: "l1", statement: "A" },
+          { id: "l2", statement: "B" },
+        ],
+      }),
+    ).rejects.toThrow("maxChildrenPerParent");
   });
 });
 
@@ -241,4 +258,13 @@ function nonCompliantEvidenceProvider(): ProviderClient {
       return;
     },
   };
+}
+
+async function captureError(run: () => Promise<unknown>): Promise<unknown> {
+  try {
+    await run();
+    throw new Error("Expected rejection.");
+  } catch (error) {
+    return error;
+  }
 }

@@ -1,7 +1,12 @@
 import { describe, expect, test } from "vitest";
 import { normalizeConfig } from "../src/config-contract.js";
 import type { ProviderClient } from "../src/openai-provider.js";
-import { SummaryValidationError, buildSummaryPromptMessages, generateParentSummary } from "../src/summary-pipeline.js";
+import {
+  SummaryValidationError,
+  buildSummaryPromptMessages,
+  generateParentSummary,
+  validateParentSummary,
+} from "../src/summary-pipeline.js";
 
 describe("summary pipeline", () => {
   test("generates validated parent summary", async () => {
@@ -180,6 +185,45 @@ describe("summary pipeline", () => {
     expect(messages).toHaveLength(2);
     const userPrompt = messages[1].content;
     expect(userPrompt.indexOf("id=c1")).toBeLessThan(userPrompt.indexOf("id=c2"));
+  });
+
+  test("validateParentSummary reports schema issues instead of throwing on malformed arrays", () => {
+    const diagnostics = validateParentSummary(
+      {
+        parent_statement: "p",
+        why_true_from_children: "c",
+        new_terms_introduced: "bad" as unknown as string[],
+        complexity_score: 3,
+        abstraction_score: 3,
+        evidence_refs: "bad" as unknown as string[],
+        confidence: 0.9,
+      },
+      [{ id: "c1", statement: "claim" }],
+      normalizeConfig({}),
+    );
+
+    expect(diagnostics.ok).toBe(false);
+    expect(diagnostics.violations.map((violation) => violation.code)).toContain("schema");
+  });
+
+  test("coverage stemmer treats 'updates' and 'update' consistently", async () => {
+    const config = normalizeConfig({});
+    const provider = mockProvider({
+      parent_statement: "Storage update remains safe.",
+      why_true_from_children: "c1 proves updates are safe.",
+      new_terms_introduced: [],
+      complexity_score: 3,
+      abstraction_score: 3,
+      evidence_refs: ["c1"],
+      confidence: 0.9,
+    });
+
+    const result = await generateParentSummary(provider, {
+      config,
+      children: [{ id: "c1", statement: "Storage updates remain safe." }],
+    });
+
+    expect(result.diagnostics.ok).toBe(true);
   });
 });
 

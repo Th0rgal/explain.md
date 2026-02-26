@@ -97,7 +97,7 @@ export function createOpenAICompatibleProvider(options: OpenAIProviderOptions): 
 
   return {
     generate: async (request) => {
-      const response = await executeWithRetry(options.config, sleepMs, async (attempt) => {
+      const attemptResult = await executeWithRetry(options.config, sleepMs, async (attempt) => {
         return postChatCompletions({
           fetchImpl,
           config: options.config,
@@ -107,13 +107,15 @@ export function createOpenAICompatibleProvider(options: OpenAIProviderOptions): 
           baseUrl,
         });
       });
+      const response = attemptResult.value;
+      const attempt = attemptResult.attempt;
 
       const text = response.choices?.[0]?.message?.content;
       if (typeof text !== "string") {
         throw new ProviderError({
           code: "invalid_response",
           message: "Response did not include choices[0].message.content.",
-          attempt: 1,
+          attempt,
           retriable: false,
         });
       }
@@ -127,7 +129,7 @@ export function createOpenAICompatibleProvider(options: OpenAIProviderOptions): 
     },
 
     stream: async function* (request: GenerateRequest): AsyncIterable<StreamChunk> {
-      const res = await executeWithRetry(options.config, sleepMs, async (attempt) => {
+      const attemptResult = await executeWithRetry(options.config, sleepMs, async (attempt) => {
         return postRawChatCompletions({
           fetchImpl,
           config: options.config,
@@ -137,13 +139,15 @@ export function createOpenAICompatibleProvider(options: OpenAIProviderOptions): 
           baseUrl,
         });
       });
+      const res = attemptResult.value;
+      const attempt = attemptResult.attempt;
 
       const body = res.body;
       if (!body) {
         throw new ProviderError({
           code: "invalid_response",
           message: "Streaming response did not include a body.",
-          attempt: 1,
+          attempt,
           retriable: false,
         });
       }
@@ -178,7 +182,7 @@ export function createOpenAICompatibleProvider(options: OpenAIProviderOptions): 
             throw new ProviderError({
               code: "invalid_response",
               message: "Failed to parse streaming SSE payload as JSON.",
-              attempt: 1,
+              attempt,
               retriable: false,
             });
           }
@@ -197,7 +201,7 @@ export function createOpenAICompatibleProvider(options: OpenAIProviderOptions): 
         throw new ProviderError({
           code: "invalid_response",
           message: "Streaming response terminated with partial SSE frame.",
-          attempt: 1,
+          attempt,
           retriable: false,
         });
       }
@@ -209,14 +213,15 @@ async function executeWithRetry<T>(
   config: ModelProviderConfig,
   sleepMs: (ms: number) => Promise<void>,
   operation: (attempt: number) => Promise<T>,
-): Promise<T> {
+): Promise<{ value: T; attempt: number }> {
   let attempt = 0;
   let lastError: unknown = undefined;
 
   while (attempt <= config.maxRetries) {
     attempt += 1;
     try {
-      return await operation(attempt);
+      const value = await operation(attempt);
+      return { value, attempt };
     } catch (error) {
       lastError = error;
       if (!(error instanceof ProviderError)) {

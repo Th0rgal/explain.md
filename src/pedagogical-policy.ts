@@ -1,5 +1,6 @@
 import type { ExplanationConfig } from "./config-contract.js";
 import type { ChildNodeInput, ParentSummary } from "./summary-pipeline.js";
+import { stemToken, tokenizeNormalized } from "./text-normalization.js";
 
 export type PolicyViolationCode =
   | "sibling_complexity_spread"
@@ -318,15 +319,15 @@ function computeVocabularyContinuityFloor(config: ExplanationConfig): number {
 function computeVocabularyContinuityRatio(children: ChildNodeInput[], summary: ParentSummary): number {
   const childTokens = new Set(
     children
-      .flatMap((child) => tokenize(child.statement).map(stemToken))
+      .flatMap((child) => tokenizeNormalized(child.statement).map(stemToken))
       .filter((token) => isLexicalToken(token) && token.length >= 4 && !STOP_WORDS.has(token)),
   );
   const introducedTokens = new Set(
     summary.new_terms_introduced
-      .flatMap((term) => tokenize(term).map(stemToken))
+      .flatMap((term) => tokenizeNormalized(term).map(stemToken))
       .filter((token) => isLexicalToken(token)),
   );
-  const parentTokens = tokenize(`${summary.parent_statement} ${summary.why_true_from_children}`)
+  const parentTokens = tokenizeNormalized(`${summary.parent_statement} ${summary.why_true_from_children}`)
     .map(stemToken)
     .filter((token) => isLexicalToken(token) && token.length >= 5 && !STOP_WORDS.has(token));
 
@@ -341,33 +342,6 @@ function computeVocabularyContinuityRatio(children: ChildNodeInput[], summary: P
     }
   }
   return covered / parentTokens.length;
-}
-
-function tokenize(text: string): string[] {
-  return text
-    .toLowerCase()
-    .split(/[^a-z0-9_]+/g)
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0);
-}
-
-function stemToken(token: string): string {
-  if (token.endsWith("ies") && token.length > 5) {
-    return `${token.slice(0, -3)}y`;
-  }
-  if (token.endsWith("ing") && token.length > 6) {
-    return token.slice(0, -3);
-  }
-  if (token.endsWith("ed") && token.length > 5) {
-    return token.slice(0, -2);
-  }
-  if (token.endsWith("es") && token.length > 5) {
-    return token.slice(0, -2);
-  }
-  if (token.endsWith("s") && token.length > 4) {
-    return token.slice(0, -1);
-  }
-  return token;
 }
 
 function clamp(value: number, min: number, max: number): number {

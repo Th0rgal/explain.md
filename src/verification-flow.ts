@@ -121,8 +121,8 @@ export class VerificationWorkflow {
     this.runner = options.runner;
     this.now = options.now ?? (() => new Date());
     this.idFactory = options.idFactory ?? (() => randomUUID());
-    this.defaultTimeoutMs = options.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS;
-    this.maxLogLinesPerJob = options.maxLogLinesPerJob ?? DEFAULT_MAX_LOG_LINES;
+    this.defaultTimeoutMs = normalizeTimeoutMs(options.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS);
+    this.maxLogLinesPerJob = normalizePositiveInt(options.maxLogLinesPerJob ?? DEFAULT_MAX_LOG_LINES, "maxLogLinesPerJob");
     this.state = buildWorkflowState(initialLedger);
   }
 
@@ -594,6 +594,16 @@ function splitLines(content: string): string[] {
 }
 
 function capLogs(lines: VerificationLogLine[], maxLines: number): VerificationLogLine[] {
+  if (maxLines <= 0) {
+    return [
+      {
+        index: 0,
+        stream: "system",
+        message: `Truncated ${lines.length} log lines.`,
+      },
+    ];
+  }
+
   if (lines.length <= maxLines) {
     return lines;
   }

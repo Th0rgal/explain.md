@@ -26,6 +26,17 @@ describe("config contract", () => {
     expect(computeConfigHash(a)).toBe(computeConfigHash(b));
   });
 
+  test("supports deep-partial modelProvider input in normalizeConfig", () => {
+    const config = normalizeConfig({
+      modelProvider: {
+        temperature: 0.5,
+      },
+    });
+
+    expect(config.modelProvider.temperature).toBe(0.5);
+    expect(config.modelProvider.model).toBe(DEFAULT_CONFIG.modelProvider.model);
+  });
+
   test("cache key includes leaf hash + config hash + language + audience", () => {
     const config = normalizeConfig({});
     const key = computeTreeCacheKey("leafhash123", config);
@@ -49,6 +60,16 @@ describe("config contract", () => {
     expect(result.errors.map((e) => e.path)).toContain("modelProvider.timeoutMs");
     expect(result.errors.map((e) => e.path)).toContain("modelProvider.maxRetries");
     expect(result.errors.map((e) => e.path)).toContain("readingLevelTarget");
+  });
+
+  test("rejects non-finite model provider temperature", () => {
+    const config = normalizeConfig({
+      modelProvider: { temperature: Number.NaN },
+    });
+
+    const result = validateConfig(config);
+    expect(result.ok).toBe(false);
+    expect(result.errors.map((e) => e.path)).toContain("modelProvider.temperature");
   });
 
   test("full regeneration when structure/semantics fields change", () => {

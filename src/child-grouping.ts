@@ -263,6 +263,9 @@ function normalizeNodes(nodes: GroupingNodeInput[]): GroupingNodeInput[] {
     if (node.complexity !== undefined && (!Number.isFinite(node.complexity) || node.complexity < 1 || node.complexity > 5)) {
       throw new Error(`node complexity must be in [1, 5] for id '${id}'.`);
     }
+    if (node.prerequisiteIds !== undefined && !Array.isArray(node.prerequisiteIds)) {
+      throw new Error(`node prerequisiteIds must be an array of strings for id '${id}'.`);
+    }
 
     return {
       id,

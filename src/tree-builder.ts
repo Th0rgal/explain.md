@@ -97,6 +97,10 @@ export async function buildRecursiveExplanationTree(
   provider: ProviderClient,
   request: TreeBuildRequest,
 ): Promise<ExplanationTree> {
+  if (!Number.isInteger(request.config.maxChildrenPerParent) || request.config.maxChildrenPerParent < 2) {
+    throw new Error("config.maxChildrenPerParent must be an integer >= 2.");
+  }
+
   const leaves = normalizeLeaves(request.leaves);
   const nodes: Record<string, ExplanationTreeNode> = {};
   const leafIds = leaves.map((leaf) => leaf.id);
@@ -526,11 +530,7 @@ async function generatePolicyCompliantParentSummary(
       if (error instanceof SummaryValidationError) {
         lastPostSummary = {
           ok: false,
-          violations: error.diagnostics.violations.map((violation) => ({
-            code: violation.code === "term_budget" ? "term_budget" : "vocabulary_continuity",
-            message: violation.message,
-            details: violation.details,
-          })),
+          violations: error.diagnostics.violations.map((violation) => mapCriticViolationToPolicyViolation(violation)),
           metrics: {
             complexitySpread: 0,
             prerequisiteOrderViolations: 0,
@@ -553,6 +553,25 @@ async function generatePolicyCompliantParentSummary(
     preSummary: preSummaryDecision,
     postSummary: lastPostSummary,
   });
+}
+
+function mapCriticViolationToPolicyViolation(
+  violation: SummaryValidationError["diagnostics"]["violations"][number],
+): ParentPolicyDiagnostics["postSummary"]["violations"][number] {
+  switch (violation.code) {
+    case "term_budget":
+      return { code: "term_budget", message: violation.message, details: violation.details };
+    case "evidence_refs":
+      return { code: "evidence_coverage", message: violation.message, details: violation.details };
+    case "schema":
+    case "complexity_band":
+    case "unsupported_terms":
+      return { code: "vocabulary_continuity", message: violation.message, details: violation.details };
+    default: {
+      const exhaustiveCheck: never = violation.code;
+      throw new Error(`Unhandled critic violation code: ${String(exhaustiveCheck)}`);
+    }
+  }
 }
 
 function emptySummary(children: Array<{ id: string }>): {

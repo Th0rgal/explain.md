@@ -222,6 +222,41 @@ describe("openai provider", () => {
       retriable: false,
     });
   });
+
+  test("reports the successful retry attempt for post-retry invalid responses", async () => {
+    process.env[ENV_KEY] = "token";
+    let requestCount = 0;
+
+    const server = await startMockServer((_req, res) => {
+      requestCount += 1;
+      if (requestCount === 1) {
+        sendJson(res, 503, { error: { message: "retry" } });
+        return;
+      }
+      sendJson(res, 200, { choices: [{ finish_reason: "stop", message: {} }] });
+    });
+
+    try {
+      const provider = createOpenAICompatibleProvider({
+        config: normalizeConfig({
+          modelProvider: {
+            ...DEFAULT_CONFIG.modelProvider,
+            endpoint: `${server.url}/v1`,
+            apiKeyEnvVar: ENV_KEY,
+            maxRetries: 1,
+            retryBaseDelayMs: 1,
+          },
+        }).modelProvider,
+      });
+
+      const thrown = await captureError(() => provider.generate({ messages: [{ role: "user", content: "x" }] }));
+      expect(thrown).toBeInstanceOf(ProviderError);
+      expect((thrown as ProviderError).code).toBe("invalid_response");
+      expect((thrown as ProviderError).attempt).toBe(2);
+    } finally {
+      await server.close();
+    }
+  });
 });
 
 async function startMockServer(

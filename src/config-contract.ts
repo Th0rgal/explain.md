@@ -31,6 +31,10 @@ export interface ExplanationConfig {
   modelProvider: ModelProviderConfig;
 }
 
+export type ExplanationConfigInput = Omit<Partial<ExplanationConfig>, "modelProvider"> & {
+  modelProvider?: Partial<ModelProviderConfig>;
+};
+
 export interface ValidationError {
   path: string;
   message: string;
@@ -84,7 +88,7 @@ const READING_ORDER: Record<ReadingLevelTarget, number> = {
   graduate: 5,
 };
 
-export function normalizeConfig(input: Partial<ExplanationConfig>): ExplanationConfig {
+export function normalizeConfig(input: ExplanationConfigInput = {}): ExplanationConfig {
   const merged: ExplanationConfig = {
     ...DEFAULT_CONFIG,
     ...input,
@@ -151,7 +155,7 @@ export function validateConfig(config: ExplanationConfig): ValidationResult {
   if (!config.modelProvider.model) {
     errors.push({ path: "modelProvider.model", message: "Model is required." });
   }
-  if (config.modelProvider.temperature < 0 || config.modelProvider.temperature > 1) {
+  if (!Number.isFinite(config.modelProvider.temperature) || config.modelProvider.temperature < 0 || config.modelProvider.temperature > 1) {
     errors.push({ path: "modelProvider.temperature", message: "Temperature must be between 0 and 1." });
   }
   assertIntBetween(errors, "modelProvider.timeoutMs", config.modelProvider.timeoutMs, 1000, 120000);

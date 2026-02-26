@@ -299,4 +299,14 @@ describe("verification workflow", () => {
     expect(jobsForLeafA).toHaveLength(2);
     expect(jobsForLeafA.map((job) => job.queueSequence)).toEqual([0, 2]);
   });
+
+  test("rejects non-positive maxLogLinesPerJob", () => {
+    expect(
+      () =>
+        new VerificationWorkflow({
+          runner: new FakeRunner([]),
+          maxLogLinesPerJob: 0,
+        }),
+    ).toThrow("maxLogLinesPerJob");
+  });
 });

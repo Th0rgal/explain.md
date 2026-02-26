@@ -15,7 +15,7 @@ const LEAN_FILE_EXTENSION = ".lean";
 const NAME_TOKEN = String.raw`(?:«[^»]+»|[A-Za-z_][A-Za-z0-9_']*(?:\.[A-Za-z_][A-Za-z0-9_']*)*)`;
 
 const DECLARATION_LINE_REGEX = new RegExp(
-  String.raw`^\s*(?:@[\w\.]+\s+)?(?:private\s+|protected\s+|noncomputable\s+|partial\s+|unsafe\s+)*(theorem|lemma|def|abbrev|axiom|inductive|structure|instance|example)\s+(${NAME_TOKEN})\b`,
+  String.raw`^\s*(?:@[\w\.]+\s+)?(?:private\s+|protected\s+|noncomputable\s+|partial\s+|unsafe\s+)*(theorem|lemma|def|abbrev|axiom|inductive|structure|instance|example)\s+(${NAME_TOKEN})(?=\s|:|:=|\(|\{|\[|$)`,
 );
 
 const TOKEN_REGEX = new RegExp(NAME_TOKEN, "g");
@@ -254,7 +254,7 @@ export function mapLeanIngestionToTheoremLeaves(result: LeanIngestionResult): Th
 export function renderLeanIngestionCanonical(result: LeanIngestionResult): string {
   const lines: string[] = [
     `schema=${result.schemaVersion}`,
-    `project_root=${result.projectRoot}`,
+    "project_root=<redacted>",
     `records=${result.records.length}`,
     `warnings=${result.warnings.length}`,
   ];
@@ -478,11 +478,7 @@ async function collectLeanFiles(
 function modulePathFromFilePath(projectRoot: string, filePath: string): string {
   const relative = path.isAbsolute(filePath) ? path.relative(projectRoot, filePath) : filePath;
   const normalizedRelative = normalizePath(relative);
-  if (normalizedRelative.startsWith("..")) {
-    return normalizedRelative.replace(new RegExp(`${LEAN_FILE_EXTENSION}$`), "");
-  }
-
-  return normalizedRelative.replace(new RegExp(`${LEAN_FILE_EXTENSION}$`), "");
+  return normalizedRelative.replace(new RegExp(`${escapeRegExp(LEAN_FILE_EXTENSION)}$`), "");
 }
 
 function mapKeywordToTheoremKind(keyword: string): TheoremKind {

@@ -1,5 +1,6 @@
 import type { ExplanationConfig } from "./config-contract.js";
 import type { ChatMessage, ProviderClient } from "./openai-provider.js";
+import { stemToken, tokenizeNormalized } from "./text-normalization.js";
 
 export interface ChildNodeInput {
   id: string;
@@ -158,6 +159,10 @@ export function validateParentSummary(
   config: ExplanationConfig,
 ): SummaryDiagnostics {
   const violations: CriticViolation[] = [];
+  const hasValidNewTerms = Array.isArray(summary.new_terms_introduced) && summary.new_terms_introduced.every((term) => typeof term === "string");
+  const hasValidEvidenceRefs = Array.isArray(summary.evidence_refs) && summary.evidence_refs.every((ref) => typeof ref === "string");
+  const newTermsIntroduced = hasValidNewTerms ? summary.new_terms_introduced : [];
+  const evidenceRefs = hasValidEvidenceRefs ? summary.evidence_refs : [];
 
   if (!summary.parent_statement || !summary.why_true_from_children) {
     violations.push({
@@ -187,14 +192,14 @@ export function validateParentSummary(
     });
   }
 
-  if (!Array.isArray(summary.new_terms_introduced) || !summary.new_terms_introduced.every((term) => typeof term === "string")) {
+  if (!hasValidNewTerms) {
     violations.push({
       code: "schema",
       message: "new_terms_introduced must be an array of strings.",
     });
   }
 
-  if (!Array.isArray(summary.evidence_refs) || !summary.evidence_refs.every((ref) => typeof ref === "string")) {
+  if (!hasValidEvidenceRefs) {
     violations.push({
       code: "schema",
       message: "evidence_refs must be an array of strings.",
@@ -202,8 +207,8 @@ export function validateParentSummary(
   }
 
   const childIds = new Set(children.map((child) => child.id));
-  const invalidRefs = summary.evidence_refs.filter((ref) => !childIds.has(ref));
-  if (invalidRefs.length > 0 || summary.evidence_refs.length === 0) {
+  const invalidRefs = evidenceRefs.filter((ref) => !childIds.has(ref));
+  if (invalidRefs.length > 0 || evidenceRefs.length === 0) {
     violations.push({
       code: "evidence_refs",
       message: "evidence_refs must be non-empty and only include provided child IDs.",
@@ -211,12 +216,12 @@ export function validateParentSummary(
     });
   }
 
-  if (summary.new_terms_introduced.length > config.termIntroductionBudget) {
+  if (newTermsIntroduced.length > config.termIntroductionBudget) {
     violations.push({
       code: "term_budget",
       message: "new_terms_introduced exceeded configured term introduction budget.",
       details: {
-        introduced: summary.new_terms_introduced.length,
+        introduced: newTermsIntroduced.length,
         budget: config.termIntroductionBudget,
       },
     });
@@ -232,7 +237,7 @@ export function validateParentSummary(
     });
   }
 
-  const coverage = computeParentTokenCoverage(summary.parent_statement, children, summary.new_terms_introduced);
+  const coverage = computeParentTokenCoverage(summary.parent_statement, children, newTermsIntroduced);
   if (coverage.total >= MIN_PARENT_TOKENS_FOR_COVERAGE_CHECK && coverage.ratio < MIN_PARENT_TOKEN_COVERAGE) {
     violations.push({
       code: "unsupported_terms",
@@ -380,12 +385,12 @@ function computeParentTokenCoverage(
 ): { ratio: number; total: number; unsupported: string[] } {
   const childTokens = new Set(
     children
-      .flatMap((child) => tokenize(child.statement).map(stemToken))
+      .flatMap((child) => tokenizeNormalized(child.statement).map(stemToken))
       .filter((token) => token.length >= 4 && !STOP_WORDS.has(token)),
   );
-  const introduced = new Set(introducedTerms.flatMap((term) => tokenize(term).map(stemToken)));
+  const introduced = new Set(introducedTerms.flatMap((term) => tokenizeNormalized(term).map(stemToken)));
 
-  const significantTokens = tokenize(statement)
+  const significantTokens = tokenizeNormalized(statement)
     .map(stemToken)
     .filter((token) => token.length >= 5 && !STOP_WORDS.has(token));
   const unsupported = new Set<string>();
@@ -400,31 +405,4 @@ function computeParentTokenCoverage(
 
   const ratio = significantTokens.length === 0 ? 1 : covered / significantTokens.length;
   return { ratio, total: significantTokens.length, unsupported: [...unsupported].sort() };
-}
-
-function stemToken(token: string): string {
-  if (token.endsWith("ies") && token.length > 5) {
-    return `${token.slice(0, -3)}y`;
-  }
-  if (token.endsWith("ing") && token.length > 6) {
-    return token.slice(0, -3);
-  }
-  if (token.endsWith("ed") && token.length > 5) {
-    return token.slice(0, -2);
-  }
-  if (token.endsWith("es") && token.length > 5) {
-    return token.slice(0, -2);
-  }
-  if (token.endsWith("s") && token.length > 4) {
-    return token.slice(0, -1);
-  }
-  return token;
-}
-
-function tokenize(text: string): string[] {
-  return text
-    .toLowerCase()
-    .split(/[^a-z0-9_]+/g)
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0);
 }

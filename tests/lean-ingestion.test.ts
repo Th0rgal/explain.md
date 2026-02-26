@@ -106,4 +106,36 @@ describe("lean ingestion", () => {
     expect(record.tags).not.toContain("domain:verity/edsl");
     expect(result.warnings.some((warning) => warning.code === "domain_classification")).toBe(true);
   });
+
+  test("parses apostrophe and guillemet declaration names without truncation", () => {
+    const result = ingestLeanSources(
+      "/virtual",
+      [
+        {
+          filePath: "/virtual/Verity/Names.lean",
+          content: [
+            "theorem add' : True := by",
+            "  trivial",
+            "",
+            "theorem «special_name» : True := by",
+            "  trivial",
+          ].join("\n"),
+        },
+      ],
+    );
+
+    expect(result.records.map((record) => record.declarationName)).toEqual(["add'", "special_name"]);
+  });
+
+  test("canonical hash is stable across different absolute project roots", () => {
+    const source = {
+      filePath: "Verity/Stable.lean",
+      content: "theorem stable : True := by\n  trivial\n",
+    };
+
+    const left = ingestLeanSources("/tmp/project-a", [source]);
+    const right = ingestLeanSources("/another/path/project-b", [source]);
+
+    expect(computeLeanIngestionHash(left)).toBe(computeLeanIngestionHash(right));
+  });
 });

@@ -74,4 +74,15 @@ describe("child grouping", () => {
     expect(result.diagnostics.warnings.map((warning) => warning.code)).toContain("cycle_detected");
     expect(result.diagnostics.orderedNodeIds).toEqual(["x", "y"]);
   });
+
+  test("rejects non-array prerequisiteIds with a clear error", () => {
+    expect(() =>
+      groupChildrenDeterministically({
+        maxChildrenPerParent: 2,
+        targetComplexity: 3,
+        complexityBandWidth: 1,
+        nodes: [{ id: "a", statement: "A", prerequisiteIds: "b" as unknown as string[] }],
+      }),
+    ).toThrow("prerequisiteIds must be an array");
+  });
 });
