@@ -5,7 +5,7 @@ This module defines a single typed contract shared by backend and frontend for e
 ## Scope
 - Tree shape and abstraction controls.
 - Pedagogy controls.
-- Model/provider controls.
+- Model/provider controls (endpoint, model, env key, timeout, retries, token budget).
 - Deterministic normalization and hashing.
 - Regeneration semantics.
 - Profile persistence key format.
@@ -33,7 +33,7 @@ Example:
 
 ## Regeneration Semantics
 - `none`: no field changed.
-- `partial`: only operational generation constraints changed (`modelProvider.maxOutputTokens`, `modelProvider.apiKeyEnvVar`).
+- `partial`: only operational generation constraints changed (`modelProvider.timeoutMs`, `modelProvider.maxRetries`, `modelProvider.retryBaseDelayMs`, `modelProvider.maxOutputTokens`, `modelProvider.apiKeyEnvVar`).
 - `full`: any semantic/pedagogical/tree-shape/language/model field changed.
 
 Unknown-field diffs default to `full` for safety.
@@ -45,6 +45,9 @@ Unknown-field diffs default to `full` for safety.
 - `termIntroductionBudget`: integer 0..8.
 - `language`: ISO-like tag (`en`, `en-us`).
 - Audience/readability compatibility gate is enforced.
+- `modelProvider.timeoutMs`: integer `1000..120000`.
+- `modelProvider.maxRetries`: integer `0..8`.
+- `modelProvider.retryBaseDelayMs`: integer `50..5000`.
 
 ## Profile Persistence
 `buildProfileStorageKey(projectId, userId, profileId)` returns:

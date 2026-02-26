@@ -11,6 +11,9 @@ export interface ModelProviderConfig {
   endpoint: string;
   model: string;
   apiKeyEnvVar?: string;
+  timeoutMs: number;
+  maxRetries: number;
+  retryBaseDelayMs: number;
   temperature: number;
   maxOutputTokens: number;
 }
@@ -53,6 +56,9 @@ export const DEFAULT_CONFIG: ExplanationConfig = {
     endpoint: "http://localhost:8080/v1",
     model: "gpt-4.1-mini",
     apiKeyEnvVar: "OPENAI_API_KEY",
+    timeoutMs: 30_000,
+    maxRetries: 2,
+    retryBaseDelayMs: 250,
     temperature: 0,
     maxOutputTokens: 1200,
   },
@@ -148,6 +154,9 @@ export function validateConfig(config: ExplanationConfig): ValidationResult {
   if (config.modelProvider.temperature < 0 || config.modelProvider.temperature > 1) {
     errors.push({ path: "modelProvider.temperature", message: "Temperature must be between 0 and 1." });
   }
+  assertIntBetween(errors, "modelProvider.timeoutMs", config.modelProvider.timeoutMs, 1000, 120000);
+  assertIntBetween(errors, "modelProvider.maxRetries", config.modelProvider.maxRetries, 0, 8);
+  assertIntBetween(errors, "modelProvider.retryBaseDelayMs", config.modelProvider.retryBaseDelayMs, 50, 5000);
   assertIntBetween(errors, "modelProvider.maxOutputTokens", config.modelProvider.maxOutputTokens, 128, 16384);
 
   const minimumReading = READING_MIN_BY_AUDIENCE[config.audienceLevel];
@@ -234,6 +243,9 @@ const FULL_REGEN_FIELDS = new Set<string>([
 ]);
 
 const PARTIAL_REGEN_FIELDS = new Set<string>([
+  "modelProvider.timeoutMs",
+  "modelProvider.maxRetries",
+  "modelProvider.retryBaseDelayMs",
   "modelProvider.maxOutputTokens",
   "modelProvider.apiKeyEnvVar",
 ]);
