@@ -10,7 +10,8 @@
     "test:live": "npm run -s build && node scripts/live-provider-check.mjs",
     "test:live:summary": "npm run -s build && node scripts/live-summary-check.mjs",
     "bench:dependency-graph": "npm run -s build && node scripts/benchmark-dependency-graph.mjs",
-    "ingest:lean": "npm run -s build && node scripts/lean-ingest.mjs"
+    "ingest:lean": "npm run -s build && node scripts/lean-ingest.mjs",
+    "eval:domain-adapters": "npm run -s build && node scripts/eval-domain-adapters.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.4.0",

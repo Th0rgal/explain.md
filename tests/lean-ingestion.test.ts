@@ -32,6 +32,8 @@ describe("lean ingestion", () => {
     expect(inc?.declarationId).toBe("lean:Verity/Core:inc:3:1");
     expect(coreSafe?.dependencyIds).toContain("lean:Verity/Core:inc:3:1");
     expect(loopPreserves?.dependencyIds).toContain("lean:Verity/Core:core_safe:8:1");
+    expect(coreSafe?.domainClassification.adapterId).toBe("verity-edsl");
+    expect(coreSafe?.tags).toContain("domain:verity/edsl");
 
     const warnings = result.warnings.filter((warning) => warning.code === "unsupported_construct");
     expect(warnings).toHaveLength(1);
@@ -52,7 +54,7 @@ describe("lean ingestion", () => {
   test("supports in-memory source ingestion and leaf/graph mapping", () => {
     const result = ingestLeanSources("/virtual", [
       {
-        filePath: "/virtual/Verity/Math.lean",
+        filePath: "/virtual/Math/Math.lean",
         content: [
           "def base : Nat := 1",
           "",
@@ -66,10 +68,42 @@ describe("lean ingestion", () => {
     const graph = buildDependencyGraphFromTheoremLeaves(leaves);
 
     expect(leaves.map((leaf) => leaf.declarationName)).toEqual(["base", "uses_base"]);
-    expect(getSupportingDeclarations(graph, "lean:Verity/Math:uses_base:3:1")).toEqual(["lean:Verity/Math:base:1:1"]);
+    expect(leaves.map((leaf) => leaf.tags)).toEqual([
+      ["domain:lean/general", "kind:definition"],
+      ["domain:lean/general", "kind:theorem"],
+    ]);
+    expect(getSupportingDeclarations(graph, "lean:Math/Math:uses_base:3:1")).toEqual(["lean:Math/Math:base:1:1"]);
 
     const canonical = renderLeanIngestionCanonical(result);
     expect(canonical).toContain("schema=1.0.0");
     expect(canonical).toContain("records=2");
+    expect(canonical).toContain("domain_adapter=lean-generic");
+  });
+
+  test("supports per-declaration manual domain overrides", () => {
+    const result = ingestLeanSources(
+      "/virtual",
+      [
+        {
+          filePath: "/virtual/Verity/Ov.lean",
+          content: "theorem t : True := by\\n  trivial\\n",
+        },
+      ],
+      {
+        domainClassification: {
+          overridesByDeclarationId: {
+            "lean:Verity/Ov:t:1:1": {
+              addTags: ["concept:state"],
+              removeTags: ["domain:verity/edsl"],
+            },
+          },
+        },
+      },
+    );
+
+    const record = result.records[0];
+    expect(record.tags).toContain("concept:state");
+    expect(record.tags).not.toContain("domain:verity/edsl");
+    expect(result.warnings.some((warning) => warning.code === "domain_classification")).toBe(true);
   });
 });

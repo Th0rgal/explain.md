@@ -26,6 +26,8 @@ This module adds a deterministic Lean 4 ingestion layer that indexes declaration
   - `statementText`, `prettyStatement`
   - `sourceSpan` and `sourceTextHash`
   - `dependencyIds` (deterministically recovered from indexed symbol references)
+  - `tags` (domain classification tags)
+  - `domainClassification` (`adapterId`, `confidence`, `evidence`, warnings)
 
 ## Diagnostics
 Warnings are deterministic and sorted by `(file, line, column, code)`.
@@ -34,6 +36,7 @@ Current warning codes:
 - `unsupported_construct` (`mutual`, `opaque`, `macro_rules`, `elab`)
 - `duplicate_declaration`
 - `parse_fallback`
+- `domain_classification` (manual override or low-confidence downgrade provenance)
 
 `strictUnsupported=true` upgrades unsupported-construct warnings to an ingestion error.
 
@@ -53,3 +56,10 @@ Optional flags:
 - `--strict-unsupported`
 
 This emits normalized JSON to stdout for downstream leaf/tree processing.
+
+## Domain-classification options
+`ingestLeanProject` / `ingestLeanSources` accepts:
+- `domainClassification.lowConfidenceThreshold`
+- `domainClassification.fallbackAdapterId`
+- `domainClassification.adapters`
+- `domainClassification.overridesByDeclarationId`

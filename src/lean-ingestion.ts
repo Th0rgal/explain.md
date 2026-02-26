@@ -1,6 +1,12 @@
 import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import {
+  classifyDeclarationDomain,
+  type DomainClassificationOptions,
+  type DomainClassificationOverride,
+  type DomainClassificationResult,
+} from "./domain-adapters.js";
 import { mapIngestedDeclarationsToLeaves, type IngestedDeclarationRecord, type TheoremLeafRecord, type TheoremKind } from "./leaf-schema.js";
 
 export const LEAN_INGESTION_SCHEMA_VERSION = "1.0.0";
@@ -28,7 +34,7 @@ export interface LeanSourceInput {
 }
 
 export interface LeanIngestionWarning {
-  code: "unsupported_construct" | "duplicate_declaration" | "parse_fallback";
+  code: "unsupported_construct" | "duplicate_declaration" | "parse_fallback" | "domain_classification";
   message: string;
   filePath: string;
   line: number;
@@ -44,7 +50,10 @@ export interface LeanIndexedDeclaration extends IngestedDeclarationRecord {
   theoremKind: TheoremKind;
   statementText: string;
   prettyStatement: string;
+  tags: string[];
+  dependencyIds: string[];
   sourceTextHash: string;
+  domainClassification: DomainClassificationResult;
 }
 
 export interface LeanIngestionResult {
@@ -59,6 +68,9 @@ export interface LeanIngestionOptions {
   includePaths?: string[];
   excludeDirectories?: string[];
   strictUnsupported?: boolean;
+  domainClassification?: Omit<DomainClassificationOptions, "override"> & {
+    overridesByDeclarationId?: Record<string, DomainClassificationOverride>;
+  };
 }
 
 interface ParsedDeclaration {
@@ -148,6 +160,38 @@ export function ingestLeanSources(
 
   const records = [...unique.values()];
   const dependenciesById = computeDeclarationDependencies(records);
+  const domainById = new Map<string, DomainClassificationResult>();
+
+  for (const declaration of records) {
+    const domainClassification = classifyDeclarationDomain(
+      {
+        declarationId: declaration.declarationId,
+        modulePath: declaration.modulePath,
+        declarationName: declaration.declarationName,
+        theoremKind: declaration.theoremKind,
+        statementText: declaration.statementText,
+        prettyStatement: declaration.prettyStatement,
+      },
+      {
+        adapters: options.domainClassification?.adapters,
+        lowConfidenceThreshold: options.domainClassification?.lowConfidenceThreshold,
+        fallbackAdapterId: options.domainClassification?.fallbackAdapterId,
+        override: options.domainClassification?.overridesByDeclarationId?.[declaration.declarationId],
+      },
+    );
+    domainById.set(declaration.declarationId, domainClassification);
+
+    for (const domainWarning of domainClassification.warnings) {
+      warnings.push({
+        code: "domain_classification",
+        message: `[${domainWarning.code}] ${domainWarning.message}`,
+        filePath: declaration.filePath,
+        line: declaration.startLine,
+        column: declaration.startColumn,
+        snippet: declaration.declarationName,
+      });
+    }
+  }
 
   const indexedRecords: LeanIndexedDeclaration[] = records
     .map((declaration) => ({
@@ -167,7 +211,8 @@ export function ingestLeanSources(
       },
       sourceTextHash: declaration.sourceTextHash,
       dependencyIds: dependenciesById.get(declaration.declarationId) ?? [],
-      tags: [],
+      tags: (domainById.get(declaration.declarationId) as DomainClassificationResult).tags,
+      domainClassification: domainById.get(declaration.declarationId) as DomainClassificationResult,
       sourceUrl: options.sourceBaseUrl
         ? buildSourceUrl(options.sourceBaseUrl, declaration.filePath, declaration.startLine, declaration.startColumn, declaration.endLine, declaration.endColumn)
         : undefined,
@@ -223,6 +268,10 @@ export function renderLeanIngestionCanonical(result: LeanIngestionResult): strin
         `kind=${record.theoremKind}`,
         `span=${record.sourceSpan.filePath}:${record.sourceSpan.startLine}:${record.sourceSpan.startColumn}-${record.sourceSpan.endLine}:${record.sourceSpan.endColumn}`,
         `deps=${record.dependencyIds?.join(",") ?? ""}`,
+        `tags=${record.tags.join(",")}`,
+        `domain_adapter=${record.domainClassification.adapterId}`,
+        `domain_confidence=${record.domainClassification.confidence.toFixed(4)}`,
+        `domain_downgraded_from=${record.domainClassification.downgradedFromAdapterId ?? ""}`,
         `hash=${record.sourceTextHash}`,
       ].join("|"),
     );
