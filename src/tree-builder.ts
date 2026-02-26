@@ -178,7 +178,9 @@ export async function buildRecursiveExplanationTree(
         continue;
       }
 
-      const children = groupNodeIds.map((nodeId) => {
+      const orderedGroupNodeIds = reorderGroupNodeIdsByPrerequisites(groupNodeIds, nodes, leafById);
+
+      const children = orderedGroupNodeIds.map((nodeId) => {
         const node = nodes[nodeId];
         const leafInput = leafById.get(node.id);
         return {
@@ -220,12 +222,12 @@ export async function buildRecursiveExplanationTree(
         preSummaryDecision,
       );
 
-      const parentId = buildParentNodeId(depth, index, groupNodeIds);
+      const parentId = buildParentNodeId(depth, index, orderedGroupNodeIds);
       const parentNode: ExplanationTreeNode = {
         id: parentId,
         kind: "parent",
         statement: parentSummary.summary.parent_statement,
-        childIds: groupNodeIds.slice(),
+        childIds: orderedGroupNodeIds.slice(),
         depth,
         complexityScore: parentSummary.summary.complexity_score,
         abstractionScore: parentSummary.summary.abstraction_score,
@@ -242,10 +244,16 @@ export async function buildRecursiveExplanationTree(
       groupPlan.push({
         depth,
         index,
-        inputNodeIds: groupNodeIds.slice(),
+        inputNodeIds: orderedGroupNodeIds.slice(),
         outputNodeId: parentId,
         complexitySpread: groupingResult.diagnostics.complexitySpreadByGroup[index] ?? 0,
       });
+    }
+
+    if (nextLayerIds.length >= activeNodeIds.length) {
+      throw new Error(
+        `Tree construction made no progress at depth ${depth} (active=${activeNodeIds.length}, next=${nextLayerIds.length}).`,
+      );
     }
 
     activeNodeIds = nextLayerIds;
@@ -404,13 +412,70 @@ function buildParentNodeId(depth: number, index: number, childIds: string[]): st
   return `p_${depth}_${index}_${digest}`;
 }
 
+function reorderGroupNodeIdsByPrerequisites(
+  groupNodeIds: string[],
+  nodes: Record<string, ExplanationTreeNode>,
+  leafById: Map<string, LeafNodeInput>,
+): string[] {
+  const nodeSet = new Set(groupNodeIds);
+  const inDegree = new Map<string, number>(groupNodeIds.map((nodeId) => [nodeId, 0]));
+  const outgoing = new Map<string, string[]>(groupNodeIds.map((nodeId) => [nodeId, []]));
+
+  for (const nodeId of groupNodeIds) {
+    const leaf = leafById.get(nodeId);
+    const prerequisites = (leaf?.prerequisiteIds ?? []).filter((prerequisiteId) => nodeSet.has(prerequisiteId));
+    for (const prerequisiteId of prerequisites) {
+      inDegree.set(nodeId, (inDegree.get(nodeId) as number) + 1);
+      (outgoing.get(prerequisiteId) as string[]).push(nodeId);
+    }
+  }
+
+  const ready = groupNodeIds.filter((nodeId) => (inDegree.get(nodeId) as number) === 0).sort((a, b) => a.localeCompare(b));
+  const ordered: string[] = [];
+
+  const remaining = new Set(groupNodeIds);
+  while (remaining.size > 0) {
+    const nodeId =
+      ready.length > 0
+        ? (ready.shift() as string)
+        : [...remaining].sort((left, right) => left.localeCompare(right))[0];
+
+    if (!remaining.has(nodeId)) {
+      continue;
+    }
+
+    remaining.delete(nodeId);
+    ordered.push(nodeId);
+
+    const dependents = (outgoing.get(nodeId) ?? []).slice().sort((a, b) => a.localeCompare(b));
+    for (const dependentId of dependents) {
+      inDegree.set(dependentId, (inDegree.get(dependentId) as number) - 1);
+      if (remaining.has(dependentId) && inDegree.get(dependentId) === 0) {
+        insertSorted(ready, dependentId);
+      }
+    }
+  }
+
+  return ordered.filter((nodeId) => Boolean(nodes[nodeId]));
+}
+
 function computeDepthLimit(leafCount: number, maxChildrenPerParent: number): number {
   if (leafCount <= 1) {
     return 0;
   }
 
   const base = Math.max(2, maxChildrenPerParent);
-  return Math.ceil(Math.log(leafCount) / Math.log(base)) + 2;
+  const optimistic = Math.ceil(Math.log(leafCount) / Math.log(base)) + 2;
+  const safeUpperBound = Math.min(2048, leafCount);
+  return Math.max(optimistic, safeUpperBound);
+}
+
+function insertSorted(values: string[], value: string): void {
+  let index = 0;
+  while (index < values.length && values[index].localeCompare(value) < 0) {
+    index += 1;
+  }
+  values.splice(index, 0, value);
 }
 
 async function generatePolicyCompliantParentSummary(

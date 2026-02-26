@@ -29,6 +29,34 @@ describe("pedagogical policy engine", () => {
     expect(decision.violations.map((violation) => violation.code)).toContain("prerequisite_order");
   });
 
+  test("uses provided child order for prerequisite checks instead of lexical id order", () => {
+    const config = normalizeConfig({});
+    const decision = evaluatePreSummaryPolicy(
+      [
+        { id: "z", statement: "Z prerequisite." },
+        { id: "a", statement: "A depends on Z.", prerequisiteIds: ["z"] },
+      ],
+      config,
+    );
+
+    expect(decision.ok).toBe(true);
+    expect(decision.metrics.prerequisiteOrderViolations).toBe(0);
+  });
+
+  test("ignores in-group cyclic prerequisite edges during order validation", () => {
+    const config = normalizeConfig({});
+    const decision = evaluatePreSummaryPolicy(
+      [
+        { id: "a", statement: "A depends on B.", prerequisiteIds: ["b"] },
+        { id: "b", statement: "B depends on A.", prerequisiteIds: ["a"] },
+      ],
+      config,
+    );
+
+    expect(decision.ok).toBe(true);
+    expect(decision.metrics.prerequisiteOrderViolations).toBe(0);
+  });
+
   test("flags post-summary evidence coverage and vocabulary continuity drift", () => {
     const config = normalizeConfig({ audienceLevel: "novice", termIntroductionBudget: 0 });
     const summary: ParentSummary = {

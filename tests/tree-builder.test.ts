@@ -139,6 +139,53 @@ describe("tree builder", () => {
       }),
     ).rejects.toBeInstanceOf(TreePolicyError);
   });
+
+  test("builds when prerequisite order is topological but not lexical by id", async () => {
+    const config = normalizeConfig({ maxChildrenPerParent: 2, complexityBandWidth: 2 });
+    const tree = await buildRecursiveExplanationTree(deterministicSummaryProvider(), {
+      config,
+      leaves: [
+        { id: "a", statement: "A depends on Z.", prerequisiteIds: ["z"] },
+        { id: "z", statement: "Z prerequisite theorem." },
+      ],
+    });
+
+    expect(tree.rootId).toMatch(/^p_/);
+    const validation = validateExplanationTree(tree, config.maxChildrenPerParent);
+    expect(validation.ok).toBe(true);
+  });
+
+  test("builds when two leaves have cyclic prerequisites", async () => {
+    const config = normalizeConfig({ maxChildrenPerParent: 2, complexityBandWidth: 2 });
+    const tree = await buildRecursiveExplanationTree(deterministicSummaryProvider(), {
+      config,
+      leaves: [
+        { id: "a", statement: "A depends on B.", prerequisiteIds: ["b"] },
+        { id: "b", statement: "B depends on A.", prerequisiteIds: ["a"] },
+      ],
+    });
+
+    expect(tree.rootId).toMatch(/^p_/);
+    const validation = validateExplanationTree(tree, config.maxChildrenPerParent);
+    expect(validation.ok).toBe(true);
+  });
+
+  test("builds when acyclic nodes depend on a cyclic pair", async () => {
+    const config = normalizeConfig({ maxChildrenPerParent: 5, complexityBandWidth: 2 });
+    const tree = await buildRecursiveExplanationTree(deterministicSummaryProvider(), {
+      config,
+      leaves: [
+        { id: "a", statement: "A depends on B.", prerequisiteIds: ["b"] },
+        { id: "b", statement: "B depends on A.", prerequisiteIds: ["a"] },
+        { id: "c", statement: "C depends on A and B.", prerequisiteIds: ["a", "b"] },
+        { id: "d", statement: "D depends on C.", prerequisiteIds: ["c"] },
+      ],
+    });
+
+    expect(tree.rootId).toMatch(/^p_/);
+    const validation = validateExplanationTree(tree, config.maxChildrenPerParent);
+    expect(validation.ok).toBe(true);
+  });
 });
 
 function deterministicSummaryProvider(): ProviderClient {

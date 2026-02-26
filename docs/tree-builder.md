@@ -12,6 +12,8 @@ Issue: #9
 ## Deterministic behavior
 - Leaves are normalized and sorted by `id` before construction.
 - Layer grouping uses the `child-grouping` planner (stable topological ordering + deterministic candidate scoring).
+- Each sibling group is re-ordered locally by in-group prerequisites before policy checks and parent synthesis.
+- If local cycles remain, order is completed with deterministic cycle-break picks (lexical) so downstream dependents still follow released prerequisites.
 - Parent IDs are deterministic hashes of `(depth, groupIndex, childIds)`.
 - Parent generation runs in deterministic request order.
 - Grouping diagnostics are preserved per depth for auditability.
@@ -30,7 +32,8 @@ Issue: #9
 ## Pedagogy policy integration (#25)
 - Pre-summary checks:
   - sibling complexity spread must stay within `complexityBandWidth`
-  - in-group prerequisite ordering must remain topological
+  - in-group prerequisite ordering must remain topological in the grouping-produced child order
+  - cyclic in-group prerequisite edges are deterministically waived as non-orderable
 - Post-summary checks:
   - `evidence_refs` must cover all child IDs in the group
   - `new_terms_introduced` must satisfy `termIntroductionBudget`
@@ -42,7 +45,9 @@ Issue: #9
 ## Degenerate and boundary cases
 - One leaf: returns that leaf as root with depth `0`.
 - Very wide input sets: reduced layer-by-layer until one root remains.
-- Optional hard stop via `maxDepth` to avoid non-terminating behavior.
+- Default depth guard uses a safe upper bound (`<= leafCount`, capped at `2048`) so slow but valid reductions do not fail early.
+- If a layer produces no reduction (`nextLayer` size >= `active` size), construction fails fast with an explicit no-progress error.
+- Optional hard stop via `maxDepth` still overrides defaults.
 
 ## API
 - `buildRecursiveExplanationTree(provider, request)`
