@@ -17,6 +17,7 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #25 follow-up: tree builder now reorders each group by local prerequisites and uses a safe depth guard with explicit no-progress failure diagnostics for large Lean corpora.
 - Issue #17: browser-triggered verification workflow core with deterministic queue/status lifecycle, reproducibility contracts, and canonical ledger persistence.
 - Issue #17 follow-up: browser-callable verification HTTP API with deterministic route payloads, persisted ledger-backed job querying, and command-runner integration.
+- Issue #16: deterministic leaf-detail/provenance contract for theorem inspection, source linking/share references, and verification-job binding for browser panels.
 
 ## Local checks
 ```bash
@@ -27,6 +28,7 @@ npm run bench:dependency-graph
 npm run ingest:lean -- /path/to/lean-project
 npm run eval:domain-adapters
 npm run eval:tree-pipeline -- /path/to/lean-project --include=Verity --include=Compiler/ContractSpec.lean
+npm run eval:leaf-detail -- /path/to/lean-project --include=Verity --leaf=<leaf-id>
 npm run serve:verification
 ```
 
@@ -49,3 +51,4 @@ EXPLAIN_MD_LIVE_RPC_API_KEY=... npm run test:live:summary
 - [Pedagogical policy engine](docs/pedagogical-policy.md)
 - [Browser-triggered verification flow](docs/verification-flow.md)
 - [Verification HTTP API service](docs/verification-api.md)
+- [Leaf detail contract](docs/leaf-detail.md)
