@@ -8,4 +8,5 @@ export * from "./openai-provider.js";
 export * from "./summary-pipeline.js";
 export * from "./tree-builder.js";
 export * from "./verification-flow.js";
+export * from "./verification-api.js";
 export * from "./pedagogical-policy.js";

@@ -43,6 +43,8 @@ Issue: #17
 - `buildLeanVerificationContract(...)` produces a reproducibility contract for `lake env lean <file>` checks.
 - `createVerificationTargetFromLeaf(leaf)` maps theorem leaves to verification targets.
 
-## Current boundary
-- This slice implements the full deterministic job/state/persistence core.
-- HTTP endpoint wiring and browser UI trigger integration remain separate adapters on top of this workflow.
+## API integration
+- HTTP endpoint adapter is provided in `verification-api.ts`:
+  - `startVerificationHttpServer(...)`
+  - `createChildProcessVerificationRunner(...)`
+- Endpoint contract is documented in `docs/verification-api.md`.
