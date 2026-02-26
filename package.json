@@ -12,7 +12,8 @@
     "bench:dependency-graph": "npm run -s build && node scripts/benchmark-dependency-graph.mjs",
     "ingest:lean": "npm run -s build && node scripts/lean-ingest.mjs",
     "eval:domain-adapters": "npm run -s build && node scripts/eval-domain-adapters.mjs",
-    "eval:tree-pipeline": "npm run -s build && node scripts/eval-tree-pipeline.mjs"
+    "eval:tree-pipeline": "npm run -s build && node scripts/eval-tree-pipeline.mjs",
+    "serve:verification": "npm run -s build && node scripts/verification-server.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.4.0",
