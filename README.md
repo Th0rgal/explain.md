@@ -13,19 +13,11 @@ npm test
 npm run build
 ```
 
-## Spec docs
-- [Configuration contract](docs/config-contract.md)
-- [Provider layer](docs/openai-provider.md)
-
-## Implemented slice
-- Issue #23: unified configuration contract with deterministic normalization, validation, hashing, cache keys, regeneration planning, and profile-key support.
-
-## Local checks
+## Live provider check
 ```bash
-npm install
-npm test
-npm run build
+EXPLAIN_MD_LIVE_RPC_API_KEY=... npm run test:live
 ```
 
 ## Spec docs
 - [Configuration contract](docs/config-contract.md)
+- [Provider layer](docs/openai-provider.md)

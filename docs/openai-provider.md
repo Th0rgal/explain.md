@@ -42,3 +42,14 @@ Each error carries `attempt`, `retriable`, and optional HTTP `status`.
 ## Streaming
 `provider.stream(...)` parses SSE `data:` frames and yields `textDelta` chunks.
 `[DONE]` terminates the stream. Partial/truncated SSE frames are rejected as `invalid_response`.
+
+## Live RPC Smoke Check
+Run a real endpoint check via the provider codepath:
+
+```bash
+EXPLAIN_MD_LIVE_RPC_API_KEY=... npm run test:live
+```
+
+Optional overrides:
+- `EXPLAIN_MD_LIVE_RPC_BASE_URL` (default: `https://agent-backend.thomas.md/v1`)
+- `EXPLAIN_MD_LIVE_RPC_MODEL` (default: `builtin/smart`)

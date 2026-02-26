@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:live": "npm run -s build && node scripts/live-provider-check.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.4.0",
