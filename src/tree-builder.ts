@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { computeConfigHash, type ExplanationConfig } from "./config-contract.js";
+import { groupChildrenDeterministically, type GroupingWarning } from "./child-grouping.js";
 import type { ProviderClient } from "./openai-provider.js";
 import { generateParentSummary } from "./summary-pipeline.js";
 
@@ -7,6 +8,7 @@ export interface LeafNodeInput {
   id: string;
   statement: string;
   complexity?: number;
+  prerequisiteIds?: string[];
 }
 
 export type ExplanationTreeNodeKind = "leaf" | "parent";
@@ -30,6 +32,14 @@ export interface GroupPlan {
   index: number;
   inputNodeIds: string[];
   outputNodeId: string;
+  complexitySpread: number;
+}
+
+export interface GroupingLayerDiagnostics {
+  depth: number;
+  orderedNodeIds: string[];
+  complexitySpreadByGroup: number[];
+  warnings: GroupingWarning[];
 }
 
 export interface ExplanationTree {
@@ -38,6 +48,7 @@ export interface ExplanationTree {
   nodes: Record<string, ExplanationTreeNode>;
   configHash: string;
   groupPlan: GroupPlan[];
+  groupingDiagnostics: GroupingLayerDiagnostics[];
   maxDepth: number;
 }
 
@@ -65,7 +76,9 @@ export async function buildRecursiveExplanationTree(
   const leaves = normalizeLeaves(request.leaves);
   const nodes: Record<string, ExplanationTreeNode> = {};
   const leafIds = leaves.map((leaf) => leaf.id);
+  const leafById = new Map(leaves.map((leaf) => [leaf.id, leaf]));
   const groupPlan: GroupPlan[] = [];
+  const groupingDiagnostics: GroupingLayerDiagnostics[] = [];
 
   for (const leaf of leaves) {
     nodes[leaf.id] = {
@@ -86,6 +99,7 @@ export async function buildRecursiveExplanationTree(
       nodes,
       configHash: computeConfigHash(request.config),
       groupPlan,
+      groupingDiagnostics,
       maxDepth: 0,
     };
 
@@ -108,7 +122,27 @@ export async function buildRecursiveExplanationTree(
       throw new Error(`Tree construction exceeded max depth ${hardDepthLimit}.`);
     }
 
-    const groups = partitionNodeIds(activeNodeIds, request.config.maxChildrenPerParent);
+    const groupingResult = groupChildrenDeterministically({
+      nodes: activeNodeIds.map((nodeId) => {
+        const node = nodes[nodeId];
+        return {
+          id: node.id,
+          statement: node.statement,
+          complexity: node.complexityScore,
+          prerequisiteIds: node.kind === "leaf" ? leafById.get(node.id)?.prerequisiteIds : [],
+        };
+      }),
+      maxChildrenPerParent: request.config.maxChildrenPerParent,
+      targetComplexity: request.config.complexityLevel,
+      complexityBandWidth: request.config.complexityBandWidth,
+    });
+    const groups = groupingResult.groups;
+    groupingDiagnostics.push({
+      depth,
+      orderedNodeIds: groupingResult.diagnostics.orderedNodeIds,
+      complexitySpreadByGroup: groupingResult.diagnostics.complexitySpreadByGroup,
+      warnings: groupingResult.diagnostics.warnings,
+    });
     const nextLayerIds: string[] = [];
 
     for (let index = 0; index < groups.length; index += 1) {
@@ -149,7 +183,13 @@ export async function buildRecursiveExplanationTree(
 
       nodes[parentId] = parentNode;
       nextLayerIds.push(parentId);
-      groupPlan.push({ depth, index, inputNodeIds: groupNodeIds.slice(), outputNodeId: parentId });
+      groupPlan.push({
+        depth,
+        index,
+        inputNodeIds: groupNodeIds.slice(),
+        outputNodeId: parentId,
+        complexitySpread: groupingResult.diagnostics.complexitySpreadByGroup[index] ?? 0,
+      });
     }
 
     activeNodeIds = nextLayerIds;
@@ -161,6 +201,7 @@ export async function buildRecursiveExplanationTree(
     nodes,
     configHash: computeConfigHash(request.config),
     groupPlan,
+    groupingDiagnostics,
     maxDepth: depth,
   };
 
@@ -263,6 +304,7 @@ function normalizeLeaves(leaves: LeafNodeInput[]): LeafNodeInput[] {
       id,
       statement,
       complexity: leaf.complexity,
+      prerequisiteIds: leaf.prerequisiteIds,
     };
   });
 
@@ -275,14 +317,6 @@ function normalizeLeaves(leaves: LeafNodeInput[]): LeafNodeInput[] {
   }
 
   return normalized;
-}
-
-function partitionNodeIds(nodeIds: string[], maxChildrenPerParent: number): string[][] {
-  const groups: string[][] = [];
-  for (let i = 0; i < nodeIds.length; i += maxChildrenPerParent) {
-    groups.push(nodeIds.slice(i, i + maxChildrenPerParent));
-  }
-  return groups;
 }
 
 function buildParentNodeId(depth: number, index: number, childIds: string[]): string {

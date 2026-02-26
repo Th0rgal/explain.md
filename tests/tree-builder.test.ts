@@ -25,6 +25,8 @@ describe("tree builder", () => {
     expect(tree.rootId).toMatch(/^p_/);
     expect(tree.leafIds).toEqual(["l1", "l2", "l3", "l4", "l5"]);
     expect(tree.maxDepth).toBeGreaterThan(0);
+    expect(tree.groupingDiagnostics.length).toBeGreaterThan(0);
+    expect(tree.groupingDiagnostics.every((layer) => layer.complexitySpreadByGroup.every((spread) => spread <= 2))).toBe(true);
 
     const validation = validateExplanationTree(tree, config.maxChildrenPerParent);
     expect(validation.ok).toBe(true);
@@ -45,6 +47,7 @@ describe("tree builder", () => {
     expect(tree.rootId).toBe("l1");
     expect(tree.maxDepth).toBe(0);
     expect(tree.groupPlan).toHaveLength(0);
+    expect(tree.groupingDiagnostics).toHaveLength(0);
 
     const validation = validateExplanationTree(tree, config.maxChildrenPerParent);
     expect(validation.ok).toBe(true);
@@ -82,6 +85,7 @@ describe("tree builder", () => {
       leafIds: ["l1", "l2"],
       configHash: "hash",
       groupPlan: [],
+      groupingDiagnostics: [],
       maxDepth: 1,
       nodes: {
         p1: {
