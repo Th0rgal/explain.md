@@ -22,6 +22,13 @@ const PRESET_DEFINITIONS: Record<string, Omit<QualityBenchmarkPreset, "name">> =
       maxRepartitionMaxRound: 1,
     },
   },
+  "fixture-verity-counter-snapshot": {
+    description:
+      "Frozen real-Verity counter snapshot (example + AST + proofs) for CI-safe provenance-preserving benchmark coverage.",
+    projectRoot: "tests/fixtures/lean-verity-counter-snapshot",
+    includePaths: ["Verity"],
+    thresholdOverrides: {},
+  },
   "fixture-verity-core": {
     description: "Deterministic fixture benchmark covering the Verity mini corpus in tests/fixtures/lean-project.",
     projectRoot: "tests/fixtures/lean-project",

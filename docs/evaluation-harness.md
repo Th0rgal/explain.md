@@ -103,6 +103,12 @@ Broader Verity fixture preset (core + loop + invariants + cycle pressure):
 npm run eval:quality -- --preset=fixture-verity-broad --out=.explain-md/quality-gate-report-broad.json
 ```
 
+Frozen real-Verity snapshot preset (counter example + AST + proofs):
+
+```bash
+npm run eval:quality -- --preset=fixture-verity-counter-snapshot --out=.explain-md/quality-gate-report-counter-snapshot.json
+```
+
 Optional threshold overrides:
 
 ```bash
@@ -148,7 +154,7 @@ To intentionally refresh baseline expectations after a reviewed benchmark change
 
 ```bash
 node scripts/eval-quality-baseline.mjs \
-  --reports=.explain-md/quality-gate-report-pressure.json,.explain-md/quality-gate-report-broad.json \
+  --reports=.explain-md/quality-gate-report-pressure.json,.explain-md/quality-gate-report-broad.json,.explain-md/quality-gate-report-counter-snapshot.json \
   --baseline=docs/benchmarks/quality-gate-baseline.json \
   --write-baseline
 ```

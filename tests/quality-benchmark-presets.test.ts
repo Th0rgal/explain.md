@@ -19,7 +19,13 @@ describe("quality-benchmark-presets", () => {
     const presets = listQualityBenchmarkPresets();
     const names = presets.map((preset) => preset.name);
 
-    expect(names).toEqual(["fixture-verity-broad", "fixture-verity-core", "fixture-verity-loop", "fixture-verity-pressure"]);
+    expect(names).toEqual([
+      "fixture-verity-broad",
+      "fixture-verity-core",
+      "fixture-verity-counter-snapshot",
+      "fixture-verity-loop",
+      "fixture-verity-pressure",
+    ]);
     expect(presets[0].includePaths).toEqual(["Verity"]);
   });
 
@@ -40,6 +46,11 @@ describe("quality-benchmark-presets", () => {
         maxRepartitionEventRate: 0.6,
         maxRepartitionMaxRound: 1,
       },
+    });
+    expect(resolveQualityBenchmarkPreset("fixture-verity-counter-snapshot")).toMatchObject({
+      projectRoot: "tests/fixtures/lean-verity-counter-snapshot",
+      includePaths: ["Verity"],
+      thresholdOverrides: {},
     });
     expect(resolveQualityBenchmarkPreset("unknown-preset")).toBeUndefined();
   });

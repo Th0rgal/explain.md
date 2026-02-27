@@ -12,6 +12,16 @@
       "repartitionMaxRound": 0
     },
     {
+      "presetName": "fixture-verity-counter-snapshot",
+      "presetHash": "84b172d99c48903f75b41d945ca91d3a39d1aac945402406cef203fb16ee305d",
+      "qualityReportHash": "d341ba5cf0898d1d4d1606af261ef8e971c1229ae21a14138d7c13e9ee69ef7e",
+      "thresholdPass": true,
+      "leafCount": 30,
+      "parentCount": 8,
+      "repartitionEventCount": 0,
+      "repartitionMaxRound": 0
+    },
+    {
       "presetName": "fixture-verity-pressure",
       "presetHash": "5251da16b02169e49c30cb4aed8f05b07caab119bbde8d7f98fca170d825705a",
       "qualityReportHash": "34efa2a67254563a5b78fd6c541847ceabc971be078eb03ceacf58f92b486d8d",
@@ -22,5 +32,5 @@
       "repartitionMaxRound": 0
     }
   ],
-  "outcomeHash": "daed53899fa0324a0a8f86c84211d2826df17546f6c06bd90469789fab64f194"
+  "outcomeHash": "babbdf697936493b794f3a0b0a75dec95041e41b35bc14b1765e6fad6d4319ad"
 }
