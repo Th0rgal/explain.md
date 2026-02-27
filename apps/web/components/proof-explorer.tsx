@@ -1,19 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  fetchCacheReport,
   fetchConfigProfiles,
   fetchDiff,
   fetchLeafDetail,
   fetchLeafVerificationJobs,
-  fetchPolicyReport,
   fetchNodeChildren,
   fetchNodePath,
+  fetchPolicyReport,
   fetchRoot,
   fetchVerificationJob,
   removeConfigProfile,
   saveConfigProfile,
   verifyLeaf,
+  type CacheReportResponse,
   type ConfigProfilesResponse,
   type DiffResponse,
   type LeafDetailResponse,
@@ -26,6 +29,11 @@ import {
   type VerificationJobResponse,
   type VerificationJobsResponse,
 } from "../lib/api-client";
+import { buildTreeScene, isWholeTreeLoaded } from "../lib/tree-scene";
+
+const ProofTree3D = dynamic(() => import("./proof-tree-3d").then((module) => module.ProofTree3D), {
+  ssr: false,
+});
 
 const DEFAULT_CONFIG: ProofConfigInput = {
   abstractionLevel: 3,
@@ -45,8 +53,11 @@ interface ProofExplorerProps {
   proofId: string;
 }
 
+type ViewMode = "list" | "tree3d";
+
 export function ProofExplorer(props: ProofExplorerProps) {
   const [config, setConfig] = useState<ProofConfigInput>(DEFAULT_CONFIG);
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [profileName, setProfileName] = useState<string>("Default profile");
   const [profileId, setProfileId] = useState<string>("default");
   const [profiles, setProfiles] = useState<ConfigProfilesResponse["profiles"]>([]);
@@ -60,7 +71,9 @@ export function ProofExplorer(props: ProofExplorerProps) {
   const [childrenByParentId, setChildrenByParentId] = useState<Record<string, NodeChildrenState>>({});
   const [diff, setDiff] = useState<DiffResponse | null>(null);
   const [policyReport, setPolicyReport] = useState<PolicyReportResponse | null>(null);
+  const [cacheReport, setCacheReport] = useState<CacheReportResponse | null>(null);
   const [pathResult, setPathResult] = useState<NodePathResponse | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedLeafId, setSelectedLeafId] = useState<string | null>(null);
   const [leafDetail, setLeafDetail] = useState<LeafDetailResponse | null>(null);
   const [verificationJobs, setVerificationJobs] = useState<VerificationJobsResponse | null>(null);
@@ -68,9 +81,25 @@ export function ProofExplorer(props: ProofExplorerProps) {
   const [selectedVerificationJob, setSelectedVerificationJob] = useState<VerificationJobResponse | null>(null);
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
+  const [isHydrating3d, setIsHydrating3d] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const isHydrating3dRef = useRef<boolean>(false);
+  const nodesByIdRef = useRef<Record<string, TreeNodeRecord>>({});
+  const childrenByParentIdRef = useRef<Record<string, NodeChildrenState>>({});
   const profileProjectId = useMemo(() => props.proofId, [props.proofId]);
+
+  useEffect(() => {
+    nodesByIdRef.current = nodesById;
+  }, [nodesById]);
+
+  useEffect(() => {
+    childrenByParentIdRef.current = childrenByParentId;
+  }, [childrenByParentId]);
+
+  useEffect(() => {
+    isHydrating3dRef.current = isHydrating3d;
+  }, [isHydrating3d]);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,7 +110,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
       setProfileError(null);
       setPathResult(null);
       try {
-        const [rootData, diffData, policyData] = await Promise.all([
+        const [rootData, diffData, policyData, cacheData] = await Promise.all([
           fetchRoot(props.proofId, config),
           fetchDiff({
             proofId: props.proofId,
@@ -89,6 +118,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
             candidateConfig: config,
           }),
           fetchPolicyReport(props.proofId, config),
+          fetchCacheReport(props.proofId, config),
         ]);
 
         if (cancelled) {
@@ -139,8 +169,11 @@ export function ProofExplorer(props: ProofExplorerProps) {
             : {},
         );
         setExpandedNodeIds(rootNode.kind === "parent" ? [rootNode.id] : []);
+        setSelectedNodeId(rootNode.id);
+        setSelectedLeafId(rootNode.kind === "leaf" ? rootNode.id : null);
         setDiff(diffData);
         setPolicyReport(policyData);
+        setCacheReport(cacheData);
       } catch (loadError) {
         if (cancelled) {
           return;
@@ -153,7 +186,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
       }
     }
 
-    load();
+    void load();
     return () => {
       cancelled = true;
     };
@@ -230,7 +263,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
       }
     }
 
-    loadLeafPanel(selectedLeafId);
+    void loadLeafPanel(selectedLeafId);
     return () => {
       cancelled = true;
     };
@@ -258,11 +291,123 @@ export function ProofExplorer(props: ProofExplorerProps) {
       }
     }
 
-    loadSelectedJob(selectedVerificationJobId);
+    void loadSelectedJob(selectedVerificationJobId);
     return () => {
       cancelled = true;
     };
   }, [selectedVerificationJobId]);
+
+  const wholeTreeLoaded = useMemo(() => {
+    if (!root?.root.node) {
+      return false;
+    }
+    return isWholeTreeLoaded(root.root.node.id, nodesById, childrenByParentId);
+  }, [childrenByParentId, nodesById, root]);
+
+  useEffect(() => {
+    if (viewMode !== "tree3d" || isHydrating3dRef.current || wholeTreeLoaded || !root?.root.node || root.root.node.kind !== "parent") {
+      return;
+    }
+
+    const rootNode = root.root.node;
+
+    let cancelled = false;
+
+    async function hydrateTree() {
+      setIsHydrating3d(true);
+      setError(null);
+
+      const queue: string[] = [rootNode.id];
+      const visited = new Set<string>();
+      const nextNodes: Record<string, TreeNodeRecord> = { ...nodesByIdRef.current };
+      const nextChildren: Record<string, NodeChildrenState> = { ...childrenByParentIdRef.current };
+      const limit = 100;
+
+      try {
+        while (queue.length > 0) {
+          const parentId = queue.shift() as string;
+          if (visited.has(parentId)) {
+            continue;
+          }
+          visited.add(parentId);
+
+          const parentNode = nextNodes[parentId];
+          if (!parentNode || parentNode.kind !== "parent") {
+            continue;
+          }
+
+          const existing = nextChildren[parentId];
+          const mergedIds = [...(existing?.childIds ?? [])];
+          let offset = existing?.nextOffset ?? 0;
+          let hasMore = existing?.hasMore ?? true;
+          let totalChildren = existing?.totalChildren ?? mergedIds.length;
+          let diagnostics = existing?.diagnostics ?? [];
+
+          while (hasMore) {
+            const result = await fetchNodeChildren(props.proofId, parentId, config, { offset, limit });
+            if (cancelled) {
+              return;
+            }
+
+            setTreeConfigHash(result.configHash);
+            setTreeSnapshotHash(result.snapshotHash);
+
+            totalChildren = result.children.totalChildren;
+            hasMore = result.children.hasMore;
+            diagnostics = result.children.diagnostics;
+            offset = result.children.offset + result.children.children.length;
+
+            nextNodes[parentId] = result.children.parent;
+            for (const child of result.children.children) {
+              nextNodes[child.id] = child;
+              if (!mergedIds.includes(child.id)) {
+                mergedIds.push(child.id);
+              }
+            }
+
+            if (result.children.children.length === 0) {
+              break;
+            }
+          }
+
+          nextChildren[parentId] = {
+            childIds: mergedIds,
+            totalChildren,
+            hasMore: false,
+            nextOffset: offset,
+            loading: false,
+            diagnostics,
+          };
+
+          const nestedParents = mergedIds.filter((childId) => nextNodes[childId]?.kind === "parent").sort((a, b) => a.localeCompare(b));
+          for (const childParentId of nestedParents) {
+            if (!visited.has(childParentId)) {
+              queue.push(childParentId);
+            }
+          }
+        }
+
+        if (!cancelled) {
+          setNodesById(nextNodes);
+          setChildrenByParentId(nextChildren);
+        }
+      } catch (hydrateError) {
+        if (!cancelled) {
+          setError(hydrateError instanceof Error ? hydrateError.message : String(hydrateError));
+        }
+      } finally {
+        if (!cancelled) {
+          setIsHydrating3d(false);
+        }
+      }
+    }
+
+    void hydrateTree();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [config, props.proofId, root, viewMode, wholeTreeLoaded]);
 
   const visibleRows = useMemo(() => {
     if (!root?.root.node) {
@@ -304,6 +449,28 @@ export function ProofExplorer(props: ProofExplorerProps) {
 
     return rows;
   }, [childrenByParentId, expandedNodeIds, nodesById, root]);
+
+  const pathNodeIds = useMemo(() => {
+    if (!pathResult?.path.ok) {
+      return [] as string[];
+    }
+    return pathResult.path.path.map((entry) => entry.id);
+  }, [pathResult]);
+
+  const scene = useMemo(() => {
+    const rootId = root?.root.node?.id ?? "";
+    return buildTreeScene({
+      rootId,
+      nodesById,
+      childrenByParentId,
+      selectedNodeId,
+      selectedLeafId,
+      pathNodeIds,
+      configHash: treeConfigHash || root?.configHash || "",
+      snapshotHash: treeSnapshotHash || root?.snapshotHash || "",
+      policyReport,
+    });
+  }, [childrenByParentId, nodesById, pathNodeIds, policyReport, root, selectedLeafId, selectedNodeId, treeConfigHash, treeSnapshotHash]);
 
   function updateConfig<Key extends keyof ProofConfigInput>(key: Key, value: ProofConfigInput[Key]): void {
     setConfig((current) => ({
@@ -391,6 +558,15 @@ export function ProofExplorer(props: ProofExplorerProps) {
       }));
       setError(childrenError instanceof Error ? childrenError.message : String(childrenError));
     }
+  }
+
+  async function selectNode(nodeId: string, kind: "leaf" | "parent") {
+    setSelectedNodeId(nodeId);
+    if (kind === "leaf") {
+      await selectLeaf(nodeId);
+      return;
+    }
+    setSelectedLeafId(null);
   }
 
   async function selectLeaf(nodeId: string): Promise<void> {
@@ -499,68 +675,18 @@ export function ProofExplorer(props: ProofExplorerProps) {
   }
 
   return (
-    <div className="layout-grid">
+    <div className="layout-grid proof-layout-grid">
       <section className="panel controls" aria-label="Tree controls">
         <h2>Controls</h2>
+
         <label>
-          Abstraction
-          <input
-            type="range"
-            min={1}
-            max={5}
-            value={config.abstractionLevel}
-            onChange={(event) => updateConfig("abstractionLevel", Number(event.target.value))}
-          />
-        </label>
-        <label>
-          Complexity
-          <input
-            type="range"
-            min={1}
-            max={5}
-            value={config.complexityLevel}
-            onChange={(event) => updateConfig("complexityLevel", Number(event.target.value))}
-          />
-        </label>
-        <label>
-          Max children
-          <input
-            type="number"
-            min={2}
-            max={12}
-            value={config.maxChildrenPerParent}
-            onChange={(event) => updateConfig("maxChildrenPerParent", Number(event.target.value))}
-          />
-        </label>
-        <label>
-          Audience
-          <select
-            value={config.audienceLevel}
-            onChange={(event) => updateConfig("audienceLevel", event.target.value as "novice" | "intermediate" | "expert")}
-          >
-            <option value="novice">Novice</option>
-            <option value="intermediate">Intermediate</option>
-            <option value="expert">Expert</option>
+          View mode
+          <select value={viewMode} onChange={(event) => setViewMode(event.target.value as ViewMode)}>
+            <option value="list">List</option>
+            <option value="tree3d">3D Tree</option>
           </select>
         </label>
-        <label>
-          Reading level
-          <select
-            value={config.readingLevelTarget}
-            onChange={(event) =>
-              updateConfig(
-                "readingLevelTarget",
-                event.target.value as "elementary" | "middle_school" | "high_school" | "undergraduate" | "graduate",
-              )
-            }
-          >
-            <option value="elementary">Elementary</option>
-            <option value="middle_school">Middle school</option>
-            <option value="high_school">High school</option>
-            <option value="undergraduate">Undergraduate</option>
-            <option value="graduate">Graduate</option>
-          </select>
-        </label>
+
         <label>
           Proof detail
           <select
@@ -572,30 +698,97 @@ export function ProofExplorer(props: ProofExplorerProps) {
             <option value="formal">Formal</option>
           </select>
         </label>
+
         <label>
-          Complexity band
+          Audience
+          <select
+            value={config.audienceLevel}
+            onChange={(event) => updateConfig("audienceLevel", event.target.value as "novice" | "intermediate" | "expert")}
+          >
+            <option value="novice">Novice</option>
+            <option value="intermediate">Intermediate</option>
+            <option value="expert">Expert</option>
+          </select>
+        </label>
+
+        <label>
+          Complexity
           <input
-            type="number"
-            min={0}
-            max={3}
-            value={config.complexityBandWidth}
-            onChange={(event) => updateConfig("complexityBandWidth", Number(event.target.value))}
+            type="range"
+            min={1}
+            max={5}
+            value={config.complexityLevel}
+            onChange={(event) => updateConfig("complexityLevel", Number(event.target.value))}
           />
         </label>
+
         <label>
-          Term budget
+          Max children
           <input
             type="number"
-            min={0}
-            max={8}
-            value={config.termIntroductionBudget}
-            onChange={(event) => updateConfig("termIntroductionBudget", Number(event.target.value))}
+            min={2}
+            max={12}
+            value={config.maxChildrenPerParent}
+            onChange={(event) => updateConfig("maxChildrenPerParent", Number(event.target.value))}
           />
         </label>
-        <label>
-          Language
-          <input type="text" value={config.language} onChange={(event) => updateConfig("language", event.target.value)} />
-        </label>
+
+        <details className="advanced-controls">
+          <summary>Advanced controls</summary>
+          <label>
+            Abstraction
+            <input
+              type="range"
+              min={1}
+              max={5}
+              value={config.abstractionLevel}
+              onChange={(event) => updateConfig("abstractionLevel", Number(event.target.value))}
+            />
+          </label>
+          <label>
+            Reading level
+            <select
+              value={config.readingLevelTarget}
+              onChange={(event) =>
+                updateConfig(
+                  "readingLevelTarget",
+                  event.target.value as "elementary" | "middle_school" | "high_school" | "undergraduate" | "graduate",
+                )
+              }
+            >
+              <option value="elementary">Elementary</option>
+              <option value="middle_school">Middle school</option>
+              <option value="high_school">High school</option>
+              <option value="undergraduate">Undergraduate</option>
+              <option value="graduate">Graduate</option>
+            </select>
+          </label>
+          <label>
+            Complexity band
+            <input
+              type="number"
+              min={0}
+              max={3}
+              value={config.complexityBandWidth}
+              onChange={(event) => updateConfig("complexityBandWidth", Number(event.target.value))}
+            />
+          </label>
+          <label>
+            Term budget
+            <input
+              type="number"
+              min={0}
+              max={8}
+              value={config.termIntroductionBudget}
+              onChange={(event) => updateConfig("termIntroductionBudget", Number(event.target.value))}
+            />
+          </label>
+          <label>
+            Language
+            <input type="text" value={config.language} onChange={(event) => updateConfig("language", event.target.value)} />
+          </label>
+        </details>
+
         <label>
           Saved profiles
           <select value={profileId} onChange={(event) => applyProfileSelection(event.target.value)}>
@@ -617,6 +810,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
           Profile name
           <input type="text" value={profileName} onChange={(event) => setProfileName(event.target.value)} />
         </label>
+
         <div className="tree-row">
           <button type="button" onClick={() => void saveCurrentProfile()}>
             Save profile
@@ -625,97 +819,98 @@ export function ProofExplorer(props: ProofExplorerProps) {
             Delete profile
           </button>
         </div>
+
         <p className="meta">Profile ledger hash: {profileLedgerHash || "unavailable"}</p>
         {profileError ? <p className="meta">Profile error: {profileError}</p> : null}
       </section>
 
       <section className="panel tree" aria-label="Root-first explanation tree">
-        <h2>Tree</h2>
+        <h2>{viewMode === "tree3d" ? "3D Tree" : "Tree"}</h2>
         <p className="meta">Config hash: {treeConfigHash || root?.configHash || "unavailable"}</p>
         <p className="meta">Snapshot hash: {treeSnapshotHash || root?.snapshotHash || "unavailable"}</p>
-        <ul className="tree-list" role="tree">
-          {visibleRows.map((row) => {
-            const { node } = row;
-            const childrenState = childrenByParentId[node.id];
-            const isExpanded = expandedNodeIds.includes(node.id);
-            const indentStyle = { paddingLeft: `${row.depthFromRoot * 1.25}rem` };
-            const isSelectedLeaf = node.kind === "leaf" && selectedLeafId === node.id;
-            return (
-              <li
-                key={node.id}
-                role="treeitem"
-                aria-expanded={node.kind === "parent" ? isExpanded : undefined}
-                aria-selected={isSelectedLeaf}
-              >
-                <div className="tree-row" style={indentStyle}>
-                  {node.kind === "parent" ? (
-                    <button type="button" onClick={() => toggleExpansion(node.id)} aria-label={`Toggle ${node.id}`}>
-                      {isExpanded ? "Collapse" : "Expand"}
+
+        {viewMode === "tree3d" ? (
+          <ProofTree3D
+            scene={scene}
+            isHydrating={isHydrating3d}
+            onSelectNode={(nodeId, kind) => {
+              void selectNode(nodeId, kind);
+            }}
+          />
+        ) : (
+          <ul className="tree-list" role="tree">
+            {visibleRows.map((row) => {
+              const { node } = row;
+              const childrenState = childrenByParentId[node.id];
+              const isExpanded = expandedNodeIds.includes(node.id);
+              const indentStyle = { paddingLeft: `${row.depthFromRoot * 1.25}rem` };
+              const isSelected = selectedNodeId === node.id;
+              return (
+                <li
+                  key={node.id}
+                  role="treeitem"
+                  aria-expanded={node.kind === "parent" ? isExpanded : undefined}
+                  aria-selected={isSelected}
+                >
+                  <div className="tree-row" style={indentStyle}>
+                    {node.kind === "parent" ? (
+                      <button type="button" onClick={() => toggleExpansion(node.id)} aria-label={`Toggle ${node.id}`}>
+                        {isExpanded ? "Collapse" : "Expand"}
+                      </button>
+                    ) : (
+                      <span className="leaf-pill">Leaf</span>
+                    )}
+                    <button
+                      type="button"
+                      className="statement-button"
+                      aria-pressed={isSelected}
+                      onClick={() => {
+                        void selectNode(node.id, node.kind);
+                      }}
+                    >
+                      {node.statement}
                     </button>
-                  ) : (
-                    <span className="leaf-pill">Leaf</span>
-                  )}
-                  <button
-                    type="button"
-                    className="statement-button"
-                    aria-pressed={isSelectedLeaf}
-                    onClick={() => (node.kind === "leaf" ? selectLeaf(node.id) : setSelectedLeafId(null))}
-                  >
-                    {node.statement}
-                  </button>
-                  {node.kind === "parent" && childrenState ? (
-                    <span className="meta">
-                      {childrenState.childIds.length}/{childrenState.totalChildren} loaded
-                    </span>
+                    {node.kind === "parent" && childrenState ? (
+                      <span className="meta">
+                        {childrenState.childIds.length}/{childrenState.totalChildren} loaded
+                      </span>
+                    ) : null}
+                  </div>
+                  {node.kind === "parent" && isExpanded && childrenState?.hasMore ? (
+                    <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
+                      <button type="button" onClick={() => void loadChildrenPage(node.id)} disabled={childrenState.loading}>
+                        {childrenState.loading ? "Loading…" : "Load more"}
+                      </button>
+                      <span className="meta">{row.hiddenChildCount} hidden children</span>
+                    </div>
                   ) : null}
-                </div>
-                {node.kind === "parent" && isExpanded && childrenState?.hasMore ? (
-                  <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
-                    <button type="button" onClick={() => loadChildrenPage(node.id)} disabled={childrenState.loading}>
-                      {childrenState.loading ? "Loading…" : "Load more"}
-                    </button>
-                    <span className="meta">{row.hiddenChildCount} hidden children</span>
-                  </div>
-                ) : null}
-                {node.kind === "parent" && isExpanded && childrenState?.diagnostics.length ? (
-                  <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
-                    <span className="meta">{childrenState.diagnostics.map((diagnostic) => diagnostic.code).join(", ")}</span>
-                  </div>
-                ) : null}
-                {node.kind === "parent" && node.policyDiagnostics ? (
-                  <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
-                    <span className="meta">
-                      Policy pre/post: {node.policyDiagnostics.preSummary.ok ? "ok" : "violating"}/
-                      {node.policyDiagnostics.postSummary.ok ? "ok" : "violating"} | spread=
-                      {node.policyDiagnostics.preSummary.metrics.complexitySpread} | new-terms=
-                      {node.policyDiagnostics.postSummary.metrics.introducedTermCount}
-                    </span>
-                  </div>
-                ) : null}
-                {node.kind === "leaf" && pathResult?.path.path.some((pathNode) => pathNode.id === node.id) ? (
-                  <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
-                    <span className="meta">Included in selected ancestry path</span>
-                  </div>
-                ) : null}
-                {node.kind === "parent" && isExpanded && !childrenState ? (
-                  <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
-                    <span className="meta">Loading children...</span>
-                  </div>
-                ) : null}
-                {node.kind === "parent" && isExpanded && childrenState && childrenState.totalChildren === 0 ? (
-                  <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
-                    <span className="meta">No children</span>
-                  </div>
-                ) : null}
-                {node.kind === "parent" && isExpanded && childrenState && !childrenState.hasMore && childrenState.totalChildren > 0 ? (
-                  <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
-                    <span className="meta">All children loaded</span>
-                  </div>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
+                  {node.kind === "parent" && isExpanded && childrenState?.diagnostics.length ? (
+                    <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
+                      <span className="meta">{childrenState.diagnostics.map((diagnostic) => diagnostic.code).join(", ")}</span>
+                    </div>
+                  ) : null}
+                  {node.kind === "parent" && node.policyDiagnostics ? (
+                    <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
+                      <span className="meta">
+                        Policy pre/post: {node.policyDiagnostics.preSummary.ok ? "ok" : "violating"}/
+                        {node.policyDiagnostics.postSummary.ok ? "ok" : "violating"} | spread=
+                        {node.policyDiagnostics.preSummary.metrics.complexitySpread} | new-terms=
+                        {node.policyDiagnostics.postSummary.metrics.introducedTermCount}
+                      </span>
+                    </div>
+                  ) : null}
+                  {node.kind === "leaf" && pathNodeIds.includes(node.id) ? (
+                    <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
+                      <span className="meta">Included in selected ancestry path</span>
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        <p className="meta">Whole-tree loaded: {wholeTreeLoaded ? "yes" : "no"}</p>
       </section>
 
       <section className="panel diff" aria-label="Explanation diff">
@@ -738,13 +933,26 @@ export function ProofExplorer(props: ProofExplorerProps) {
           Threshold pass: {policyReport ? (policyReport.report.thresholdPass ? "yes" : "no") : "unavailable"}
         </p>
         <p className="meta">
-          Parent count: {policyReport?.report.metrics.parentCount ?? 0} | violation rate:{" "}
-          {policyReport?.report.metrics.policyViolationRate ?? 0}
+          Parent count: {policyReport?.report.metrics.parentCount ?? 0} | violation rate: {policyReport?.report.metrics.policyViolationRate ?? 0}
         </p>
         <ul>
           {(policyReport?.report.thresholdFailures ?? []).slice(0, 6).map((failure) => (
             <li key={failure.code}>
               {failure.code}: {failure.details.actual} {failure.details.comparator} {failure.details.expected}
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="panel diff" aria-label="Cache report">
+        <h2>Cache</h2>
+        <p className="meta">Layer: {cacheReport?.cache.layer ?? "unavailable"}</p>
+        <p className="meta">Status: {cacheReport?.cache.status ?? "unavailable"}</p>
+        <p className="meta">Snapshot hash: {cacheReport?.cache.snapshotHash ?? "unavailable"}</p>
+        <ul>
+          {(cacheReport?.cache.diagnostics ?? []).slice(0, 4).map((diagnostic) => (
+            <li key={diagnostic.code}>
+              {diagnostic.code}: {diagnostic.message}
             </li>
           ))}
         </ul>
@@ -764,7 +972,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
             <p>Share: {leafDetail.view.shareReference.compact}</p>
             <p>Verification jobs: {leafDetail.view.verification.summary.totalJobs}</p>
             <p>Latest status: {leafDetail.view.verification.summary.latestStatus ?? "none"}</p>
-            <button type="button" onClick={runVerificationForSelectedLeaf} disabled={isVerifying}>
+            <button type="button" onClick={() => void runVerificationForSelectedLeaf()} disabled={isVerifying}>
               {isVerifying ? "Running verification..." : "Verify leaf proof"}
             </button>
             {verificationError && (

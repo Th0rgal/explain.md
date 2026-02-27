@@ -29,6 +29,8 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #4 follow-up: web proof service now exposes deterministic dependency graph query views (SCC/cycle totals + per-declaration support closure) via `GET /api/proofs/dependency-graph`.
 - Issue #12: Lean fixture web proof datasets now support deterministic persistent cache reuse/invalidation (source-fingerprint + config-hash keyed) with auditable cache telemetry via `GET /api/proofs/cache-report`.
 - Issue #13: deterministic tree storage/query contract with versioned snapshot schema, root/children/ancestry/leaf-provenance reads, and canonical import/export hashing.
+- Issue #46: tokenized web design system with AI-2027-leaning palette, unified editorial layout, and deterministic accessibility/focus styles across explorer panels.
+- Issue #47: whole-tree 3D explanation mode with deterministic scene transform/hash, policy overlays, and shared list/3D selection semantics.
 
 ## Local checks
 ```bash
@@ -75,3 +77,5 @@ EXPLAIN_MD_LIVE_RPC_API_KEY=... npm run test:live:summary
 - [Progressive disclosure + explanation diff](docs/progressive-disclosure.md)
 - [Tree storage + query APIs](docs/tree-storage.md)
 - [Next.js web scaffold](docs/nextjs-scaffold.md)
+- [Web design system](docs/web-design-system.md)
+- [3D tree mode](docs/tree-3d-mode.md)
