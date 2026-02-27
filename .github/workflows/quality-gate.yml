@@ -24,6 +24,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install web dependencies
+        run: npm --prefix apps/web ci
+
       - name: Build
         run: npm run build
 
