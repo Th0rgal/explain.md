@@ -35,7 +35,19 @@ Deterministic cache-reuse diagnostics for proof dataset generation.
           "cacheEntryHash": "..."
         }
       }
-    ]
+    ],
+    "blockedSubtreePlan": {
+      "schemaVersion": "1.0.0",
+      "reason": "source_fingerprint_mismatch",
+      "changedDeclarationIds": [],
+      "blockedDeclarationIds": [],
+      "blockedLeafIds": [],
+      "unaffectedLeafIds": ["lean:Verity/Core:core_safe:8:1"],
+      "executionBatches": [],
+      "cyclicBatchCount": 0,
+      "fullRebuildRequired": false,
+      "planHash": "..."
+    }
   }
 }
 ```
@@ -44,7 +56,10 @@ Deterministic cache-reuse diagnostics for proof dataset generation.
 - Persistent cache path is deterministic by `proofId` and `configHash`.
 - Reuse requires a matching `sourceFingerprint` (computed from Lean fixture file paths + content hashes).
 - Cache entry integrity is checked by snapshot/dependency hash validation before reuse.
-- On mismatch or invalid entry, the dataset is rebuilt deterministically and cache is overwritten.
+- On source-fingerprint mismatch, the service computes a deterministic blocked-subtree plan:
+  - if no declarations are blocked and dependency topology is unchanged, cache reuse is recovered with diagnostic `cache_topology_recovery_hit`.
+  - otherwise `blockedSubtreePlan.fullRebuildRequired=true` and dataset rebuild continues deterministically.
+- On invalid entry or topology mismatch, the dataset is rebuilt deterministically and cache is overwritten.
 
 ## Environment
 - `EXPLAIN_MD_WEB_PROOF_CACHE_DIR`

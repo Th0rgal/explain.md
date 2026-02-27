@@ -312,6 +312,7 @@ export interface CacheReportResponse {
     diagnostics: Array<{
       code:
         | "cache_hit"
+        | "cache_topology_recovery_hit"
         | "cache_miss"
         | "cache_write_failed"
         | "cache_read_failed"
@@ -321,6 +322,18 @@ export interface CacheReportResponse {
       message: string;
       details?: Record<string, unknown>;
     }>;
+    blockedSubtreePlan?: {
+      schemaVersion: "1.0.0";
+      reason: "source_fingerprint_mismatch";
+      changedDeclarationIds: string[];
+      blockedDeclarationIds: string[];
+      blockedLeafIds: string[];
+      unaffectedLeafIds: string[];
+      executionBatches: string[][];
+      cyclicBatchCount: number;
+      fullRebuildRequired: boolean;
+      planHash: string;
+    };
   };
 }
 

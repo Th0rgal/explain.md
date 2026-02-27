@@ -87,6 +87,7 @@ type ProofDatasetCacheLayer = "persistent" | "ephemeral";
 export interface ProofDatasetCacheDiagnostic {
   code:
     | "cache_hit"
+    | "cache_topology_recovery_hit"
     | "cache_miss"
     | "cache_write_failed"
     | "cache_read_failed"
@@ -95,6 +96,19 @@ export interface ProofDatasetCacheDiagnostic {
     | "cache_snapshot_hash_mismatch";
   message: string;
   details?: Record<string, unknown>;
+}
+
+export interface ProofDatasetBlockedSubtreePlan {
+  schemaVersion: "1.0.0";
+  reason: "source_fingerprint_mismatch";
+  changedDeclarationIds: string[];
+  blockedDeclarationIds: string[];
+  blockedLeafIds: string[];
+  unaffectedLeafIds: string[];
+  executionBatches: string[][];
+  cyclicBatchCount: number;
+  fullRebuildRequired: boolean;
+  planHash: string;
 }
 
 export interface ProofDatasetCacheMetadata {
@@ -106,6 +120,7 @@ export interface ProofDatasetCacheMetadata {
   snapshotHash: string;
   cacheEntryHash: string;
   diagnostics: ProofDatasetCacheDiagnostic[];
+  blockedSubtreePlan?: ProofDatasetBlockedSubtreePlan;
 }
 
 interface ProofDatasetCacheEntry {
@@ -770,6 +785,8 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
   const cacheKey = `${proofId}:${configHash}:${sourceFingerprint}`;
   const cached = await readProofDatasetCacheEntry(cachePath);
   const cacheDiagnostics: ProofDatasetCacheDiagnostic[] = [];
+  let cachedLeavesForTopologyRecovery: TheoremLeafRecord[] | undefined;
+  let cachedTreeForTopologyRecovery: ExplanationTree | undefined;
 
   if (cached.entry) {
     if (cached.entry.sourceFingerprint === sourceFingerprint) {
@@ -841,6 +858,21 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
         });
       }
     } else {
+      const imported = importTreeStorageSnapshot(cached.entry.snapshot);
+      const hasImportErrors = imported.diagnostics.some((diagnostic) => diagnostic.severity === "error");
+      if (!hasImportErrors && imported.tree) {
+        cachedLeavesForTopologyRecovery = imported.leaves;
+        cachedTreeForTopologyRecovery = imported.tree;
+      } else {
+        cacheDiagnostics.push({
+          code: "cache_entry_invalid",
+          message: "Cached snapshot failed validation before topology recovery; rebuilding dataset.",
+          details: {
+            cachePath,
+            diagnostics: imported.diagnostics,
+          },
+        });
+      }
       cacheDiagnostics.push({
         code: "cache_miss",
         message: "Cached dataset source fingerprint mismatch; rebuilding dataset.",
@@ -876,6 +908,68 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
     theoremLeaves.map((leaf) => ({ id: leaf.id, dependencyIds: leaf.dependencyIds })),
   );
   const dependencyGraphHash = computeDependencyGraphHash(dependencyGraph);
+  let blockedSubtreePlan: ProofDatasetBlockedSubtreePlan | undefined;
+
+  if (cached.entry && cachedLeavesForTopologyRecovery && cachedTreeForTopologyRecovery) {
+    blockedSubtreePlan = buildBlockedSubtreePlan(cachedLeavesForTopologyRecovery, theoremLeaves);
+
+    const topologyIsStable =
+      !blockedSubtreePlan.fullRebuildRequired && dependencyGraphHash === cached.entry.dependencyGraphHash;
+
+    if (topologyIsStable) {
+      const recoveredCacheEntry: ProofDatasetCacheEntry = {
+        schemaVersion: PROOF_DATASET_CACHE_SCHEMA_VERSION,
+        proofId,
+        configHash,
+        sourceFingerprint,
+        ingestionHash,
+        dependencyGraphHash: cached.entry.dependencyGraphHash,
+        snapshotHash: cached.entry.snapshotHash,
+        snapshot: cached.entry.snapshot,
+      };
+      const cacheWriteError = await writeProofDatasetCacheEntry(cachePath, recoveredCacheEntry);
+      if (cacheWriteError) {
+        cacheDiagnostics.push({
+          code: "cache_write_failed",
+          message: "Failed writing topology recovery cache entry; continuing with recovered cached dataset.",
+          details: { cachePath, error: cacheWriteError },
+        });
+      }
+      cacheDiagnostics.push({
+        code: "cache_topology_recovery_hit",
+        message: "Recovered cached dataset via deterministic topology plan (no blocked declarations).",
+        details: {
+          cachePath,
+          planHash: blockedSubtreePlan.planHash,
+        },
+      });
+
+      return {
+        dataset: {
+          proofId,
+          title: `Lean Verity fixture (${theoremLeaves.length} declarations, ingestion=${ingestionHash.slice(0, 8)}, depgraph=${dependencyGraphHash.slice(0, 8)})`,
+          config,
+          configHash,
+          tree: cachedTreeForTopologyRecovery,
+          leaves: theoremLeaves,
+          dependencyGraph,
+          dependencyGraphHash,
+        },
+        queryApi: createTreeQueryApi(cached.entry.snapshot),
+        cache: {
+          layer: "persistent",
+          status: "hit",
+          cacheKey,
+          sourceFingerprint,
+          cachePath,
+          snapshotHash: cached.entry.snapshotHash,
+          cacheEntryHash: computeProofDatasetCacheEntryHash(recoveredCacheEntry),
+          diagnostics: cacheDiagnostics,
+          blockedSubtreePlan,
+        },
+      };
+    }
+  }
 
   const tree = await buildRecursiveExplanationTree(createDeterministicSummaryProvider(), {
     leaves: mapTheoremLeavesToTreeLeaves(theoremLeaves),
@@ -935,6 +1029,7 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
       snapshotHash,
       cacheEntryHash: computeProofDatasetCacheEntryHash(cacheEntry),
       diagnostics: cacheDiagnostics,
+      blockedSubtreePlan,
     },
   };
 }
@@ -1064,6 +1159,166 @@ function computeSourceFingerprint(sources: Array<{ relativePath: string; filePat
       }))
       .sort((left, right) => left.relativePath.localeCompare(right.relativePath)),
   });
+}
+
+function buildBlockedSubtreePlan(
+  cachedLeaves: TheoremLeafRecord[],
+  currentLeaves: TheoremLeafRecord[],
+): ProofDatasetBlockedSubtreePlan {
+  const cachedByDeclarationId = new Map(cachedLeaves.map((leaf) => [leaf.declarationId, leaf]));
+  const currentByDeclarationId = new Map(currentLeaves.map((leaf) => [leaf.declarationId, leaf]));
+
+  const declarationIds = [...new Set([...cachedByDeclarationId.keys(), ...currentByDeclarationId.keys()])].sort((a, b) =>
+    a.localeCompare(b),
+  );
+
+  const changedDeclarationIds = declarationIds.filter((declarationId) => {
+    const cached = cachedByDeclarationId.get(declarationId);
+    const current = currentByDeclarationId.get(declarationId);
+    if (!cached || !current) {
+      return true;
+    }
+    return computeLeafTopologyFingerprint(cached) !== computeLeafTopologyFingerprint(current);
+  });
+
+  const currentDependentsByDeclaration = buildDependentsByDeclaration(currentLeaves);
+  const blockedDeclarationSet = new Set<string>();
+  const queue = [...changedDeclarationIds];
+  while (queue.length > 0) {
+    const next = queue.shift() as string;
+    if (blockedDeclarationSet.has(next)) {
+      continue;
+    }
+    blockedDeclarationSet.add(next);
+    for (const dependentId of currentDependentsByDeclaration.get(next) ?? []) {
+      if (!blockedDeclarationSet.has(dependentId)) {
+        queue.push(dependentId);
+      }
+    }
+  }
+
+  const blockedDeclarationIds = [...blockedDeclarationSet]
+    .filter((declarationId) => currentByDeclarationId.has(declarationId))
+    .sort((a, b) => a.localeCompare(b));
+  const blockedLeafIds = blockedDeclarationIds
+    .map((declarationId) => (currentByDeclarationId.get(declarationId) as TheoremLeafRecord).id)
+    .sort((a, b) => a.localeCompare(b));
+  const unaffectedLeafIds = currentLeaves
+    .filter((leaf) => !blockedDeclarationSet.has(leaf.declarationId))
+    .map((leaf) => leaf.id)
+    .sort((a, b) => a.localeCompare(b));
+
+  const executionPlan = buildExecutionBatches(blockedDeclarationIds, currentByDeclarationId);
+  const planWithoutHash = {
+    schemaVersion: "1.0.0" as const,
+    reason: "source_fingerprint_mismatch" as const,
+    changedDeclarationIds,
+    blockedDeclarationIds,
+    blockedLeafIds,
+    unaffectedLeafIds,
+    executionBatches: executionPlan.executionBatches,
+    cyclicBatchCount: executionPlan.cyclicBatchCount,
+    fullRebuildRequired:
+      blockedDeclarationIds.length > 0 || changedDeclarationIds.some((declarationId) => !currentByDeclarationId.has(declarationId)),
+  };
+
+  return {
+    ...planWithoutHash,
+    planHash: computeCanonicalRequestHash(planWithoutHash),
+  };
+}
+
+function computeLeafTopologyFingerprint(leaf: TheoremLeafRecord): string {
+  return computeCanonicalRequestHash({
+    id: leaf.id,
+    declarationId: leaf.declarationId,
+    theoremKind: leaf.theoremKind,
+    modulePath: leaf.modulePath,
+    declarationName: leaf.declarationName,
+    statementText: leaf.statementText,
+    prettyStatement: leaf.prettyStatement,
+    sourceSpan: leaf.sourceSpan,
+    dependencyIds: [...leaf.dependencyIds].sort((a, b) => a.localeCompare(b)),
+    tags: [...leaf.tags].sort((a, b) => a.localeCompare(b)),
+    sourceUrl: leaf.sourceUrl ?? "",
+  });
+}
+
+function buildDependentsByDeclaration(leaves: TheoremLeafRecord[]): Map<string, string[]> {
+  const dependents = new Map<string, Set<string>>();
+  for (const leaf of leaves) {
+    if (!dependents.has(leaf.declarationId)) {
+      dependents.set(leaf.declarationId, new Set());
+    }
+  }
+  for (const leaf of leaves) {
+    for (const dependencyId of leaf.dependencyIds) {
+      if (!dependents.has(dependencyId)) {
+        dependents.set(dependencyId, new Set());
+      }
+      dependents.get(dependencyId)?.add(leaf.declarationId);
+    }
+  }
+  return new Map(
+    [...dependents.entries()].map(([declarationId, ids]) => [declarationId, [...ids].sort((a, b) => a.localeCompare(b))]),
+  );
+}
+
+function buildExecutionBatches(
+  blockedDeclarationIds: string[],
+  leavesByDeclarationId: Map<string, TheoremLeafRecord>,
+): { executionBatches: string[][]; cyclicBatchCount: number } {
+  if (blockedDeclarationIds.length === 0) {
+    return { executionBatches: [], cyclicBatchCount: 0 };
+  }
+
+  const blocked = new Set(blockedDeclarationIds);
+  const dependents = new Map<string, Set<string>>();
+  const indegree = new Map<string, number>();
+
+  for (const declarationId of blockedDeclarationIds) {
+    dependents.set(declarationId, new Set());
+    indegree.set(declarationId, 0);
+  }
+
+  for (const declarationId of blockedDeclarationIds) {
+    const leaf = leavesByDeclarationId.get(declarationId);
+    if (!leaf) {
+      continue;
+    }
+    const internalDependencies = leaf.dependencyIds.filter((dependencyId) => blocked.has(dependencyId));
+    indegree.set(declarationId, internalDependencies.length);
+    for (const dependencyId of internalDependencies) {
+      dependents.get(dependencyId)?.add(declarationId);
+    }
+  }
+
+  const remaining = new Set(blockedDeclarationIds);
+  const executionBatches: string[][] = [];
+  let cyclicBatchCount = 0;
+
+  while (remaining.size > 0) {
+    const batch = [...remaining]
+      .filter((declarationId) => (indegree.get(declarationId) ?? 0) === 0)
+      .sort((a, b) => a.localeCompare(b));
+
+    if (batch.length === 0) {
+      const cycleBatch = [...remaining].sort((a, b) => a.localeCompare(b));
+      executionBatches.push(cycleBatch);
+      cyclicBatchCount += 1;
+      break;
+    }
+
+    executionBatches.push(batch);
+    for (const declarationId of batch) {
+      remaining.delete(declarationId);
+      for (const dependentId of dependents.get(declarationId) ?? []) {
+        indegree.set(dependentId, Math.max(0, (indegree.get(dependentId) ?? 0) - 1));
+      }
+    }
+  }
+
+  return { executionBatches, cyclicBatchCount };
 }
 
 function createDeterministicSummaryProvider(): ProviderClient {

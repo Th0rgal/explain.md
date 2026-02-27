@@ -286,4 +286,93 @@ describe("proof service", () => {
       await fs.rm(tempCacheDir, { recursive: true, force: true });
     }
   });
+
+  it("recovers deterministic cache hit from source-fingerprint mismatch when topology plan has no blocked declarations", async () => {
+    const previousCacheDir = process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR;
+    const previousFixtureRoot = process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT;
+    const tempCacheDir = await fs.mkdtemp(path.join(os.tmpdir(), "explain-md-proof-cache-"));
+    const fixtureSourceRoot = await resolveFixtureSourceRootForTests();
+    const tempFixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), "explain-md-proof-fixture-"));
+    process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR = tempCacheDir;
+    process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT = tempFixtureRoot;
+    await copyDirectory(fixtureSourceRoot, tempFixtureRoot);
+
+    try {
+      clearProofDatasetCacheForTests();
+      await buildProofCacheReportView({
+        proofId: LEAN_FIXTURE_PROOF_ID,
+      });
+
+      clearProofDatasetCacheForTests();
+      const warm = await buildProofCacheReportView({
+        proofId: LEAN_FIXTURE_PROOF_ID,
+      });
+      expect(warm.cache.status).toBe("hit");
+      expect(warm.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_hit")).toBe(true);
+
+      const corePath = path.join(tempFixtureRoot, "Verity", "Core.lean");
+      const coreBefore = await fs.readFile(corePath, "utf8");
+      await fs.writeFile(corePath, coreBefore.replace("namespace Verity", "namespace  Verity"), "utf8");
+
+      clearProofDatasetCacheForTests();
+      const recovered = await buildProofCacheReportView({
+        proofId: LEAN_FIXTURE_PROOF_ID,
+      });
+
+      expect(recovered.cache.status).toBe("hit");
+      expect(recovered.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_topology_recovery_hit")).toBe(true);
+      expect(recovered.cache.blockedSubtreePlan?.reason).toBe("source_fingerprint_mismatch");
+      expect(recovered.cache.blockedSubtreePlan?.fullRebuildRequired).toBe(false);
+      expect(recovered.cache.blockedSubtreePlan?.blockedDeclarationIds).toEqual([]);
+      expect(recovered.cache.blockedSubtreePlan?.blockedLeafIds).toEqual([]);
+      expect(recovered.cache.blockedSubtreePlan?.executionBatches).toEqual([]);
+      expect(recovered.cache.blockedSubtreePlan?.planHash).toHaveLength(64);
+    } finally {
+      clearProofDatasetCacheForTests();
+      if (previousCacheDir === undefined) {
+        delete process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR;
+      } else {
+        process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR = previousCacheDir;
+      }
+      if (previousFixtureRoot === undefined) {
+        delete process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT;
+      } else {
+        process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT = previousFixtureRoot;
+      }
+      await fs.rm(tempCacheDir, { recursive: true, force: true });
+      await fs.rm(tempFixtureRoot, { recursive: true, force: true });
+    }
+  });
 });
+
+async function copyDirectory(sourceDir: string, destinationDir: string): Promise<void> {
+  await fs.mkdir(destinationDir, { recursive: true });
+  const entries = await fs.readdir(sourceDir, { withFileTypes: true });
+  for (const entry of entries) {
+    const sourcePath = path.join(sourceDir, entry.name);
+    const destinationPath = path.join(destinationDir, entry.name);
+    if (entry.isDirectory()) {
+      await copyDirectory(sourcePath, destinationPath);
+      continue;
+    }
+    await fs.copyFile(sourcePath, destinationPath);
+  }
+}
+
+async function resolveFixtureSourceRootForTests(): Promise<string> {
+  const candidates = [
+    path.resolve(process.cwd(), "tests", "fixtures", "lean-project"),
+    path.resolve(process.cwd(), "..", "..", "tests", "fixtures", "lean-project"),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      await fs.access(candidate);
+      return candidate;
+    } catch {
+      // continue
+    }
+  }
+
+  throw new Error(`Could not locate lean fixture project for tests. Tried: ${candidates.join(", ")}`);
+}

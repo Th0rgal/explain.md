@@ -48,6 +48,11 @@ export interface ProofCacheBenchmarkReport {
       beforeChangeStatus: "hit" | "miss";
       afterChangeStatus: "hit" | "miss";
       afterChangeDiagnostics: string[];
+      afterChangeTopologyPlan?: {
+        fullRebuildRequired: boolean;
+        blockedDeclarationCount: number;
+        planHash: string;
+      };
       afterChangeSnapshotHash: string;
       recoveryStatus: "hit" | "miss";
       recoverySnapshotHash: string;
@@ -132,6 +137,13 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
       beforeChangeStatus: beforeChange.cache.status,
       afterChangeStatus: afterChange.cache.status,
       afterChangeDiagnostics: afterChange.cache.diagnostics.map((diagnostic) => diagnostic.code).sort(),
+      afterChangeTopologyPlan: afterChange.cache.blockedSubtreePlan
+        ? {
+            fullRebuildRequired: afterChange.cache.blockedSubtreePlan.fullRebuildRequired,
+            blockedDeclarationCount: afterChange.cache.blockedSubtreePlan.blockedDeclarationIds.length,
+            planHash: afterChange.cache.blockedSubtreePlan.planHash,
+          }
+        : undefined,
       afterChangeSnapshotHash: afterChange.cache.snapshotHash,
       recoveryStatus: recovery.cache.status,
       recoverySnapshotHash: recovery.cache.snapshotHash,
@@ -153,6 +165,7 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
         beforeChangeStatus: invalidation.beforeChangeStatus,
         afterChangeStatus: invalidation.afterChangeStatus,
         afterChangeDiagnostics: invalidation.afterChangeDiagnostics,
+        afterChangeTopologyPlan: invalidation.afterChangeTopologyPlan,
         recoveryStatus: invalidation.recoveryStatus,
         snapshotChangedOnMutation: invalidation.afterChangeSnapshotHash !== beforeChange.cache.snapshotHash,
       },

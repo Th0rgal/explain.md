@@ -13,14 +13,15 @@ By default this writes:
 ## What It Measures
 - Cold path (`coldNoPersistentCache`): persistent cache removed before each iteration.
 - Warm path (`warmPersistentCache`): persistent cache prewarmed, in-memory cache cleared between iterations.
-- Invalidation path (`invalidation`): mutates `Verity/Core.lean` in a temporary fixture copy, then verifies miss-then-hit recovery.
+- Invalidation path (`invalidation`): mutates `Verity/Core.lean` in a temporary fixture copy, then verifies deterministic topology-plan evidence plus recovery.
+  - current benchmark mutation intentionally blocks declarations, so `afterChangeTopologyPlan.fullRebuildRequired=true` and `recoveryStatus=hit`.
 
 ## Determinism and Auditability
 - Report includes:
   - `requestHash`: canonical hash of benchmark inputs (`proofId`, `configHash`, iteration counts).
   - `outcomeHash`: canonical hash of machine-checkable outcomes:
     - cold/warm hit-miss status vectors
-    - invalidation status transitions and diagnostic codes
+    - invalidation status transitions, diagnostic codes, and topology-plan summary
 - Timing fields are informative but not included in `outcomeHash`, so run-to-run performance jitter does not break reproducibility checks.
 
 ## Environment
