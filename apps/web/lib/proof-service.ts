@@ -42,6 +42,7 @@ export interface LeafDetailRequest {
   proofId: string;
   leafId: string;
   config?: ExplanationConfigInput;
+  verificationJobs?: VerificationJob[];
 }
 
 export interface SeedProofCatalogEntry {
@@ -132,7 +133,7 @@ export function buildSeedDiff(request: DiffRequest) {
 
 export function buildSeedLeafDetail(request: LeafDetailRequest) {
   const dataset = loadSeedDataset(request.proofId, request.config);
-  const jobs = sampleVerificationJobs(request.proofId, request.leafId);
+  const jobs = request.verificationJobs ?? sampleVerificationJobs(request.proofId, request.leafId);
   const result = buildLeafDetailView(dataset.tree as never, dataset.leaves, request.leafId, {
     verificationJobs: jobs,
   });
@@ -163,6 +164,11 @@ export function buildSeedLeafDetail(request: LeafDetailRequest) {
     view: result.view,
     detailHash,
   };
+}
+
+export function findSeedLeaf(proofId: string, leafId: string) {
+  const dataset = loadSeedDataset(proofId, {});
+  return dataset.leaves.find((leaf) => leaf.id === leafId);
 }
 
 function assertSupportedProof(proofId: string): void {

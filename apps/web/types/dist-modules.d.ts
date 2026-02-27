@@ -14,6 +14,10 @@ declare module "../../../dist/verification-flow" {
   export * from "../../../src/verification-flow";
 }
 
+declare module "../../../dist/verification-api" {
+  export * from "../../../src/verification-api";
+}
+
 declare module "../../../dist/leaf-schema" {
   export * from "../../../src/leaf-schema";
 }
