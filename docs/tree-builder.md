@@ -34,7 +34,7 @@ Issue: #9
 - Pre-summary checks:
   - sibling complexity spread must stay within `complexityBandWidth`
   - in-group prerequisite ordering must remain topological in the grouping-produced child order
-  - cyclic in-group prerequisite edges are deterministically waived as non-orderable
+  - cyclic in-group prerequisite edges are treated as prerequisite-order violations
 - Post-summary checks:
   - `evidence_refs` must cover all child IDs in the group
   - `new_terms_introduced` must satisfy `termIntroductionBudget`

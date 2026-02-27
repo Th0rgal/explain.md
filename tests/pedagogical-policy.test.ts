@@ -43,7 +43,7 @@ describe("pedagogical policy engine", () => {
     expect(decision.metrics.prerequisiteOrderViolations).toBe(0);
   });
 
-  test("ignores in-group cyclic prerequisite edges during order validation", () => {
+  test("flags in-group cyclic prerequisite edges during order validation", () => {
     const config = normalizeConfig({});
     const decision = evaluatePreSummaryPolicy(
       [
@@ -53,8 +53,9 @@ describe("pedagogical policy engine", () => {
       config,
     );
 
-    expect(decision.ok).toBe(true);
-    expect(decision.metrics.prerequisiteOrderViolations).toBe(0);
+    expect(decision.ok).toBe(false);
+    expect(decision.metrics.prerequisiteOrderViolations).toBeGreaterThan(0);
+    expect(decision.violations.map((violation) => violation.code)).toContain("prerequisite_order");
   });
 
   test("flags post-summary evidence coverage and vocabulary continuity drift", () => {

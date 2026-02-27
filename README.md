@@ -13,7 +13,7 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #8: parent-summary generation pipeline with strict structured-output schema, deterministic prompting, and critic validation diagnostics.
 - Issue #9: recursive single-root tree builder with deterministic layering, structural validity checks, and leaf-preservation guarantees.
 - Issue #25: pedagogical policy engine with deterministic pre/post summary checks, node-level diagnostics, and bounded rewrite retry.
-- Issue #25 follow-up: prerequisite-order policy now evaluates deterministic grouping order (not lexical IDs) and waives cyclic in-group edges, fixing real Verity SCC compatibility.
+- Issue #25 follow-up: prerequisite-order policy now evaluates deterministic grouping order (not lexical IDs) and treats cyclic in-group edges as explicit violations that deterministically trigger repartition or fail-fast.
 - Issue #25 follow-up: tree builder now reorders each group by local prerequisites and uses a safe depth guard with explicit no-progress failure diagnostics for large Lean corpora.
 - Issue #25 follow-up: web proof service now exposes deterministic pedagogy policy reports (threshold-calibrated quality metrics + canonical report hashing) via `GET /api/proofs/policy-report`.
 - Issue #23 follow-up: web config/query contracts now expose advanced pedagogy knobs (`readingLevelTarget`, `complexityBandWidth`, `proofDetailMode`) with strict deterministic parsing across routes and explorer controls.

@@ -199,33 +199,41 @@ describe("tree builder", () => {
     expect(validation.ok).toBe(true);
   });
 
-  test("builds when two leaves have cyclic prerequisites", async () => {
+  test("fails fast when a cyclic prerequisite pair is unsplittable", async () => {
     const config = normalizeConfig({ maxChildrenPerParent: 2, complexityBandWidth: 2 });
-    const tree = await buildRecursiveExplanationTree(deterministicSummaryProvider(), {
-      config,
-      leaves: [
-        { id: "a", statement: "A depends on B.", prerequisiteIds: ["b"] },
-        { id: "b", statement: "B depends on A.", prerequisiteIds: ["a"] },
-      ],
-    });
+    const thrown = await captureError(() =>
+      buildRecursiveExplanationTree(deterministicSummaryProvider(), {
+        config,
+        leaves: [
+          { id: "a", statement: "A depends on B.", prerequisiteIds: ["b"] },
+          { id: "b", statement: "B depends on A.", prerequisiteIds: ["a"] },
+        ],
+      }),
+    );
 
-    expect(tree.rootId).toMatch(/^p_/);
-    const validation = validateExplanationTree(tree, config.maxChildrenPerParent);
-    expect(validation.ok).toBe(true);
+    expect(thrown).toBeInstanceOf(TreePolicyError);
+    const diagnostics = (thrown as TreePolicyError).diagnostics;
+    expect(diagnostics.preSummary.ok).toBe(false);
+    expect(diagnostics.preSummary.violations.map((violation) => violation.code)).toContain("prerequisite_order");
   });
 
-  test("builds when acyclic nodes depend on a cyclic pair", async () => {
-    const config = normalizeConfig({ maxChildrenPerParent: 5, complexityBandWidth: 2 });
+  test("repartitions deterministically on pre-summary prerequisite violations when cycle is splittable", async () => {
+    const config = normalizeConfig({ maxChildrenPerParent: 4, complexityBandWidth: 2 });
     const tree = await buildRecursiveExplanationTree(deterministicSummaryProvider(), {
       config,
       leaves: [
-        { id: "a", statement: "A depends on B.", prerequisiteIds: ["b"] },
+        { id: "a", statement: "A depends on D.", prerequisiteIds: ["d"] },
         { id: "b", statement: "B depends on A.", prerequisiteIds: ["a"] },
-        { id: "c", statement: "C depends on A and B.", prerequisiteIds: ["a", "b"] },
+        { id: "c", statement: "C depends on B.", prerequisiteIds: ["b"] },
         { id: "d", statement: "D depends on C.", prerequisiteIds: ["c"] },
       ],
     });
 
+    const layerDiagnostics = tree.groupingDiagnostics[0];
+    expect(layerDiagnostics.repartitionEvents).toBeDefined();
+    expect(layerDiagnostics.repartitionEvents?.length).toBeGreaterThan(0);
+    expect(layerDiagnostics.repartitionEvents?.[0].reason).toBe("pre_summary_policy");
+    expect(layerDiagnostics.repartitionEvents?.[0].violationCodes).toContain("prerequisite_order");
     expect(tree.rootId).toMatch(/^p_/);
     const validation = validateExplanationTree(tree, config.maxChildrenPerParent);
     expect(validation.ok).toBe(true);
