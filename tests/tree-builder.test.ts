@@ -294,6 +294,45 @@ describe("tree builder", () => {
     const reusedGroups = withReuseTree.groupingDiagnostics.flatMap((layer) => layer.summaryReuse?.reusedGroupIndexes ?? []);
     expect(reusedGroups.length).toBeGreaterThan(0);
   });
+
+  test("reuses parent summaries by child hash when reusable parent IDs are reindexed", async () => {
+    const config = normalizeConfig({ maxChildrenPerParent: 2, complexityBandWidth: 2 });
+    const baselineProvider = countedDeterministicSummaryProvider();
+    const leaves = [
+      { id: "l1", statement: "Leaf one." },
+      { id: "l2", statement: "Leaf two." },
+      { id: "l3", statement: "Leaf three." },
+      { id: "l4", statement: "Leaf four." },
+      { id: "l5", statement: "Leaf five." },
+      { id: "l6", statement: "Leaf six." },
+    ];
+
+    const previousTree = await buildRecursiveExplanationTree(baselineProvider.provider, {
+      config,
+      leaves,
+    });
+    expect(baselineProvider.counter.count).toBeGreaterThan(0);
+
+    const reindexedReusableSummaries = Object.fromEntries(
+      Object.entries(buildReusableParentSummaries(previousTree)).map(([parentId, summary]) => [`shifted_${parentId}`, summary]),
+    );
+    const withReuseProvider = countedDeterministicSummaryProvider();
+    const withReuseTree = await buildRecursiveExplanationTree(withReuseProvider.provider, {
+      config,
+      leaves,
+      reusableParentSummaries: reindexedReusableSummaries,
+    });
+
+    expect(withReuseProvider.counter.count).toBe(0);
+    const reusedByChildHashGroups = withReuseTree.groupingDiagnostics.flatMap(
+      (layer) => layer.summaryReuse?.reusedByChildHashGroupIndexes ?? [],
+    );
+    const reusedByParentIdGroups = withReuseTree.groupingDiagnostics.flatMap(
+      (layer) => layer.summaryReuse?.reusedByParentIdGroupIndexes ?? [],
+    );
+    expect(reusedByChildHashGroups.length).toBeGreaterThan(0);
+    expect(reusedByParentIdGroups).toHaveLength(0);
+  });
 });
 
 function deterministicSummaryProvider(): ProviderClient {

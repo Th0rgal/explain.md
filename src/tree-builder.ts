@@ -60,6 +60,8 @@ export interface SummaryBatchDiagnostics {
 export interface SummaryReuseDiagnostics {
   reusedGroupIndexes: number[];
   generatedGroupIndexes: number[];
+  reusedByParentIdGroupIndexes?: number[];
+  reusedByChildHashGroupIndexes?: number[];
 }
 
 export interface ExplanationTree {
@@ -132,6 +134,11 @@ interface PendingSummaryTask {
   complexitySpread: number;
 }
 
+interface ReusableSummaryCandidate {
+  key: string;
+  summary: ReusableParentSummary;
+}
+
 export async function buildRecursiveExplanationTree(
   provider: ProviderClient,
   request: TreeBuildRequest,
@@ -183,6 +190,8 @@ export async function buildRecursiveExplanationTree(
   const hardDepthLimit = request.maxDepth ?? computeDepthLimit(leaves.length, request.config.maxChildrenPerParent);
   const summaryBatchSize = normalizeSummaryBatchSize(request.summaryBatchSize);
   const reusableParentSummaries = request.reusableParentSummaries ?? {};
+  const reusableSummaryPoolByChildHash = buildReusableSummaryPoolByChildHash(reusableParentSummaries);
+  const consumedReusableSummaryKeys = new Set<string>();
 
   let depth = 0;
   let activeNodeIds = leafIds.slice();
@@ -212,6 +221,8 @@ export async function buildRecursiveExplanationTree(
     const nextLayerByGroupIndex: Array<string | undefined> = new Array(groups.length);
     const reusedGroupIndexes: number[] = [];
     const generatedGroupIndexes: number[] = [];
+    const reusedByParentIdGroupIndexes: number[] = [];
+    const reusedByChildHashGroupIndexes: number[] = [];
 
     for (let index = 0; index < groups.length; index += 1) {
       const groupNodeIds = groups[index];
@@ -256,8 +267,26 @@ export async function buildRecursiveExplanationTree(
         });
       }
 
-      const reusableParent = reusableParentSummaries[parentId];
-      if (reusableParent && reusableParent.childStatementHash === computeChildStatementHash(children)) {
+      const childStatementHash = computeChildStatementHash(children);
+      let reusableParent = reusableParentSummaries[parentId];
+      let reusableParentKey = parentId;
+      let reusedByParentId = true;
+      if (
+        (!reusableParent || reusableParent.childStatementHash !== childStatementHash) &&
+        reusableSummaryPoolByChildHash.has(childStatementHash)
+      ) {
+        const candidate = selectReusableSummaryCandidate(
+          reusableSummaryPoolByChildHash.get(childStatementHash) as ReusableSummaryCandidate[],
+          consumedReusableSummaryKeys,
+        );
+        if (candidate) {
+          reusableParent = candidate.summary;
+          reusableParentKey = candidate.key;
+          reusedByParentId = false;
+        }
+      }
+
+      if (reusableParent && reusableParent.childStatementHash === childStatementHash) {
         const postSummaryDecision = evaluatePostSummaryPolicy(children, reusableParent.summary, request.config);
         if (postSummaryDecision.ok) {
           const policyDiagnostics = reusableParent.policyDiagnostics
@@ -294,7 +323,13 @@ export async function buildRecursiveExplanationTree(
             outputNodeId: parentId,
             complexitySpread: groupingResult.diagnostics.complexitySpreadByGroup[index] ?? 0,
           });
+          consumedReusableSummaryKeys.add(reusableParentKey);
           reusedGroupIndexes.push(index);
+          if (reusedByParentId) {
+            reusedByParentIdGroupIndexes.push(index);
+          } else {
+            reusedByChildHashGroupIndexes.push(index);
+          }
           continue;
         }
       }
@@ -377,6 +412,8 @@ export async function buildRecursiveExplanationTree(
           ? {
               reusedGroupIndexes,
               generatedGroupIndexes,
+              reusedByParentIdGroupIndexes,
+              reusedByChildHashGroupIndexes,
             }
           : undefined,
     });
@@ -407,6 +444,36 @@ export async function buildRecursiveExplanationTree(
   }
 
   return tree;
+}
+
+function buildReusableSummaryPoolByChildHash(
+  reusableParentSummaries: Record<string, ReusableParentSummary>,
+): Map<string, ReusableSummaryCandidate[]> {
+  const pool = new Map<string, ReusableSummaryCandidate[]>();
+  const orderedParentIds = Object.keys(reusableParentSummaries).sort((left, right) => left.localeCompare(right));
+  for (const parentId of orderedParentIds) {
+    const summary = reusableParentSummaries[parentId];
+    const existing = pool.get(summary.childStatementHash);
+    const candidate: ReusableSummaryCandidate = { key: parentId, summary };
+    if (existing) {
+      existing.push(candidate);
+    } else {
+      pool.set(summary.childStatementHash, [candidate]);
+    }
+  }
+  return pool;
+}
+
+function selectReusableSummaryCandidate(
+  candidates: ReusableSummaryCandidate[],
+  consumedKeys: Set<string>,
+): ReusableSummaryCandidate | undefined {
+  for (const candidate of candidates) {
+    if (!consumedKeys.has(candidate.key)) {
+      return candidate;
+    }
+  }
+  return undefined;
 }
 
 export function validateExplanationTree(tree: ExplanationTree, maxChildrenPerParent: number): TreeValidationResult {

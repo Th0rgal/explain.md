@@ -19,6 +19,9 @@ Issue: #9
 - Grouping diagnostics are preserved per depth for auditability.
 - Grouping diagnostics include `summaryBatches[]` with batch/group cardinalities for reproducible batching audits.
 - Grouping diagnostics include `summaryReuse` with generated vs reused group indexes when reusable parent summaries are provided.
+- `summaryReuse` also reports deterministic reuse origin:
+  - `reusedByParentIdGroupIndexes` when stable parent IDs match.
+  - `reusedByChildHashGroupIndexes` when parent IDs changed but child-grounding hashes still match.
 - Policy diagnostics are attached per parent (`preSummary`, `postSummary`, `retriesUsed`).
 
 ## Tree validity checks
@@ -63,6 +66,7 @@ Request shape:
 - `reusableParentSummaries?`: optional map keyed by deterministic parent id (`p_<depth>_<groupIndex>_<digest>`) for stable-id parent reuse
   - each entry includes `childStatementHash` and previously validated summary payload
   - reuse is accepted only when the current child statement hash matches and post-summary policy still passes
+  - when stable IDs do not match (for example after deterministic topology reindexing), reuse falls back to deterministic child-statement-hash matching
 
 Output includes:
 - `rootId`, `leafIds`, `nodes`, `configHash`, `groupPlan`, `groupingDiagnostics`, `maxDepth`

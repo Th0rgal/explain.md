@@ -1035,6 +1035,8 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
             generatedParentSummaryCount: topologyRebuild.generatedParentSummaryCount,
             reusedParentNodeCount: topologyRebuild.reusedParentNodeCount,
             generatedParentNodeCount: topologyRebuild.generatedParentNodeCount,
+            reusedParentByStableIdCount: topologyRebuild.reusedParentByStableIdCount,
+            reusedParentByChildHashCount: topologyRebuild.reusedParentByChildHashCount,
             previousParentCount: topologyRebuild.previousParentCount,
             nextParentCount: topologyRebuild.nextParentCount,
           },
@@ -1607,6 +1609,8 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
       generatedParentSummaryCount: number;
       reusedParentNodeCount: number;
       generatedParentNodeCount: number;
+      reusedParentByStableIdCount: number;
+      reusedParentByChildHashCount: number;
       previousParentCount: number;
       nextParentCount: number;
     }
@@ -1645,6 +1649,8 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
     generatedParentSummaryCount: reuseStats.generatedGroupCount,
     reusedParentNodeCount: reuseStats.reusedGroupCount,
     generatedParentNodeCount: reuseStats.generatedGroupCount,
+    reusedParentByStableIdCount: reuseStats.reusedByParentIdGroupCount,
+    reusedParentByChildHashCount: reuseStats.reusedByChildHashGroupCount,
     previousParentCount: Object.values(imported.tree.nodes).filter((node) => node.kind === "parent").length,
     nextParentCount: Object.values(tree.nodes).filter((node) => node.kind === "parent").length,
   };
@@ -1706,14 +1712,20 @@ function computeChildStatementHash(
 function summarizeTreeSummaryReuse(groupingDiagnostics: ExplanationTree["groupingDiagnostics"]): {
   reusedGroupCount: number;
   generatedGroupCount: number;
+  reusedByParentIdGroupCount: number;
+  reusedByChildHashGroupCount: number;
 } {
   let reusedGroupCount = 0;
   let generatedGroupCount = 0;
+  let reusedByParentIdGroupCount = 0;
+  let reusedByChildHashGroupCount = 0;
   for (const layer of groupingDiagnostics) {
     reusedGroupCount += layer.summaryReuse?.reusedGroupIndexes.length ?? 0;
     generatedGroupCount += layer.summaryReuse?.generatedGroupIndexes.length ?? 0;
+    reusedByParentIdGroupCount += layer.summaryReuse?.reusedByParentIdGroupIndexes?.length ?? 0;
+    reusedByChildHashGroupCount += layer.summaryReuse?.reusedByChildHashGroupIndexes?.length ?? 0;
   }
-  return { reusedGroupCount, generatedGroupCount };
+  return { reusedGroupCount, generatedGroupCount, reusedByParentIdGroupCount, reusedByChildHashGroupCount };
 }
 
 function parseParentGroupIndex(parentId: string): number {

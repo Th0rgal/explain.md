@@ -67,6 +67,8 @@ export interface ProofCacheBenchmarkReport {
       afterChangeStatus: "hit" | "miss";
       afterChangeDiagnostics: string[];
       afterChangeSnapshotHash: string;
+      reusedParentByStableIdCount: number;
+      reusedParentByChildHashCount: number;
       recoveryStatus: "hit" | "miss";
       recoverySnapshotHash: string;
     };
@@ -184,6 +186,8 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
       afterChangeStatus: afterTopologyChange.cache.status,
       afterChangeDiagnostics: afterTopologyChange.cache.diagnostics.map((diagnostic) => diagnostic.code).sort(),
       afterChangeSnapshotHash: afterTopologyChange.cache.snapshotHash,
+      reusedParentByStableIdCount: readNumericTopologyDetail(afterTopologyChange.cache.diagnostics, "reusedParentByStableIdCount"),
+      reusedParentByChildHashCount: readNumericTopologyDetail(afterTopologyChange.cache.diagnostics, "reusedParentByChildHashCount"),
       recoveryStatus: topologyRecovery.cache.status,
       recoverySnapshotHash: topologyRecovery.cache.snapshotHash,
     };
@@ -213,6 +217,8 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
         beforeChangeStatus: topologyChange.beforeChangeStatus,
         afterChangeStatus: topologyChange.afterChangeStatus,
         afterChangeDiagnostics: topologyChange.afterChangeDiagnostics,
+        reusedParentByStableIdCount: topologyChange.reusedParentByStableIdCount,
+        reusedParentByChildHashCount: topologyChange.reusedParentByChildHashCount,
         recoveryStatus: topologyChange.recoveryStatus,
         snapshotChangedOnMutation: topologyChange.afterChangeSnapshotHash !== beforeTopologyChange.cache.snapshotHash,
       },
@@ -264,6 +270,15 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
       }
     }
   }
+}
+
+function readNumericTopologyDetail(
+  diagnostics: Array<{ code: string; details?: Record<string, unknown> }>,
+  key: "reusedParentByStableIdCount" | "reusedParentByChildHashCount",
+): number {
+  const topologyDiagnostic = diagnostics.find((diagnostic) => diagnostic.code === "cache_incremental_topology_rebuild");
+  const value = topologyDiagnostic?.details?.[key];
+  return typeof value === "number" ? value : 0;
 }
 
 async function captureCacheReportDuration(proofId: string, config: ExplanationConfigInput): Promise<ScenarioSample> {

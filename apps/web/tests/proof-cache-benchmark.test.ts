@@ -26,6 +26,8 @@ describe("proof cache benchmark", () => {
     expect(report.scenarios.topologyChange.afterChangeStatus).toBe("hit");
     expect(report.scenarios.topologyChange.afterChangeDiagnostics).toContain("cache_incremental_topology_rebuild");
     expect(report.scenarios.topologyChange.afterChangeDiagnostics).not.toContain("cache_incremental_rebuild");
+    expect(report.scenarios.topologyChange.reusedParentByStableIdCount).toBeGreaterThanOrEqual(0);
+    expect(report.scenarios.topologyChange.reusedParentByChildHashCount).toBeGreaterThanOrEqual(0);
     expect(report.scenarios.topologyChange.recoveryStatus).toBe("hit");
   });
 

@@ -1,18 +1,18 @@
 {
   "schemaVersion": "1.0.0",
-  "generatedAt": "2026-02-27T10:51:50.945Z",
+  "generatedAt": "2026-02-27T10:57:15.240Z",
   "proofId": "lean-verity-fixture",
   "configHash": "1b1e2b9ff73897b141a9f88c8d23a3b884495340813865fd955fa8fc3eaa4da2",
   "requestHash": "e6f53e14545f9579927084e1924992e7294f331551f9b89f4e93dc25669d6696",
-  "outcomeHash": "20e93a8d9439af1b82b1f0f201d92903cc74f7b929fe5d54ca30f82aa3be74d0",
+  "outcomeHash": "99fb6ac5e37a506d51955a42e5c92bacdb052e1e2e990c67892373161484b259",
   "parameters": {
     "coldIterations": 3,
     "warmIterations": 3,
     "mutationTargetPath": "Verity/Core.lean"
   },
   "paths": {
-    "fixtureProjectRootHash": "ae6bfda416b786ef800fcd49957f00e1bc65fb32c91da2f8f1f96165d6645359",
-    "cacheDirHash": "c67ef5f7864a0aaa6d968661a1b87c46e44ccb86bc769080ce8c6bd1e5523547"
+    "fixtureProjectRootHash": "ebc8745367682f9143bbd65fd2f9237d5002ece3f023aace15bb2225f09ae29d",
+    "cacheDirHash": "80b8bd6171bcede775152fb69c3ef58f99e6df83eaae55c9956cb43cfa2c32d4"
   },
   "scenarios": {
     "coldNoPersistentCache": {
@@ -22,10 +22,10 @@
         "miss",
         "miss"
       ],
-      "meanMs": 10.557,
-      "medianMs": 3.945,
-      "minMs": 3.218,
-      "maxMs": 24.508
+      "meanMs": 15.145,
+      "medianMs": 6.289,
+      "minMs": 5.672,
+      "maxMs": 33.474
     },
     "warmPersistentCache": {
       "iterations": 3,
@@ -34,10 +34,10 @@
         "hit",
         "hit"
       ],
-      "meanMs": 2.008,
-      "medianMs": 1.851,
-      "minMs": 1.85,
-      "maxMs": 2.324
+      "meanMs": 1.694,
+      "medianMs": 1.665,
+      "minMs": 1.48,
+      "maxMs": 1.938
     },
     "semanticNoop": {
       "beforeChangeStatus": "hit",
@@ -67,6 +67,8 @@
         "cache_miss"
       ],
       "afterChangeSnapshotHash": "40996c1ce2f9bdae613d9c4e1b905a1a654a9732ec5e0e8afa6dadaf9050f454",
+      "reusedParentByStableIdCount": 0,
+      "reusedParentByChildHashCount": 0,
       "recoveryStatus": "hit",
       "recoverySnapshotHash": "40996c1ce2f9bdae613d9c4e1b905a1a654a9732ec5e0e8afa6dadaf9050f454"
     }
