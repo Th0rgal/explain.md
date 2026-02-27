@@ -15,7 +15,7 @@
     "eval:tree-pipeline": "npm run -s build && node scripts/eval-tree-pipeline.mjs",
     "eval:leaf-detail": "npm run -s build && node scripts/eval-leaf-detail.mjs",
     "eval:quality": "npm run -s build && node scripts/eval-quality-harness.mjs",
-    "eval:quality:ci": "npm run -s build && node scripts/eval-quality-harness.mjs --preset=fixture-verity-core --out=.explain-md/quality-gate-report.json",
+    "eval:quality:ci": "npm run -s build && node scripts/eval-quality-harness.mjs --preset=fixture-verity-pressure --out=.explain-md/quality-gate-report.json",
     "serve:verification": "npm run -s build && node scripts/verification-server.mjs",
     "web:dev": "npm --prefix apps/web run dev",
     "web:build": "npm --prefix apps/web run build",

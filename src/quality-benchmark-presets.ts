@@ -22,6 +22,15 @@ const PRESET_DEFINITIONS: Record<string, Omit<QualityBenchmarkPreset, "name">> =
     includePaths: ["Verity/Loop.lean"],
     thresholdOverrides: {},
   },
+  "fixture-verity-pressure": {
+    description: "Deterministic Verity pressure benchmark that must trigger bounded repartition at least once.",
+    projectRoot: "tests/fixtures/lean-pressure-project",
+    includePaths: ["Verity"],
+    thresholdOverrides: {
+      maxUnsupportedParentRate: 1,
+      minRepartitionEventRate: 0.3,
+    },
+  },
 };
 
 export function listQualityBenchmarkPresets(): QualityBenchmarkPreset[] {

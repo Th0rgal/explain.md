@@ -38,7 +38,7 @@ The tree panel uses incremental root/children/path queries:
 - Query dependency reachability/SCC evidence deterministically with `/api/proofs/dependency-graph`.
 - Surface per-parent policy diagnostics (pre/post compliance + metrics) directly in tree rows.
 - Query deterministic pedagogy calibration metrics + threshold gates with `/api/proofs/policy-report`.
-  - Optional threshold overrides: `maxUnsupportedParentRate`, `maxPrerequisiteViolationRate`, `maxPolicyViolationRate`, `maxTermJumpRate`, `maxComplexitySpreadMean`, `minEvidenceCoverageMean`, `minVocabularyContinuityMean`.
+  - Optional threshold overrides: `maxUnsupportedParentRate`, `maxPrerequisiteViolationRate`, `maxPolicyViolationRate`, `maxTermJumpRate`, `maxComplexitySpreadMean`, `minEvidenceCoverageMean`, `minVocabularyContinuityMean`, `minRepartitionEventRate`, `maxRepartitionEventRate`, `maxRepartitionMaxRound`.
 - Query deterministic cache reuse diagnostics with `/api/proofs/cache-report` (`status`, `cacheKey`, `sourceFingerprint`, `snapshotHash`, `cacheEntryHash`).
 - Run deterministic cache benchmark evidence generation with `npm run benchmark:cache` (writes `docs/benchmarks/proof-cache-benchmark.json` from repo root).
 - Use shared config parser (`lib/config-input.ts`) across query routes to keep config semantics consistent.

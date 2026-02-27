@@ -225,6 +225,66 @@ describe("evaluation-harness", () => {
     expect(report.thresholdFailures.map((failure) => failure.code)).toContain("repartition_max_round");
   });
 
+  it("fails threshold gates when repartition pressure is below configured minimum", () => {
+    const config = normalizeConfig();
+    const tree = buildFixtureTree();
+    tree.rootId = "parent:2";
+    tree.nodes["parent:2"] = {
+      id: "parent:2",
+      kind: "parent",
+      statement: "root preserves the existing claim",
+      childIds: ["parent:1"],
+      depth: 2,
+      complexityScore: 2,
+      abstractionScore: 2,
+      confidence: 0.99,
+      whyTrueFromChildren: "single child restatement",
+      newTermsIntroduced: [],
+      evidenceRefs: ["parent:1"],
+    };
+    tree.policyDiagnosticsByParent["parent:2"] = {
+      depth: 2,
+      groupIndex: 0,
+      retriesUsed: 0,
+      preSummary: {
+        ok: true,
+        violations: [],
+        metrics: {
+          complexitySpread: 0,
+          prerequisiteOrderViolations: 0,
+          introducedTermCount: 0,
+          evidenceCoverageRatio: 1,
+          vocabularyContinuityRatio: 1,
+          vocabularyContinuityFloor: 0.7,
+        },
+      },
+      postSummary: {
+        ok: true,
+        violations: [],
+        metrics: {
+          complexitySpread: 0,
+          prerequisiteOrderViolations: 0,
+          introducedTermCount: 0,
+          evidenceCoverageRatio: 1,
+          vocabularyContinuityRatio: 1,
+          vocabularyContinuityFloor: 0.7,
+        },
+      },
+    };
+    tree.nodes["parent:2"].policyDiagnostics = tree.policyDiagnosticsByParent["parent:2"];
+
+    const report = evaluateExplanationTreeQuality(tree, config, {
+      thresholds: {
+        minRepartitionEventRate: 0.75,
+      },
+    });
+
+    expect(report.repartitionMetrics.eventCount).toBe(1);
+    expect(report.metrics.parentCount).toBe(2);
+    expect(report.thresholdPass).toBe(false);
+    expect(report.thresholdFailures.map((failure) => failure.code)).toContain("min_repartition_event_rate");
+  });
+
   it("ignores generatedAt in canonical render/hash so report identity is reproducible", () => {
     const config = normalizeConfig();
     const report = evaluateExplanationTreeQuality(buildFixtureTree(), config);

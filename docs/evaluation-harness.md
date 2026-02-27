@@ -50,6 +50,7 @@ The evaluator computes a threshold verdict (`thresholdPass`) with machine-readab
 - `complexity_spread_mean`
 - `evidence_coverage_mean`
 - `vocabulary_continuity_mean`
+- `min_repartition_event_rate`
 - `repartition_event_rate`
 - `repartition_max_round`
 
@@ -90,12 +91,19 @@ Run with a deterministic preset and emit an auditable artifact JSON:
 npm run eval:quality -- --preset=fixture-verity-core --out=.explain-md/quality-gate-report.json
 ```
 
+Pressure-focused preset (expects bounded but non-zero repartition pressure):
+
+```bash
+npm run eval:quality -- --preset=fixture-verity-pressure --out=.explain-md/quality-gate-report.json
+```
+
 Optional threshold overrides:
 
 ```bash
 npm run eval:quality -- /path/to/lean-project \
   --max-unsupported-parent-rate=0.05 \
   --min-vocabulary-continuity-mean=0.70 \
+  --min-repartition-event-rate=0.20 \
   --max-repartition-event-rate=0.50 \
   --max-repartition-max-round=1
 ```

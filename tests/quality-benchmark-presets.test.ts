@@ -19,12 +19,19 @@ describe("quality-benchmark-presets", () => {
     const presets = listQualityBenchmarkPresets();
     const names = presets.map((preset) => preset.name);
 
-    expect(names).toEqual(["fixture-verity-core", "fixture-verity-loop"]);
+    expect(names).toEqual(["fixture-verity-core", "fixture-verity-loop", "fixture-verity-pressure"]);
     expect(presets[0].includePaths).toEqual(["Verity"]);
   });
 
   it("resolves known presets and rejects unknown names", () => {
     expect(resolveQualityBenchmarkPreset("fixture-verity-core")?.projectRoot).toBe("tests/fixtures/lean-project");
+    expect(resolveQualityBenchmarkPreset("fixture-verity-pressure")).toMatchObject({
+      projectRoot: "tests/fixtures/lean-pressure-project",
+      thresholdOverrides: {
+        maxUnsupportedParentRate: 1,
+        minRepartitionEventRate: 0.3,
+      },
+    });
     expect(resolveQualityBenchmarkPreset("unknown-preset")).toBeUndefined();
   });
 

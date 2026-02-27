@@ -10,6 +10,7 @@ interface PolicyThresholdOverrides {
   maxComplexitySpreadMean?: number;
   minEvidenceCoverageMean?: number;
   minVocabularyContinuityMean?: number;
+  minRepartitionEventRate?: number;
   maxRepartitionEventRate?: number;
   maxRepartitionMaxRound?: number;
 }
@@ -55,6 +56,9 @@ function readThresholdOverrides(searchParams: URLSearchParams): PolicyThresholdO
   });
   setOptionalRate(searchParams, "minVocabularyContinuityMean", (value) => {
     overrides.minVocabularyContinuityMean = value;
+  });
+  setOptionalRate(searchParams, "minRepartitionEventRate", (value) => {
+    overrides.minRepartitionEventRate = value;
   });
   setOptionalRate(searchParams, "maxRepartitionEventRate", (value) => {
     overrides.maxRepartitionEventRate = value;

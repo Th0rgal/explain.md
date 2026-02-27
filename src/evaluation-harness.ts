@@ -45,6 +45,7 @@ export interface TreeQualityThresholds {
   maxComplexitySpreadMean: number;
   minEvidenceCoverageMean: number;
   minVocabularyContinuityMean: number;
+  minRepartitionEventRate: number;
   maxRepartitionEventRate: number;
   maxRepartitionMaxRound: number;
 }
@@ -58,6 +59,7 @@ export interface TreeQualityThresholdFailure {
     | "complexity_spread_mean"
     | "evidence_coverage_mean"
     | "vocabulary_continuity_mean"
+    | "min_repartition_event_rate"
     | "repartition_event_rate"
     | "repartition_max_round";
   message: string;
@@ -488,6 +490,18 @@ function evaluateThresholds(
     });
   }
 
+  if (repartitionEventRate < thresholds.minRepartitionEventRate) {
+    failures.push({
+      code: "min_repartition_event_rate",
+      message: "Repartition event rate dropped below threshold.",
+      details: {
+        actual: repartitionEventRate,
+        expected: thresholds.minRepartitionEventRate,
+        comparator: ">=",
+      },
+    });
+  }
+
   if (repartitionEventRate > thresholds.maxRepartitionEventRate) {
     failures.push({
       code: "repartition_event_rate",
@@ -524,6 +538,7 @@ function normalizeThresholds(config: ExplanationConfig, overrides?: Partial<Tree
     maxComplexitySpreadMean: config.complexityBandWidth,
     minEvidenceCoverageMean: 1,
     minVocabularyContinuityMean: computeVocabularyContinuityThreshold(config),
+    minRepartitionEventRate: 0,
     maxRepartitionEventRate: 1,
     maxRepartitionMaxRound: 3,
   };
@@ -539,6 +554,7 @@ function normalizeThresholds(config: ExplanationConfig, overrides?: Partial<Tree
     ),
     minEvidenceCoverageMean: clampRate(overrides?.minEvidenceCoverageMean ?? defaults.minEvidenceCoverageMean),
     minVocabularyContinuityMean: clampRate(overrides?.minVocabularyContinuityMean ?? defaults.minVocabularyContinuityMean),
+    minRepartitionEventRate: clampRate(overrides?.minRepartitionEventRate ?? defaults.minRepartitionEventRate),
     maxRepartitionEventRate: clampRate(overrides?.maxRepartitionEventRate ?? defaults.maxRepartitionEventRate),
     maxRepartitionMaxRound: clampNonNegativeInteger(
       overrides?.maxRepartitionMaxRound ?? defaults.maxRepartitionMaxRound,

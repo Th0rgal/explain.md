@@ -29,6 +29,7 @@ Optional threshold overrides (`[0,1]`):
 - `maxComplexitySpreadMean`
 - `minEvidenceCoverageMean`
 - `minVocabularyContinuityMean`
+- `minRepartitionEventRate`
 - `maxRepartitionEventRate`
 
 Optional threshold overrides (non-negative integer):
