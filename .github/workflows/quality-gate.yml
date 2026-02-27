@@ -45,6 +45,9 @@ jobs:
       - name: Run web build
         run: npm run web:build
 
+      - name: Validate research dossier evidence map
+        run: npm run eval:research-dossier
+
       - name: Run deterministic release gate
         run: npm run eval:release-gate:ci
 
@@ -57,4 +60,5 @@ jobs:
             .explain-md/quality-gate-report-*.json
             .explain-md/quality-gate-baseline-check.json
             .explain-md/observability-slo-benchmark-report.json
+            .explain-md/research-dossier-report.json
             .explain-md/release-gate-report.json

@@ -38,6 +38,7 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #12 follow-up: deterministic cache benchmark harness now records cold/warm latency profiles plus source-fingerprint invalidation recovery with machine-checkable `requestHash`/`outcomeHash`.
 - Issue #13: deterministic tree storage/query contract with versioned snapshot schema, root/children/ancestry/leaf-provenance reads, and canonical import/export hashing.
 - Issue #19 follow-up: deterministic prompt-boundary hardening for parent-summary generation with child-ID safety validation, untrusted-text sanitization, secret redaction, and auditable boundary markers.
+- Issue #24: research dossier with machine-checkable issue-to-evidence mapping for inductive tree design decisions, pedagogy controls, and evaluation strategy.
 
 ## Local checks
 ```bash
@@ -53,6 +54,7 @@ npm run eval:quality -- /path/to/lean-project --include=Verity --include=Compile
 npm run eval:quality -- --list-presets
 npm run eval:quality:ci
 npm run eval:quality:baseline
+npm run eval:research-dossier
 npm run eval:release-gate:ci
 npm run serve:verification
 npm run web:lint
@@ -80,6 +82,8 @@ EXPLAIN_MD_LIVE_RPC_API_KEY=... npm run test:live:summary
 - [Prompt security model](docs/security-prompt-safety.md)
 - [Recursive tree builder](docs/tree-builder.md)
 - [Evaluation harness](docs/evaluation-harness.md)
+- [Research dossier](docs/research-dossier.md)
+- [Research dossier evidence map](docs/research-dossier-evidence.json)
 - [Release gate charter](docs/release-gate.md)
 - [Pedagogical policy engine](docs/pedagogical-policy.md)
 - [Policy report API](docs/policy-report-api.md)

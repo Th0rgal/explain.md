@@ -1,0 +1,184 @@
+{
+  "schemaVersion": "1.0.0",
+  "scope": {
+    "objective": "Build explain.md into a provenance-first system that converts Lean 4 proofs (especially Verity EDSL) into an inductive explanation tree with bounded, user-configurable complexity and browser-verifiable leaves.",
+    "requiredIssueCoverage": [7, 8, 9, 18, 23, 25]
+  },
+  "citations": [
+    {
+      "id": "lean4_cade_2021",
+      "title": "The Lean 4 Theorem Prover and Programming Language",
+      "authors": ["Leonardo de Moura", "Sebastian Ullrich"],
+      "year": 2021,
+      "venue": "CADE-28",
+      "url": "https://doi.org/10.1007/978-3-030-79876-5_37",
+      "relevance": "Supports deterministic Lean-oriented pipeline design and auditable theorem metadata extraction."
+    },
+    {
+      "id": "leandojo_neurips_2023",
+      "title": "LeanDojo: Theorem Proving with Retrieval-Augmented Language Models",
+      "authors": ["Kaiyu Yang", "Aakanksha Chowdhery", "Anima Anandkumar", "Percy Liang"],
+      "year": 2023,
+      "venue": "NeurIPS Datasets and Benchmarks",
+      "url": "https://openreview.net/forum?id=g7OX2sOJtn",
+      "relevance": "Motivates Lean-focused benchmark curation and retrieval-grounded theorem context pipelines."
+    },
+    {
+      "id": "sweller_cognitive_load_1988",
+      "title": "Cognitive Load During Problem Solving: Effects on Learning",
+      "authors": ["John Sweller"],
+      "year": 1988,
+      "venue": "Cognitive Science",
+      "url": "https://doi.org/10.1207/s15516709cog1202_4",
+      "relevance": "Grounds bounded complexity and term-introduction budgeting controls."
+    },
+    {
+      "id": "wood_scaffolding_1976",
+      "title": "The role of tutoring in problem solving",
+      "authors": ["David Wood", "Jerome S. Bruner", "Gail Ross"],
+      "year": 1976,
+      "venue": "Journal of Child Psychology and Psychiatry",
+      "url": "https://doi.org/10.1111/j.1469-7610.1976.tb00381.x",
+      "relevance": "Supports prerequisite-aware incremental disclosure and guided progression through proof structure."
+    },
+    {
+      "id": "atkinson_worked_examples_2000",
+      "title": "Learning from Examples: Instructional Principles from the Worked Examples Research",
+      "authors": ["Robert K. Atkinson", "Sharon J. Derry", "Alexander Renkl", "Donald Wortham"],
+      "year": 2000,
+      "venue": "Review of Educational Research",
+      "url": "https://doi.org/10.3102/00346543070002181",
+      "relevance": "Supports explanation trees that expose intermediate parent summaries and traceable leaf evidence."
+    },
+    {
+      "id": "kalyuga_expertise_reversal_2003",
+      "title": "The Expertise Reversal Effect",
+      "authors": ["Slava Kalyuga", "Paul Ayres", "Paul Chandler", "John Sweller"],
+      "year": 2003,
+      "venue": "Educational Psychologist",
+      "url": "https://doi.org/10.1207/S15326985EP3801_4",
+      "relevance": "Motivates audience-sensitive controls for abstraction, detail, and reading level."
+    },
+    {
+      "id": "novak_concept_maps_2008",
+      "title": "The Theory Underlying Concept Maps and How to Construct and Use Them",
+      "authors": ["Joseph D. Novak", "Alberto J. Canas"],
+      "year": 2008,
+      "venue": "Institute for Human and Machine Cognition Technical Report",
+      "url": "https://cmap.ihmc.us/docs/theory-of-concept-maps",
+      "relevance": "Supports explicit graph structure, parent-child entailment, and prerequisite edges in explanations."
+    },
+    {
+      "id": "vanlehn_its_2011",
+      "title": "The Relative Effectiveness of Human Tutoring, Intelligent Tutoring Systems, and Other Tutoring Systems",
+      "authors": ["Kurt VanLehn"],
+      "year": 2011,
+      "venue": "Educational Psychologist",
+      "url": "https://doi.org/10.1111/j.1467-9280.2010.02677.x",
+      "relevance": "Supports telemetry and evaluation loops that continuously verify instructional quality constraints."
+    },
+    {
+      "id": "polu_generative_atp_2020",
+      "title": "Generative Language Modeling for Automated Theorem Proving",
+      "authors": ["Stanislas Polu", "Ilya Sutskever"],
+      "year": 2020,
+      "venue": "arXiv",
+      "url": "https://arxiv.org/abs/2009.03393",
+      "relevance": "Motivates deterministic benchmark artifacts and strict failure diagnostics for theorem-oriented generation loops."
+    }
+  ],
+  "designDecisions": [
+    {
+      "id": "issue-7-deterministic-grouping",
+      "issue": 7,
+      "decision": "Use dependency-aware deterministic child grouping with bounded sibling complexity and prerequisite ordering.",
+      "rationale": "Concept-map and scaffolding literature motivates explicit dependency ordering and bounded chunk size to keep reasoning tractable.",
+      "implementationRefs": [
+        "src/child-grouping.ts",
+        "src/tree-builder.ts",
+        "docs/child-grouping.md"
+      ],
+      "citationIds": ["novak_concept_maps_2008", "sweller_cognitive_load_1988", "wood_scaffolding_1976"]
+    },
+    {
+      "id": "issue-8-structured-parent-summaries",
+      "issue": 8,
+      "decision": "Use a strict structured summary contract with explicit evidence references, introduced-term tracking, and deterministic critic validation.",
+      "rationale": "Worked-example and theorem-generation evidence supports stepwise, auditable intermediate outputs instead of opaque free-form summaries.",
+      "implementationRefs": [
+        "src/summary-pipeline.ts",
+        "src/pedagogical-policy.ts",
+        "docs/summary-pipeline.md"
+      ],
+      "citationIds": ["atkinson_worked_examples_2000", "polu_generative_atp_2020"]
+    },
+    {
+      "id": "issue-9-single-root-induction",
+      "issue": 9,
+      "decision": "Build the explanation recursively to a single root while preserving child entailment and deterministic ordering.",
+      "rationale": "Lean proof artifacts and concept-map hierarchy both favor explicit inductive composition with stable structural identity.",
+      "implementationRefs": [
+        "src/tree-builder.ts",
+        "src/tree-storage.ts",
+        "docs/tree-builder.md"
+      ],
+      "citationIds": ["lean4_cade_2021", "novak_concept_maps_2008"]
+    },
+    {
+      "id": "issue-18-quality-gates",
+      "issue": 18,
+      "decision": "Use deterministic quality metrics and hashable benchmark reports to gate unsupported claims, policy violations, and repartition pressure.",
+      "rationale": "The tutoring-system evaluation literature and theorem-proving ML practice both require reproducible benchmark-driven quality checks.",
+      "implementationRefs": [
+        "src/evaluation-harness.ts",
+        "src/quality-benchmark-presets.ts",
+        "docs/evaluation-harness.md"
+      ],
+      "citationIds": ["leandojo_neurips_2023", "polu_generative_atp_2020", "vanlehn_its_2011"]
+    },
+    {
+      "id": "issue-23-config-contract",
+      "issue": 23,
+      "decision": "Centralize configuration normalization/hashing for abstraction, complexity, audience, language, and entailment controls.",
+      "rationale": "Expertise-reversal and cognitive-load evidence supports configurable pedagogy modes, while deterministic contracts preserve auditability.",
+      "implementationRefs": [
+        "src/config-contract.ts",
+        "apps/web/lib/config-input.ts",
+        "docs/config-contract.md"
+      ],
+      "citationIds": ["kalyuga_expertise_reversal_2003", "sweller_cognitive_load_1988"]
+    },
+    {
+      "id": "issue-25-policy-engine",
+      "issue": 25,
+      "decision": "Enforce fail-fast pedagogical policy checks pre/post summary with bounded repartition/rewrite loops and strict entailment mode.",
+      "rationale": "Scaffolding and worked-example findings support strict progression constraints and explicit remediation when constraints fail.",
+      "implementationRefs": [
+        "src/pedagogical-policy.ts",
+        "src/tree-builder.ts",
+        "docs/pedagogical-policy.md"
+      ],
+      "citationIds": ["atkinson_worked_examples_2000", "sweller_cognitive_load_1988", "wood_scaffolding_1976"]
+    }
+  ],
+  "openQuestions": [
+    {
+      "id": "oq-lean-telemetry-external-validity",
+      "question": "How well do current frozen Verity snapshots represent proof families with substantially different tactic/style distributions?",
+      "risk": "Policy and threshold settings may overfit current fixture families.",
+      "nextCheck": "Add at least one additional pinned Lean corpus family and compare threshold stability across presets."
+    },
+    {
+      "id": "oq-strict-entailment-coverage",
+      "question": "Does strict entailment mode preserve acceptable readability for novice audiences across large trees?",
+      "risk": "Strict lexical continuity may reduce pedagogical clarity in some audience profiles.",
+      "nextCheck": "Run paired calibrated-vs-strict quality reports with human rubric sampling stratified by audience level."
+    },
+    {
+      "id": "oq-ui-scale-a11y",
+      "question": "What are safe default virtualization/a11y thresholds for very large trees on low-power devices?",
+      "risk": "Accessibility and usability may regress at scale despite deterministic planners.",
+      "nextCheck": "Add deterministic large-tree browser benchmark transcripts for multiple render-threshold profiles."
+    }
+  ]
+}
