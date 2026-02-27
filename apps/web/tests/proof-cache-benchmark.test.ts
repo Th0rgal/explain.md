@@ -39,7 +39,7 @@ describe("proof cache benchmark", () => {
     expect(report.scenarios.topologyChange.frontierPartitionRecoveredSummaryCount).toBeGreaterThanOrEqual(0);
     expect(report.scenarios.topologyChange.frontierPartitionRecoveryPassCount).toBeGreaterThanOrEqual(0);
     expect(report.scenarios.topologyChange.frontierPartitionRecoveryScheduledGroupCount).toBeGreaterThanOrEqual(0);
-    expect(report.scenarios.topologyChange.frontierPartitionRecoveryStrategy).toBe("minimal_blocked_group");
+    expect(report.scenarios.topologyChange.frontierPartitionRecoveryStrategy).toBe("minimal_hitting_set_greedy");
     expect(typeof report.scenarios.topologyChange.frontierPartitionFallbackUsed).toBe("boolean");
     expect(report.scenarios.topologyChange.recoveryStatus).toBe("hit");
   });

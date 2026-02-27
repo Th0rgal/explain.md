@@ -1,18 +1,18 @@
 {
   "schemaVersion": "1.0.0",
-  "generatedAt": "2026-02-27T11:41:36.147Z",
+  "generatedAt": "2026-02-27T11:52:22.548Z",
   "proofId": "lean-verity-fixture",
   "configHash": "1b1e2b9ff73897b141a9f88c8d23a3b884495340813865fd955fa8fc3eaa4da2",
   "requestHash": "e6f53e14545f9579927084e1924992e7294f331551f9b89f4e93dc25669d6696",
-  "outcomeHash": "5bb56b4f787bc545b2dbc79e4c33539d44d50594ff83c6939b65c3997c437ef5",
+  "outcomeHash": "8c21571832c4ac08244f38c32b7b0dd128f4c6fc77cb944eae0297cfe7cfebde",
   "parameters": {
     "coldIterations": 3,
     "warmIterations": 3,
     "mutationTargetPath": "Verity/Core.lean"
   },
   "paths": {
-    "fixtureProjectRootHash": "646b499576f631cca458fec481c374f986307d0c049f1a0d4aca370607e3b963",
-    "cacheDirHash": "2a753e1c3eaaf4169fda65b3757ecdfe596619f5624938df2e5cac3f10974ba6"
+    "fixtureProjectRootHash": "ee5cb127aa6cd3b157cf4e32f70502b04631eed4a87982d6a803d6db780bfe6a",
+    "cacheDirHash": "b766aab7fa90e64ccd65edded7dbc520fe0574980f1e6b416a4edae7a5801da8"
   },
   "scenarios": {
     "coldNoPersistentCache": {
@@ -22,10 +22,10 @@
         "miss",
         "miss"
       ],
-      "meanMs": 12.245,
-      "medianMs": 6.632,
-      "minMs": 5.877,
-      "maxMs": 24.226
+      "meanMs": 11.901,
+      "medianMs": 6.088,
+      "minMs": 4.804,
+      "maxMs": 24.811
     },
     "warmPersistentCache": {
       "iterations": 3,
@@ -34,10 +34,10 @@
         "hit",
         "hit"
       ],
-      "meanMs": 1.328,
-      "medianMs": 1.29,
-      "minMs": 1.128,
-      "maxMs": 1.565
+      "meanMs": 1.284,
+      "medianMs": 1.233,
+      "minMs": 1.126,
+      "maxMs": 1.494
     },
     "semanticNoop": {
       "beforeChangeStatus": "hit",
@@ -80,7 +80,7 @@
       "frontierPartitionRecoveredSummaryCount": 0,
       "frontierPartitionRecoveryPassCount": 0,
       "frontierPartitionRecoveryScheduledGroupCount": 0,
-      "frontierPartitionRecoveryStrategy": "minimal_blocked_group",
+      "frontierPartitionRecoveryStrategy": "minimal_hitting_set_greedy",
       "frontierPartitionFallbackUsed": false,
       "recoveryStatus": "hit",
       "recoverySnapshotHash": "40996c1ce2f9bdae613d9c4e1b905a1a654a9732ec5e0e8afa6dadaf9050f454"

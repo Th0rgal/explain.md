@@ -1651,7 +1651,7 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
       frontierPartitionRecoveredSummaryCount: number;
       frontierPartitionRecoveryPassCount: number;
       frontierPartitionRecoveryScheduledGroupCount: number;
-      frontierPartitionRecoveryStrategy: "minimal_blocked_group";
+      frontierPartitionRecoveryStrategy: "minimal_hitting_set_greedy";
       frontierPartitionFallbackUsed: boolean;
       previousParentCount: number;
       nextParentCount: number;
@@ -1708,7 +1708,7 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
           frontierPartitionFallbackUsed = true;
           break;
         }
-        frontierPartitionRecoveryScheduledGroupCount += 1;
+        frontierPartitionRecoveryScheduledGroupCount += scheduledExpansion.scheduledGroupCount;
         frontierPartitionRecoveryPassCount += 1;
         frontierPartitionRecoveredLeafCount += scheduledExpansion.expandedLeafIds.length;
         frontierLeafIds = scheduledExpansion.nextFrontierLeafIds;
@@ -1760,7 +1760,7 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
     frontierPartitionRecoveredSummaryCount,
     frontierPartitionRecoveryPassCount,
     frontierPartitionRecoveryScheduledGroupCount,
-    frontierPartitionRecoveryStrategy: "minimal_blocked_group",
+    frontierPartitionRecoveryStrategy: "minimal_hitting_set_greedy",
     frontierPartitionFallbackUsed,
     previousParentCount: Object.values(imported.tree.nodes).filter((node) => node.kind === "parent").length,
     nextParentCount: Object.values(builtTree.nodes).filter((node) => node.kind === "parent").length,
@@ -1775,53 +1775,88 @@ export function selectMinimalBlockedFrontierExpansion(input: {
   | {
       expandedLeafIds: string[];
       nextFrontierLeafIds: string[];
+      scheduledGroupCount: number;
     }
   | undefined {
-  const candidates = input.blockedGroups
-    .map((blockedGroup) => {
-      const expandedLeafIds = blockedGroup.frontierLeafIds.filter(
-        (leafId) => input.availableLeafIdSet.has(leafId) && !input.frontierLeafIdSet.has(leafId),
-      );
-      return {
-        blockedGroup,
-        expandedLeafIds,
-      };
-    })
-    .filter((candidate) => candidate.expandedLeafIds.length > 0)
-    .sort((left, right) => {
-      if (left.expandedLeafIds.length !== right.expandedLeafIds.length) {
-        return left.expandedLeafIds.length - right.expandedLeafIds.length;
-      }
-      if (left.blockedGroup.frontierLeafIds.length !== right.blockedGroup.frontierLeafIds.length) {
-        return left.blockedGroup.frontierLeafIds.length - right.blockedGroup.frontierLeafIds.length;
-      }
-      if (left.blockedGroup.depth !== right.blockedGroup.depth) {
-        return left.blockedGroup.depth - right.blockedGroup.depth;
-      }
-      if (left.blockedGroup.groupIndex !== right.blockedGroup.groupIndex) {
-        return left.blockedGroup.groupIndex - right.blockedGroup.groupIndex;
-      }
-      const parentOrder = left.blockedGroup.parentId.localeCompare(right.blockedGroup.parentId);
-      if (parentOrder !== 0) {
-        return parentOrder;
-      }
-      return left.expandedLeafIds.join("\n").localeCompare(right.expandedLeafIds.join("\n"));
-    });
+  const frontierLeafIdSet = new Set(input.frontierLeafIdSet);
+  const blockedGroups = input.blockedGroups
+    .map((blockedGroup) => ({
+      blockedGroup,
+      candidateLeafIds: blockedGroup.frontierLeafIds
+        .filter((leafId) => input.availableLeafIdSet.has(leafId) && !frontierLeafIdSet.has(leafId))
+        .sort((left, right) => left.localeCompare(right)),
+    }))
+    .sort((left, right) => compareBlockedGroups(left.blockedGroup, right.blockedGroup));
 
-  const selected = candidates[0];
-  if (!selected) {
+  if (blockedGroups.length === 0) {
     return undefined;
   }
 
-  const nextFrontier = new Set(input.frontierLeafIdSet);
-  for (const leafId of selected.expandedLeafIds) {
+  if (blockedGroups.some((group) => group.candidateLeafIds.length === 0)) {
+    return undefined;
+  }
+
+  const remaining = blockedGroups.slice();
+  const expandedLeafIds = new Set<string>();
+  let scheduledGroupCount = 0;
+
+  while (remaining.length > 0) {
+    const coverage = new Map<string, number>();
+
+    for (const group of remaining) {
+      for (const leafId of group.candidateLeafIds) {
+        coverage.set(leafId, (coverage.get(leafId) ?? 0) + 1);
+      }
+    }
+
+    const selectedLeafId = [...coverage.entries()]
+      .sort((left, right) => {
+        if (left[1] !== right[1]) {
+          return right[1] - left[1];
+        }
+        return left[0].localeCompare(right[0]);
+      })
+      .map((entry) => entry[0])[0];
+
+    if (!selectedLeafId) {
+      return undefined;
+    }
+
+    expandedLeafIds.add(selectedLeafId);
+    let nextIndex = 0;
+    while (nextIndex < remaining.length) {
+      if (remaining[nextIndex].candidateLeafIds.includes(selectedLeafId)) {
+        remaining.splice(nextIndex, 1);
+        scheduledGroupCount += 1;
+      } else {
+        nextIndex += 1;
+      }
+    }
+  }
+
+  const nextFrontier = new Set(frontierLeafIdSet);
+  for (const leafId of expandedLeafIds) {
     nextFrontier.add(leafId);
   }
 
   return {
-    expandedLeafIds: selected.expandedLeafIds,
+    expandedLeafIds: [...expandedLeafIds].sort((left, right) => left.localeCompare(right)),
     nextFrontierLeafIds: [...nextFrontier].sort((left, right) => left.localeCompare(right)),
+    scheduledGroupCount,
   };
+}
+
+function compareBlockedGroups(
+  left: TreeFrontierPartitionError["blockedGroups"][number],
+  right: TreeFrontierPartitionError["blockedGroups"][number],
+): number {
+  if (left.depth !== right.depth) {
+    return left.depth - right.depth;
+  }
+  if (left.groupIndex !== right.groupIndex) {
+    return left.groupIndex - right.groupIndex;
+  }
+  return left.parentId.localeCompare(right.parentId);
 }
 
 function mergeRecoveryReusableSummaries(

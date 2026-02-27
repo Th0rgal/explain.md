@@ -80,7 +80,7 @@ export interface ProofCacheBenchmarkReport {
       frontierPartitionRecoveredSummaryCount: number;
       frontierPartitionRecoveryPassCount: number;
       frontierPartitionRecoveryScheduledGroupCount: number;
-      frontierPartitionRecoveryStrategy: "minimal_blocked_group" | "unknown";
+      frontierPartitionRecoveryStrategy: "minimal_hitting_set_greedy" | "unknown";
       frontierPartitionFallbackUsed: boolean;
       recoveryStatus: "hit" | "miss";
       recoverySnapshotHash: string;
@@ -376,10 +376,10 @@ function readBooleanTopologyDetail(
 
 function readTopologyRecoveryStrategy(
   diagnostics: Array<{ code: string; details?: Record<string, unknown> }>,
-): "minimal_blocked_group" | "unknown" {
+): "minimal_hitting_set_greedy" | "unknown" {
   const topologyDiagnostic = diagnostics.find((diagnostic) => diagnostic.code === "cache_incremental_topology_rebuild");
-  return topologyDiagnostic?.details?.frontierPartitionRecoveryStrategy === "minimal_blocked_group"
-    ? "minimal_blocked_group"
+  return topologyDiagnostic?.details?.frontierPartitionRecoveryStrategy === "minimal_hitting_set_greedy"
+    ? "minimal_hitting_set_greedy"
     : "unknown";
 }
 

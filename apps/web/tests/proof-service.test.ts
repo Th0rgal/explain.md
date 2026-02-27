@@ -78,6 +78,7 @@ describe("proof service", () => {
     expect(selected).toBeDefined();
     expect(selected?.expandedLeafIds).toEqual(["l2"]);
     expect(selected?.nextFrontierLeafIds).toEqual(["l1", "l2"]);
+    expect(selected?.scheduledGroupCount).toBe(2);
   });
 
   it("breaks blocked-group recovery ties by stable metadata order", () => {
@@ -103,6 +104,39 @@ describe("proof service", () => {
     expect(selected).toBeDefined();
     expect(selected?.expandedLeafIds).toEqual(["l2"]);
     expect(selected?.nextFrontierLeafIds).toEqual(["l2"]);
+    expect(selected?.scheduledGroupCount).toBe(2);
+  });
+
+  it("greedily covers blocked groups with deterministic minimal leaf additions", () => {
+    const selected = selectMinimalBlockedFrontierExpansion({
+      blockedGroups: [
+        {
+          depth: 2,
+          groupIndex: 0,
+          parentId: "p_2_0_a",
+          frontierLeafIds: ["l1", "l2"],
+        },
+        {
+          depth: 2,
+          groupIndex: 1,
+          parentId: "p_2_1_b",
+          frontierLeafIds: ["l2", "l3"],
+        },
+        {
+          depth: 2,
+          groupIndex: 2,
+          parentId: "p_2_2_c",
+          frontierLeafIds: ["l3"],
+        },
+      ],
+      frontierLeafIdSet: new Set<string>(),
+      availableLeafIdSet: new Set(["l1", "l2", "l3"]),
+    });
+
+    expect(selected).toBeDefined();
+    expect(selected?.expandedLeafIds).toEqual(["l2", "l3"]);
+    expect(selected?.nextFrontierLeafIds).toEqual(["l2", "l3"]);
+    expect(selected?.scheduledGroupCount).toBe(3);
   });
 
   it("computes deterministic diff hash and reports config changes", () => {
@@ -498,7 +532,7 @@ describe("proof service", () => {
       expect(typeof topologyDiagnostic?.details?.frontierPartitionRecoveredSummaryCount).toBe("number");
       expect(typeof topologyDiagnostic?.details?.frontierPartitionRecoveryPassCount).toBe("number");
       expect(typeof topologyDiagnostic?.details?.frontierPartitionRecoveryScheduledGroupCount).toBe("number");
-      expect(topologyDiagnostic?.details?.frontierPartitionRecoveryStrategy).toBe("minimal_blocked_group");
+      expect(topologyDiagnostic?.details?.frontierPartitionRecoveryStrategy).toBe("minimal_hitting_set_greedy");
       expect(typeof topologyDiagnostic?.details?.frontierPartitionFallbackUsed).toBe("boolean");
       expect((topologyDiagnostic?.details?.reusedParentNodeCount as number) >= 0).toBe(true);
       expect((topologyDiagnostic?.details?.generatedParentNodeCount as number) >= 0).toBe(true);
@@ -516,9 +550,10 @@ describe("proof service", () => {
       expect((topologyDiagnostic?.details?.frontierPartitionRecoveryPassCount as number) >= 0).toBe(true);
       expect((topologyDiagnostic?.details?.frontierPartitionRecoveryScheduledGroupCount as number) >= 0).toBe(true);
       if ((topologyDiagnostic?.details?.frontierPartitionRecoveryPassCount as number) > 0) {
-        expect(topologyDiagnostic?.details?.frontierPartitionRecoveryScheduledGroupCount).toBe(
-          topologyDiagnostic?.details?.frontierPartitionRecoveryPassCount,
-        );
+        expect(
+          (topologyDiagnostic?.details?.frontierPartitionRecoveryScheduledGroupCount as number) >=
+            (topologyDiagnostic?.details?.frontierPartitionRecoveryPassCount as number),
+        ).toBe(true);
       }
     } finally {
       clearProofDatasetCacheForTests();

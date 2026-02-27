@@ -18,7 +18,7 @@ By default this writes:
 - Topology change path (`topologyChange`): applies a theorem-addition mutation and verifies deterministic topology-aware rebuild diagnostics (`cache_incremental_topology_rebuild`) with explicit stable-id reuse, child-hash reuse, and ambiguity-skip counters.
   - Includes child-statement-hash reuse fallback counters for deterministic reindex-heavy topology shifts.
   - Includes frontier-disambiguated fallback counters for ambiguity-safe reuse under deep multi-frontier reindexing.
-  - Includes frontier-partition scheduling counters (`frontierPartitionLeafCount`, `frontierPartitionBlockedGroupCount`, `frontierPartitionRecoveredLeafCount`, `frontierPartitionRecoveredSummaryCount`, `frontierPartitionRecoveryPassCount`, `frontierPartitionRecoveryScheduledGroupCount`, `frontierPartitionRecoveryStrategy`, `frontierPartitionFallbackUsed`) to audit minimal-subtree generation attempts, retry warm-start summary carry-over, and deterministic blocked-group recovery scheduling.
+  - Includes frontier-partition scheduling counters (`frontierPartitionLeafCount`, `frontierPartitionBlockedGroupCount`, `frontierPartitionRecoveredLeafCount`, `frontierPartitionRecoveredSummaryCount`, `frontierPartitionRecoveryPassCount`, `frontierPartitionRecoveryScheduledGroupCount`, `frontierPartitionRecoveryStrategy`, `frontierPartitionFallbackUsed`) to audit minimal-subtree generation attempts, retry warm-start summary carry-over, and deterministic blocked-group recovery scheduling via strategy `minimal_hitting_set_greedy`.
 
 ## Determinism and Auditability
 - Report includes:
