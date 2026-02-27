@@ -10,6 +10,7 @@ export interface ApiError {
   error: {
     code: string;
     message: string;
+    details?: unknown;
   };
 }
 
@@ -17,13 +18,14 @@ export function jsonSuccess<T>(data: T, status = 200): NextResponse<ApiSuccess<T
   return NextResponse.json({ ok: true, data }, { status });
 }
 
-export function jsonError(code: string, message: string, status = 400): NextResponse<ApiError> {
+export function jsonError(code: string, message: string, status = 400, details?: unknown): NextResponse<ApiError> {
   return NextResponse.json(
     {
       ok: false,
       error: {
         code,
         message,
+        details,
       },
     },
     { status },

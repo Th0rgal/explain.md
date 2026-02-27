@@ -14,12 +14,22 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 - `lib/api-client.ts` for typed client-side fetch wrappers.
 - Shell UI with baseline navigation, controls, loading state, and error boundary.
 
+## Implemented in issue #23 (web contract enforcement slice)
+- Unified config parser added at `apps/web/lib/config-input.ts`.
+- All proof routes (`seed`, `view`, `diff`, `leaf detail`) now parse config through this shared parser.
+- Route-local defaults were removed so config inputs remain partial and deterministic before seed merge.
+- Full config-contract field coverage is accepted from body/query:
+  - tree/pedagogy knobs (`abstractionLevel`, `complexityLevel`, `maxChildrenPerParent`, `language`, `audienceLevel`, `readingLevelTarget`, `complexityBandWidth`, `termIntroductionBudget`, `proofDetailMode`)
+  - provider knobs (`modelProvider.*`)
+- Invalid config returns machine-checkable diagnostics in `error.details.errors[]` (`path`, `message`).
+
 ## Determinism and provenance
 - Seed dataset is fixed (`seed-verity`) and uses core canonical models from `src/`.
 - Responses include stable hashes:
   - `configHash`
   - `requestHash`
   - `viewHash` / `diffHash` / `detailHash`
+- Config parsing and normalization is deterministic before request hashing.
 - Leaf detail panel is backed by provenance path + deterministic sample verification history.
 
 ## State management

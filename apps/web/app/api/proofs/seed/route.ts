@@ -1,27 +1,19 @@
 import { NextRequest } from "next/server";
-import type { ExplanationConfigInput } from "../../../../../../src/config-contract";
-import { jsonError, jsonSuccess, normalizeInteger, normalizeOptionalInteger, normalizeString } from "../../../../lib/http-contract";
+import { ConfigContractError, parseConfigFromSearchParams } from "../../../../lib/config-input";
+import { jsonError, jsonSuccess } from "../../../../lib/http-contract";
 import { listSeedProofs } from "../../../../lib/proof-service";
-
-function readConfigFromSearch(request: NextRequest): ExplanationConfigInput {
-  const search = request.nextUrl.searchParams;
-  return {
-    abstractionLevel: normalizeInteger(search.get("abstractionLevel"), 3, 1, 5) as 1 | 2 | 3 | 4 | 5,
-    complexityLevel: normalizeInteger(search.get("complexityLevel"), 3, 1, 5) as 1 | 2 | 3 | 4 | 5,
-    maxChildrenPerParent: normalizeInteger(search.get("maxChildrenPerParent"), 3, 2, 12),
-    audienceLevel: normalizeString(search.get("audienceLevel"), "intermediate") as "novice" | "intermediate" | "expert",
-    language: normalizeString(search.get("language"), "en"),
-    termIntroductionBudget: normalizeOptionalInteger(search.get("termIntroductionBudget"), 0, 8),
-  };
-}
 
 export async function GET(request: NextRequest) {
   try {
-    const config = readConfigFromSearch(request);
+    const config = parseConfigFromSearchParams(request.nextUrl.searchParams);
     return jsonSuccess({
       proofs: listSeedProofs(config),
     });
   } catch (error) {
+    if (error instanceof ConfigContractError) {
+      return jsonError("invalid_config", error.message, 400, { errors: error.details });
+    }
+
     const message = error instanceof Error ? error.message : String(error);
     return jsonError("invalid_request", message, 400);
   }

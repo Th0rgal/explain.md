@@ -4,7 +4,21 @@ export interface ProofConfigInput {
   maxChildrenPerParent?: number;
   audienceLevel?: "novice" | "intermediate" | "expert";
   language?: string;
+  readingLevelTarget?: "elementary" | "middle_school" | "high_school" | "undergraduate" | "graduate";
+  complexityBandWidth?: number;
   termIntroductionBudget?: number;
+  proofDetailMode?: "minimal" | "balanced" | "formal";
+  modelProvider?: {
+    provider?: string;
+    endpoint?: string;
+    model?: string;
+    apiKeyEnvVar?: string;
+    timeoutMs?: number;
+    maxRetries?: number;
+    retryBaseDelayMs?: number;
+    temperature?: number;
+    maxOutputTokens?: number;
+  };
 }
 
 interface ApiSuccess<T> {
@@ -17,6 +31,7 @@ interface ApiFailure {
   error: {
     code: string;
     message: string;
+    details?: unknown;
   };
 }
 
@@ -156,8 +171,44 @@ export async function fetchLeafDetail(proofId: string, leafId: string, config: P
   if (config.language) {
     params.set("language", config.language);
   }
+  if (config.readingLevelTarget) {
+    params.set("readingLevelTarget", config.readingLevelTarget);
+  }
+  if (config.complexityBandWidth !== undefined) {
+    params.set("complexityBandWidth", String(config.complexityBandWidth));
+  }
   if (config.termIntroductionBudget !== undefined) {
     params.set("termIntroductionBudget", String(config.termIntroductionBudget));
+  }
+  if (config.proofDetailMode) {
+    params.set("proofDetailMode", config.proofDetailMode);
+  }
+  if (config.modelProvider?.provider) {
+    params.set("modelProvider.provider", config.modelProvider.provider);
+  }
+  if (config.modelProvider?.endpoint) {
+    params.set("modelProvider.endpoint", config.modelProvider.endpoint);
+  }
+  if (config.modelProvider?.model) {
+    params.set("modelProvider.model", config.modelProvider.model);
+  }
+  if (config.modelProvider?.apiKeyEnvVar) {
+    params.set("modelProvider.apiKeyEnvVar", config.modelProvider.apiKeyEnvVar);
+  }
+  if (config.modelProvider?.timeoutMs !== undefined) {
+    params.set("modelProvider.timeoutMs", String(config.modelProvider.timeoutMs));
+  }
+  if (config.modelProvider?.maxRetries !== undefined) {
+    params.set("modelProvider.maxRetries", String(config.modelProvider.maxRetries));
+  }
+  if (config.modelProvider?.retryBaseDelayMs !== undefined) {
+    params.set("modelProvider.retryBaseDelayMs", String(config.modelProvider.retryBaseDelayMs));
+  }
+  if (config.modelProvider?.temperature !== undefined) {
+    params.set("modelProvider.temperature", String(config.modelProvider.temperature));
+  }
+  if (config.modelProvider?.maxOutputTokens !== undefined) {
+    params.set("modelProvider.maxOutputTokens", String(config.modelProvider.maxOutputTokens));
   }
 
   return requestJson<LeafDetailResponse>(`/api/proofs/leaves/${encodeURIComponent(leafId)}?${params.toString()}`);
