@@ -63,7 +63,9 @@ export interface ProofCacheBenchmarkReport {
       afterChangeStatus: "hit" | "miss";
       afterChangeDiagnostics: string[];
       afterChangeAdditionRecovery?: {
+        recoveryMode: "insertion" | "regeneration";
         addedLeafCount: number;
+        insertedParentCount: number;
         reusableParentSummaryCount: number;
         reusedParentSummaryCount: number;
         reusedParentSummaryByGroundingCount: number;
@@ -465,14 +467,18 @@ function extractTopologyRegenerationRecoveryDiagnostics(
 function extractTopologyAdditionRecoveryDiagnostics(
   diagnostics: Array<{ code: string; details?: Record<string, unknown> }>,
 ): ProofCacheBenchmarkReport["scenarios"]["topologyShapeInvalidation"]["afterChangeAdditionRecovery"] {
-  const additionRecovery = diagnostics.find(
-    (diagnostic) => diagnostic.code === "cache_topology_addition_subtree_regeneration_rebuild_hit",
-  );
+  const additionRecovery =
+    diagnostics.find((diagnostic) => diagnostic.code === "cache_topology_addition_subtree_insertion_rebuild_hit") ??
+    diagnostics.find((diagnostic) => diagnostic.code === "cache_topology_addition_subtree_regeneration_rebuild_hit");
   if (!additionRecovery?.details) {
     return undefined;
   }
   return {
+    recoveryMode: (additionRecovery.details.recoveryMode === "insertion" ? "insertion" : "regeneration") as
+      | "insertion"
+      | "regeneration",
     addedLeafCount: Number(additionRecovery.details.addedLeafCount ?? 0),
+    insertedParentCount: Number(additionRecovery.details.insertedParentCount ?? 0),
     reusableParentSummaryCount: Number(additionRecovery.details.reusableParentSummaryCount ?? 0),
     reusedParentSummaryCount: Number(additionRecovery.details.reusedParentSummaryCount ?? 0),
     reusedParentSummaryByGroundingCount: Number(additionRecovery.details.reusedParentSummaryByGroundingCount ?? 0),

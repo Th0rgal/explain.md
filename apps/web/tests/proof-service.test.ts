@@ -497,9 +497,14 @@ describe("proof service", () => {
       expect(rebuilt.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_miss")).toBe(true);
       expect(
         rebuilt.cache.diagnostics.some(
-          (diagnostic) => diagnostic.code === "cache_topology_addition_subtree_regeneration_rebuild_hit",
+          (diagnostic) => diagnostic.code === "cache_topology_addition_subtree_insertion_rebuild_hit",
         ),
       ).toBe(true);
+      expect(
+        rebuilt.cache.diagnostics.some(
+          (diagnostic) => diagnostic.code === "cache_topology_addition_subtree_regeneration_rebuild_hit",
+        ),
+      ).toBe(false);
       expect(
         rebuilt.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_topology_regeneration_rebuild_hit"),
       ).toBe(false);
@@ -507,9 +512,11 @@ describe("proof service", () => {
         false,
       );
       const additionDiagnostic = rebuilt.cache.diagnostics.find(
-        (diagnostic) => diagnostic.code === "cache_topology_addition_subtree_regeneration_rebuild_hit",
+        (diagnostic) => diagnostic.code === "cache_topology_addition_subtree_insertion_rebuild_hit",
       );
+      expect(additionDiagnostic?.details?.recoveryMode).toBe("insertion");
       expect((additionDiagnostic?.details?.addedLeafCount as number) > 0).toBe(true);
+      expect((additionDiagnostic?.details?.insertedParentCount as number) > 0).toBe(true);
       expect((additionDiagnostic?.details?.reusableParentSummaryCount as number) >= 0).toBe(true);
       expect((additionDiagnostic?.details?.reusedParentSummaryCount as number) >= 0).toBe(true);
       expect(

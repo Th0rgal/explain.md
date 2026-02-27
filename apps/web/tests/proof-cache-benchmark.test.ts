@@ -27,9 +27,13 @@ describe("proof cache benchmark", () => {
     expect(report.scenarios.topologyShapeInvalidation.afterChangeStatus).toBe("hit");
     expect(report.scenarios.topologyShapeInvalidation.afterChangeDiagnostics).toContain("cache_miss");
     expect(report.scenarios.topologyShapeInvalidation.afterChangeDiagnostics).toContain(
-      "cache_topology_addition_subtree_regeneration_rebuild_hit",
+      "cache_topology_addition_subtree_insertion_rebuild_hit",
     );
+    expect(report.scenarios.topologyShapeInvalidation.afterChangeAdditionRecovery?.recoveryMode).toBe("insertion");
     expect((report.scenarios.topologyShapeInvalidation.afterChangeAdditionRecovery?.addedLeafCount ?? 0) > 0).toBe(true);
+    expect((report.scenarios.topologyShapeInvalidation.afterChangeAdditionRecovery?.insertedParentCount ?? 0) > 0).toBe(
+      true,
+    );
     expect(
       report.scenarios.topologyShapeInvalidation.afterChangeAdditionRecovery?.additionRecoveryHash,
     ).toHaveLength(64);
