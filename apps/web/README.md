@@ -24,6 +24,7 @@ This Next.js app provides a deterministic frontend scaffold for explain.md.
   - `GET /api/observability/verification-metrics`
   - `GET /api/observability/proof-query-metrics`
   - `GET /api/observability/ui-interaction-metrics`
+  - `GET /api/observability/ui-interaction-ledger`
   - `POST /api/observability/ui-interactions`
   - `GET /api/observability/slo-report`
 - Client API layer in `lib/api-client.ts`.
@@ -61,6 +62,8 @@ The tree panel uses incremental root/children/path queries:
     - emits deterministic `requestId` and `traceId`
   - `GET /api/observability/ui-interaction-metrics`
     - deterministic rolling-window aggregates (`requestCount`, `successCount`, `failureCount`, `uniqueTraceCount`, parent-trace rate, per-interaction `meanDurationMs`/`p95DurationMs`) + `snapshotHash`
+  - `GET /api/observability/ui-interaction-ledger`
+    - deterministic durable retention snapshot for UI traces (`persistedEventCount`, `rollingWindowRequestCount`, `droppedFromRollingWindowCount`, `appendFailureCount`, `latestRequestId`, retention mode/path hash) + `snapshotHash`
 - Observability SLO/alert report endpoint:
   - `GET /api/observability/slo-report`
   - deterministic policy report across proof-query + verification + UI-interaction snapshots with threshold pass/fail diagnostics and `snapshotHash`
@@ -146,6 +149,7 @@ The tree panel uses incremental root/children/path queries:
 - Lean fixture proof datasets are persisted to `.explain-md/web-proof-cache` (override with `EXPLAIN_MD_WEB_PROOF_CACHE_DIR`).
 - Lean fixture project root can be overridden with `EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT` (used by benchmark/invalidation harness).
 - Config profiles are persisted to `.explain-md/web-config-profiles.json` (override with `EXPLAIN_MD_WEB_CONFIG_PROFILE_LEDGER`).
+- UI interaction observability ledger defaults to `.explain-md/web-ui-interaction-ledger.ndjson` and can be overridden with `EXPLAIN_MD_UI_INTERACTION_LEDGER_PATH` (test environment defaults to disabled unless set).
 - Tree render window thresholds can be configured with:
   - `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_MAX_ROWS` (default `120`)
   - `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_OVERSCAN_ROWS` (default `24`)

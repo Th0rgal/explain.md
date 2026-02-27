@@ -32,6 +32,7 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - `GET /api/observability/verification-metrics`
   - `GET /api/observability/proof-query-metrics`
   - `GET /api/observability/ui-interaction-metrics`
+  - `GET /api/observability/ui-interaction-ledger`
   - `POST /api/observability/ui-interactions`
   - `GET /api/observability/slo-report`
 - Verification state is persisted in a canonical ledger at `.explain-md/web-verification-ledger.json`.
@@ -53,6 +54,7 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 - UI interaction observability contracts:
   - `POST /api/observability/ui-interactions` records deterministic browser interaction traces with canonical `requestId`/`traceId`
   - `GET /api/observability/ui-interaction-metrics` exports deterministic rolling-window UI interaction aggregates (`requestCount`, success/failure rate, parent-trace rate, per-interaction duration stats) with `snapshotHash`
+  - `GET /api/observability/ui-interaction-ledger` exports deterministic durable-retention diagnostics (`persistedEventCount`, `rollingWindowRequestCount`, `droppedFromRollingWindowCount`, `appendFailureCount`, `latestRequestId`, retention `mode`/`pathHash`) with `snapshotHash`
 
 ## Determinism and provenance
 - Two deterministic datasets are exposed through one contract:
@@ -90,6 +92,7 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 - Config profiles are persisted/queryable through deterministic API contracts with canonical storage keys, profile `configHash`, and response-level `requestHash` + `ledgerHash`.
 - Lean fixture datasets are persisted under `.explain-md/web-proof-cache` (override with `EXPLAIN_MD_WEB_PROOF_CACHE_DIR`) and invalidated by source fingerprint + config hash.
 - Lean fixture root lookup can be overridden with `EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT` for deterministic benchmark/invalidation runs against temporary fixture copies.
+- UI interaction durable telemetry ledger defaults to `.explain-md/web-ui-interaction-ledger.ndjson` and can be overridden with `EXPLAIN_MD_UI_INTERACTION_LEDGER_PATH` (disabled by default under `NODE_ENV=test` unless explicitly set).
 - Deterministic benchmark artifact generation is available via `npm run web:bench:cache` (writes `docs/benchmarks/proof-cache-benchmark.json`).
 - Deterministic assistive-tech interaction benchmark is available via `npm run web:bench:tree-a11y` (writes `docs/benchmarks/tree-a11y-evaluation.json`).
 - Deterministic observability SLO benchmark is available via `npm run web:bench:observability-slo` (writes `docs/benchmarks/observability-slo-benchmark.json`).

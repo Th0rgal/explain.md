@@ -4,6 +4,7 @@ import {
   fetchConfigProfiles,
   fetchObservabilitySloReport,
   fetchProofQueryObservabilityMetrics,
+  fetchUiInteractionObservabilityLedger,
   fetchUiInteractionObservabilityMetrics,
   fetchVerificationObservabilityMetrics,
   postUiInteractionObservabilityEvent,
@@ -439,6 +440,36 @@ describe("api client", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith("/api/observability/ui-interaction-metrics", undefined);
+  });
+
+  it("fetches UI interaction observability ledger export endpoint", async () => {
+    const fetchMock = vi.fn(async () =>
+      buildMockResponse({
+        ok: true,
+        data: {
+          schemaVersion: "1.0.0",
+          sampleWindowSize: 1024,
+          rollingWindowRequestCount: 8,
+          persistedEventCount: 20,
+          droppedFromRollingWindowCount: 12,
+          appendFailureCount: 0,
+          latestRequestId: "a".repeat(64),
+          retention: {
+            enabled: true,
+            mode: "ndjson",
+            pathHash: "b".repeat(64),
+          },
+          generatedAt: "2026-02-27T00:00:00.000Z",
+          snapshotHash: "c".repeat(64),
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchUiInteractionObservabilityLedger();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith("/api/observability/ui-interaction-ledger", undefined);
   });
 
   it("posts UI interaction observability events deterministically", async () => {

@@ -581,6 +581,23 @@ export interface UiInteractionObservabilityMetricsResponse {
   snapshotHash: string;
 }
 
+export interface UiInteractionObservabilityLedgerResponse {
+  schemaVersion: "1.0.0";
+  sampleWindowSize: number;
+  rollingWindowRequestCount: number;
+  persistedEventCount: number;
+  droppedFromRollingWindowCount: number;
+  appendFailureCount: number;
+  latestRequestId?: string;
+  retention: {
+    enabled: boolean;
+    mode: "disabled" | "ndjson";
+    pathHash?: string;
+  };
+  generatedAt: string;
+  snapshotHash: string;
+}
+
 export interface ObservabilitySloThresholdsInput {
   minProofRequestCount?: number;
   minVerificationRequestCount?: number;
@@ -855,6 +872,10 @@ export async function fetchProofQueryObservabilityMetrics(): Promise<ProofQueryO
 
 export async function fetchUiInteractionObservabilityMetrics(): Promise<UiInteractionObservabilityMetricsResponse> {
   return requestJson<UiInteractionObservabilityMetricsResponse>("/api/observability/ui-interaction-metrics");
+}
+
+export async function fetchUiInteractionObservabilityLedger(): Promise<UiInteractionObservabilityLedgerResponse> {
+  return requestJson<UiInteractionObservabilityLedgerResponse>("/api/observability/ui-interaction-ledger");
 }
 
 export async function postUiInteractionObservabilityEvent(payload: {
