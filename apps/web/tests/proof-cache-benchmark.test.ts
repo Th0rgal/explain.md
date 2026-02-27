@@ -29,6 +29,7 @@ describe("proof cache benchmark", () => {
     expect(report.scenarios.topologyShapeInvalidation.afterChangeDiagnostics).toContain(
       "cache_topology_regeneration_rebuild_hit",
     );
+    expect(report.scenarios.topologyShapeInvalidation.afterChangeRemovalRecovery).toBeUndefined();
     expect(report.scenarios.topologyShapeInvalidation.afterChangeRegenerationRecovery?.regenerationHash).toHaveLength(64);
     expect(
       (report.scenarios.topologyShapeInvalidation.afterChangeRegenerationRecovery?.reusedParentSummaryByGroundingCount ??

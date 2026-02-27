@@ -62,6 +62,14 @@ export interface ProofCacheBenchmarkReport {
       beforeChangeStatus: "hit" | "miss";
       afterChangeStatus: "hit" | "miss";
       afterChangeDiagnostics: string[];
+      afterChangeRemovalRecovery?: {
+        removedLeafCount: number;
+        touchedParentCount: number;
+        recomputedParentCount: number;
+        collapsedParentCount: number;
+        droppedParentCount: number;
+        recoveryHash: string;
+      };
       afterChangeRegenerationRecovery?: {
         reusableParentSummaryCount: number;
         reusedParentSummaryCount: number;
@@ -200,6 +208,7 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
       beforeChangeStatus: beforeShapeChange.cache.status,
       afterChangeStatus: afterShapeChange.cache.status,
       afterChangeDiagnostics: afterShapeChange.cache.diagnostics.map((diagnostic) => diagnostic.code).sort(),
+      afterChangeRemovalRecovery: extractTopologyRemovalRecoveryDiagnostics(afterShapeChange.cache.diagnostics),
       afterChangeRegenerationRecovery: extractTopologyRegenerationRecoveryDiagnostics(afterShapeChange.cache.diagnostics),
       afterChangeTopologyPlan: afterShapeChange.cache.blockedSubtreePlan
         ? {
@@ -240,6 +249,7 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
         beforeChangeStatus: topologyShapeInvalidation.beforeChangeStatus,
         afterChangeStatus: topologyShapeInvalidation.afterChangeStatus,
         afterChangeDiagnostics: topologyShapeInvalidation.afterChangeDiagnostics,
+        afterChangeRemovalRecovery: topologyShapeInvalidation.afterChangeRemovalRecovery,
         afterChangeRegenerationRecovery: topologyShapeInvalidation.afterChangeRegenerationRecovery,
         afterChangeTopologyPlan: topologyShapeInvalidation.afterChangeTopologyPlan,
         recoveryStatus: topologyShapeInvalidation.recoveryStatus,
@@ -349,6 +359,23 @@ function extractTopologyRegenerationRecoveryDiagnostics(
       regeneration.details.skippedUnrebasableStatementSignatureReuseCount ?? 0,
     ),
     regenerationHash: String(regeneration.details.regenerationHash ?? ""),
+  };
+}
+
+function extractTopologyRemovalRecoveryDiagnostics(
+  diagnostics: Array<{ code: string; details?: Record<string, unknown> }>,
+): ProofCacheBenchmarkReport["scenarios"]["topologyShapeInvalidation"]["afterChangeRemovalRecovery"] {
+  const recovery = diagnostics.find((diagnostic) => diagnostic.code === "cache_topology_removal_subtree_rebuild_hit");
+  if (!recovery?.details) {
+    return undefined;
+  }
+  return {
+    removedLeafCount: Number(recovery.details.removedLeafCount ?? 0),
+    touchedParentCount: Number(recovery.details.touchedParentCount ?? 0),
+    recomputedParentCount: Number(recovery.details.recomputedParentCount ?? 0),
+    collapsedParentCount: Number(recovery.details.collapsedParentCount ?? 0),
+    droppedParentCount: Number(recovery.details.droppedParentCount ?? 0),
+    recoveryHash: String(recovery.details.recoveryHash ?? ""),
   };
 }
 

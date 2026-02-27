@@ -1,18 +1,18 @@
 {
   "schemaVersion": "1.0.0",
-  "generatedAt": "2026-02-27T15:11:14.847Z",
+  "generatedAt": "2026-02-27T15:20:41.457Z",
   "proofId": "lean-verity-fixture",
   "configHash": "a75632c3c71bea58a13445a49951b87763ebd9e868fb4f51ac128e6c783e8af7",
   "requestHash": "3f46810b2ac7310b0662c6e01ba36ed7e2f53d0d01cd2f7653b72ffecf20dc0e",
-  "outcomeHash": "eedb44db55985743ff6bc3b5b3f31cc8e26a0c070c288087b2059d7d866c94de",
+  "outcomeHash": "cea28fc1ad47fe6b071d693e446af3e965583b657cafb30a694839bcd1195c1a",
   "parameters": {
     "coldIterations": 3,
     "warmIterations": 3,
     "mutationTargetPath": "Verity/Core.lean"
   },
   "paths": {
-    "fixtureProjectRootHash": "2455fc0eabfeda25fc4132000f6e5e9f93d5e183c2b55e2394a108b9c5f273b9",
-    "cacheDirHash": "914676278e23237185135b49b9f3e1798fb9a2b7b28e36104f1db4437fbc7347"
+    "fixtureProjectRootHash": "87995690d543d40d766c92fd4502636ef68dea662b8107d43e2a4017d9a8aabf",
+    "cacheDirHash": "d32c73568435a7d3ab50104a761827d04c01c801434e72c40c4b58f3f9189262"
   },
   "scenarios": {
     "coldNoPersistentCache": {
@@ -22,10 +22,10 @@
         "miss",
         "miss"
       ],
-      "meanMs": 10.672,
-      "medianMs": 4.7,
-      "minMs": 4.435,
-      "maxMs": 22.881
+      "meanMs": 11.035,
+      "medianMs": 5.209,
+      "minMs": 4.992,
+      "maxMs": 22.902
     },
     "warmPersistentCache": {
       "iterations": 3,
@@ -34,10 +34,10 @@
         "hit",
         "hit"
       ],
-      "meanMs": 1.61,
-      "medianMs": 1.59,
-      "minMs": 1.53,
-      "maxMs": 1.71
+      "meanMs": 1.382,
+      "medianMs": 1.417,
+      "minMs": 1.222,
+      "maxMs": 1.507
     },
     "invalidation": {
       "beforeChangeStatus": "hit",
