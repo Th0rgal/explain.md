@@ -45,6 +45,8 @@ export interface TreeQualityThresholds {
   maxComplexitySpreadMean: number;
   minEvidenceCoverageMean: number;
   minVocabularyContinuityMean: number;
+  maxRepartitionEventRate: number;
+  maxRepartitionMaxRound: number;
 }
 
 export interface TreeQualityThresholdFailure {
@@ -55,7 +57,9 @@ export interface TreeQualityThresholdFailure {
     | "term_jump_rate"
     | "complexity_spread_mean"
     | "evidence_coverage_mean"
-    | "vocabulary_continuity_mean";
+    | "vocabulary_continuity_mean"
+    | "repartition_event_rate"
+    | "repartition_max_round";
   message: string;
   details: {
     actual: number;
@@ -150,8 +154,8 @@ export function evaluateExplanationTreeQuality(
   const parentSamples = collectParentSamples(tree, config, supportCoverageFloor);
   const depthMetrics = buildDepthMetrics(parentSamples, supportCoverageFloor);
   const metrics = aggregateMetrics(parentSamples, supportCoverageFloor);
-  const thresholdFailures = evaluateThresholds(metrics, thresholds);
   const repartitionMetrics = collectRepartitionMetrics(tree);
+  const thresholdFailures = evaluateThresholds(metrics, repartitionMetrics, thresholds);
 
   return {
     rootId: tree.rootId,
@@ -392,8 +396,13 @@ function buildDepthMetrics(samples: ParentQualitySample[], supportCoverageFloor:
     });
 }
 
-function evaluateThresholds(metrics: TreeQualityMetrics, thresholds: TreeQualityThresholds): TreeQualityThresholdFailure[] {
+function evaluateThresholds(
+  metrics: TreeQualityMetrics,
+  repartitionMetrics: RepartitionMetrics,
+  thresholds: TreeQualityThresholds,
+): TreeQualityThresholdFailure[] {
   const failures: TreeQualityThresholdFailure[] = [];
+  const repartitionEventRate = metrics.parentCount === 0 ? 0 : repartitionMetrics.eventCount / metrics.parentCount;
 
   if (metrics.unsupportedParentRate > thresholds.maxUnsupportedParentRate) {
     failures.push({
@@ -479,6 +488,30 @@ function evaluateThresholds(metrics: TreeQualityMetrics, thresholds: TreeQuality
     });
   }
 
+  if (repartitionEventRate > thresholds.maxRepartitionEventRate) {
+    failures.push({
+      code: "repartition_event_rate",
+      message: "Repartition event rate exceeded threshold.",
+      details: {
+        actual: repartitionEventRate,
+        expected: thresholds.maxRepartitionEventRate,
+        comparator: "<=",
+      },
+    });
+  }
+
+  if (repartitionMetrics.maxRound > thresholds.maxRepartitionMaxRound) {
+    failures.push({
+      code: "repartition_max_round",
+      message: "Maximum repartition round exceeded threshold.",
+      details: {
+        actual: repartitionMetrics.maxRound,
+        expected: thresholds.maxRepartitionMaxRound,
+        comparator: "<=",
+      },
+    });
+  }
+
   return failures;
 }
 
@@ -491,6 +524,8 @@ function normalizeThresholds(config: ExplanationConfig, overrides?: Partial<Tree
     maxComplexitySpreadMean: config.complexityBandWidth,
     minEvidenceCoverageMean: 1,
     minVocabularyContinuityMean: computeVocabularyContinuityThreshold(config),
+    maxRepartitionEventRate: 1,
+    maxRepartitionMaxRound: 3,
   };
 
   return {
@@ -504,6 +539,11 @@ function normalizeThresholds(config: ExplanationConfig, overrides?: Partial<Tree
     ),
     minEvidenceCoverageMean: clampRate(overrides?.minEvidenceCoverageMean ?? defaults.minEvidenceCoverageMean),
     minVocabularyContinuityMean: clampRate(overrides?.minVocabularyContinuityMean ?? defaults.minVocabularyContinuityMean),
+    maxRepartitionEventRate: clampRate(overrides?.maxRepartitionEventRate ?? defaults.maxRepartitionEventRate),
+    maxRepartitionMaxRound: clampNonNegativeInteger(
+      overrides?.maxRepartitionMaxRound ?? defaults.maxRepartitionMaxRound,
+      defaults.maxRepartitionMaxRound,
+    ),
   };
 }
 
@@ -519,6 +559,13 @@ function clampSpread(value: number, fallback: number): number {
     return fallback;
   }
   return Math.max(0, value);
+}
+
+function clampNonNegativeInteger(value: number, fallback: number): number {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+  return Math.max(0, Math.floor(value));
 }
 
 function computeSupportCoverageFloor(config: ExplanationConfig): number {

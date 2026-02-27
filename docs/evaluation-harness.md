@@ -46,6 +46,8 @@ The evaluator computes a threshold verdict (`thresholdPass`) with machine-readab
 - `complexity_spread_mean`
 - `evidence_coverage_mean`
 - `vocabulary_continuity_mean`
+- `repartition_event_rate`
+- `repartition_max_round`
 
 Defaults are deterministic and can be overridden in `options.thresholds`.
 
@@ -77,7 +79,9 @@ Optional threshold overrides:
 ```bash
 npm run eval:quality -- /path/to/lean-project \
   --max-unsupported-parent-rate=0.05 \
-  --min-vocabulary-continuity-mean=0.70
+  --min-vocabulary-continuity-mean=0.70 \
+  --max-repartition-event-rate=0.50 \
+  --max-repartition-max-round=1
 ```
 
 Exit codes:

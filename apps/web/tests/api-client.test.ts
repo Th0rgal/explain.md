@@ -374,6 +374,8 @@ describe("api client", () => {
               maxComplexitySpreadMean: 1,
               minEvidenceCoverageMean: 1,
               minVocabularyContinuityMean: 1,
+              maxRepartitionEventRate: 1,
+              maxRepartitionMaxRound: 3,
             },
             thresholdPass: true,
             thresholdFailures: [],
@@ -407,6 +409,8 @@ describe("api client", () => {
         maxPolicyViolationRate: 0,
         minEvidenceCoverageMean: 1,
         minVocabularyContinuityMean: 1,
+        maxRepartitionEventRate: 0.5,
+        maxRepartitionMaxRound: 1,
       },
     );
 
@@ -420,6 +424,8 @@ describe("api client", () => {
     expect(requestUrl).toContain("maxPolicyViolationRate=0");
     expect(requestUrl).toContain("minEvidenceCoverageMean=1");
     expect(requestUrl).toContain("minVocabularyContinuityMean=1");
+    expect(requestUrl).toContain("maxRepartitionEventRate=0.5");
+    expect(requestUrl).toContain("maxRepartitionMaxRound=1");
   });
 
   it("encodes cache report query contract deterministically", async () => {

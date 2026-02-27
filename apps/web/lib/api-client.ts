@@ -240,6 +240,8 @@ export interface PolicyReportResponse {
       maxComplexitySpreadMean: number;
       minEvidenceCoverageMean: number;
       minVocabularyContinuityMean: number;
+      maxRepartitionEventRate: number;
+      maxRepartitionMaxRound: number;
     };
     thresholdPass: boolean;
     thresholdFailures: Array<{

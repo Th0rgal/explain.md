@@ -54,6 +54,14 @@ function parseArgs(argv) {
       thresholdOverrides.minVocabularyContinuityMean = Number.parseFloat(arg.slice("--min-vocabulary-continuity-mean=".length));
       continue;
     }
+    if (arg.startsWith("--max-repartition-event-rate=")) {
+      thresholdOverrides.maxRepartitionEventRate = Number.parseFloat(arg.slice("--max-repartition-event-rate=".length));
+      continue;
+    }
+    if (arg.startsWith("--max-repartition-max-round=")) {
+      thresholdOverrides.maxRepartitionMaxRound = Number.parseFloat(arg.slice("--max-repartition-max-round=".length));
+      continue;
+    }
     if (!arg.startsWith("--")) {
       projectRoot = path.resolve(cwd, arg);
     }

@@ -29,6 +29,10 @@ Optional threshold overrides (`[0,1]`):
 - `maxComplexitySpreadMean`
 - `minEvidenceCoverageMean`
 - `minVocabularyContinuityMean`
+- `maxRepartitionEventRate`
+
+Optional threshold overrides (non-negative integer):
+- `maxRepartitionMaxRound`
 
 ## Response
 - `proofId`

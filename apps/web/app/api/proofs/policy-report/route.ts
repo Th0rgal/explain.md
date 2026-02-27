@@ -10,6 +10,8 @@ interface PolicyThresholdOverrides {
   maxComplexitySpreadMean?: number;
   minEvidenceCoverageMean?: number;
   minVocabularyContinuityMean?: number;
+  maxRepartitionEventRate?: number;
+  maxRepartitionMaxRound?: number;
 }
 
 export async function GET(request: Request) {
@@ -54,6 +56,12 @@ function readThresholdOverrides(searchParams: URLSearchParams): PolicyThresholdO
   setOptionalRate(searchParams, "minVocabularyContinuityMean", (value) => {
     overrides.minVocabularyContinuityMean = value;
   });
+  setOptionalRate(searchParams, "maxRepartitionEventRate", (value) => {
+    overrides.maxRepartitionEventRate = value;
+  });
+  setOptionalNonNegativeInteger(searchParams, "maxRepartitionMaxRound", (value) => {
+    overrides.maxRepartitionMaxRound = value;
+  });
 
   return overrides;
 }
@@ -67,6 +75,20 @@ function setOptionalRate(searchParams: URLSearchParams, key: string, assign: (va
   const parsed = Number(raw);
   if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
     throw new Error(`Expected ${key} to be a number in [0, 1], but received '${raw}'.`);
+  }
+
+  assign(parsed);
+}
+
+function setOptionalNonNegativeInteger(searchParams: URLSearchParams, key: string, assign: (value: number) => void): void {
+  const raw = searchParams.get(key);
+  if (raw === null || raw.trim().length === 0) {
+    return;
+  }
+
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0 || !Number.isInteger(parsed)) {
+    throw new Error(`Expected ${key} to be a non-negative integer, but received '${raw}'.`);
   }
 
   assign(parsed);

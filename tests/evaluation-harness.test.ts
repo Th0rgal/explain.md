@@ -209,6 +209,22 @@ describe("evaluation-harness", () => {
     ]);
   });
 
+  it("fails threshold gates when repartition pressure exceeds configured limits", () => {
+    const config = normalizeConfig();
+    const report = evaluateExplanationTreeQuality(buildFixtureTree(), config, {
+      thresholds: {
+        maxRepartitionEventRate: 0,
+        maxRepartitionMaxRound: 0,
+      },
+    });
+
+    expect(report.repartitionMetrics.eventCount).toBe(1);
+    expect(report.repartitionMetrics.maxRound).toBe(1);
+    expect(report.thresholdPass).toBe(false);
+    expect(report.thresholdFailures.map((failure) => failure.code)).toContain("repartition_event_rate");
+    expect(report.thresholdFailures.map((failure) => failure.code)).toContain("repartition_max_round");
+  });
+
   it("ignores generatedAt in canonical render/hash so report identity is reproducible", () => {
     const config = normalizeConfig();
     const report = evaluateExplanationTreeQuality(buildFixtureTree(), config);

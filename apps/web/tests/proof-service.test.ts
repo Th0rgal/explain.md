@@ -237,10 +237,14 @@ describe("proof service", () => {
       proofId: LEAN_FIXTURE_PROOF_ID,
       thresholds: {
         maxComplexitySpreadMean: 0,
+        maxRepartitionEventRate: 1,
+        maxRepartitionMaxRound: 3,
       },
     });
 
     expect(response.report.thresholds.maxComplexitySpreadMean).toBe(0);
+    expect(response.report.thresholds.maxRepartitionEventRate).toBe(1);
+    expect(response.report.thresholds.maxRepartitionMaxRound).toBe(3);
     expect(typeof response.report.thresholdPass).toBe("boolean");
     expect(response.report.thresholdFailures.every((failure) => typeof failure.code === "string")).toBe(true);
   });
