@@ -364,6 +364,7 @@ export interface LeafDetailResponse {
       compact: string;
       markdown: string;
       sourceUrl?: string;
+      sourceUrlOrigin: "leaf" | "source_span" | "missing";
     };
     verification: {
       summary: {

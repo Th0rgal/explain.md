@@ -116,3 +116,5 @@ npm run typecheck
 npm run test
 npm run build
 ```
+
+`npm run typecheck` uses `tsconfig.typecheck.json` so checks remain deterministic without requiring generated `.next/types` artifacts.

@@ -150,8 +150,13 @@ CLI JSON output includes `repartitionMetrics` so CI and benchmark artifacts can 
 ## CI quality gate
 GitHub Actions runs `.github/workflows/quality-gate.yml` on PRs and `main` pushes:
 - `npm ci`
+- `npm --prefix apps/web ci`
 - `npm run build`
 - `npm test`
+- `npm run web:lint`
+- `npm run web:typecheck`
+- `npm run web:test`
+- `npm run web:build`
 - `npm run eval:quality:ci`
 
 The workflow uploads `.explain-md/quality-gate-report-*.json` as `quality-gate-reports`.

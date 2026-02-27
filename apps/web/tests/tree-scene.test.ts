@@ -115,9 +115,19 @@ describe("tree scene transform", () => {
             maxComplexitySpreadMean: 1,
             minEvidenceCoverageMean: 0,
             minVocabularyContinuityMean: 0,
+            minRepartitionEventRate: 0,
+            maxRepartitionEventRate: 1,
+            maxRepartitionMaxRound: 1,
           },
           thresholdPass: true,
           thresholdFailures: [],
+          repartitionMetrics: {
+            eventCount: 0,
+            preSummaryEventCount: 0,
+            postSummaryEventCount: 0,
+            maxRound: 0,
+            depthMetrics: [],
+          },
           parentSamples: [
             {
               parentId: "violating",

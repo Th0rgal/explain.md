@@ -33,6 +33,18 @@ jobs:
       - name: Run unit tests
         run: npm test
 
+      - name: Run web lint
+        run: npm run web:lint
+
+      - name: Run web typecheck
+        run: npm run web:typecheck
+
+      - name: Run web tests
+        run: npm run web:test
+
+      - name: Run web build
+        run: npm run web:build
+
       - name: Run deterministic quality gate
         run: npm run eval:quality:ci
 

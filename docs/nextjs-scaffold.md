@@ -124,6 +124,8 @@ npm run web:test
 npm run web:build
 ```
 
+`web:typecheck` runs `tsc` against `apps/web/tsconfig.typecheck.json` so it is deterministic from a clean checkout and does not depend on pre-generated `.next/types` files.
+
 From `apps/web` directly:
 
 ```bash
