@@ -74,6 +74,9 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - planner inputs: `totalRowCount`, `anchorRowIndex`, `maxVisibleRows`, `overscanRows`
   - planner outputs: `mode`, `startIndex/endIndex`, `renderedRowCount`, `hiddenAboveCount`, `hiddenBelowCount`
   - tree panel exposes machine-checkable diagnostics via `data-tree-*` attributes
+  - for very large trees, deterministic virtualization mode is enabled with fixed row height and spacer rows:
+    - mode: `data-tree-render-mode="virtualized"`
+    - indices: `data-tree-virtual-start-index`, `data-tree-virtual-end-index`
   - keyboard navigation keeps deterministic tree semantics:
     - `ArrowUp/ArrowDown`, `Home/End`, `PageUp/PageDown` move active row
     - `ArrowRight` expands collapsed parents or enters first visible child
@@ -87,6 +90,13 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 Public env knobs for deterministic window bounds:
 - `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_MAX_ROWS` (default `120`)
 - `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_OVERSCAN_ROWS` (default `24`)
+
+Public env knobs for deterministic virtualization bounds:
+- `NEXT_PUBLIC_EXPLAIN_MD_TREE_VIRTUALIZATION_ENABLED` (default `true`)
+- `NEXT_PUBLIC_EXPLAIN_MD_TREE_VIRTUALIZATION_MIN_ROWS` (default `400`)
+- `NEXT_PUBLIC_EXPLAIN_MD_TREE_ROW_HEIGHT_PX` (default `36`)
+- `NEXT_PUBLIC_EXPLAIN_MD_TREE_VIEWPORT_ROWS` (default `18`)
+- `NEXT_PUBLIC_EXPLAIN_MD_TREE_VIRTUALIZATION_OVERSCAN_ROWS` (default `6`)
 
 ## Local verification
 From repository root:

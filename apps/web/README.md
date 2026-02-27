@@ -51,6 +51,9 @@ The tree panel uses incremental root/children/path queries:
 - Large trees use deterministic render-window planning to bound DOM row count while preserving root-first ordering.
   - Window diagnostics are surfaced as `data-tree-*` attributes on the tree panel (`mode`, `total`, `rendered`, `hiddenAbove`, `hiddenBelow`).
   - Paging controls (`Show previous rows` / `Show next rows`) shift the window deterministically without mutating proof data.
+  - For very large trees, deterministic DOM virtualization is enabled with fixed row height + spacer rows:
+    - `data-tree-render-mode="virtualized"`
+    - `data-tree-virtual-start-index` / `data-tree-virtual-end-index`
   - Keyboard navigation is deterministic and window-aware:
     - `ArrowUp/ArrowDown`, `Home/End`, and `PageUp/PageDown` move the active tree row.
     - `ArrowRight` expands a collapsed parent, or moves to its first visible child when already expanded.
@@ -74,6 +77,12 @@ The tree panel uses incremental root/children/path queries:
 - Tree render window thresholds can be configured with:
   - `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_MAX_ROWS` (default `120`)
   - `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_OVERSCAN_ROWS` (default `24`)
+- Tree virtualization thresholds can be configured with:
+  - `NEXT_PUBLIC_EXPLAIN_MD_TREE_VIRTUALIZATION_ENABLED` (default `true`)
+  - `NEXT_PUBLIC_EXPLAIN_MD_TREE_VIRTUALIZATION_MIN_ROWS` (default `400`)
+  - `NEXT_PUBLIC_EXPLAIN_MD_TREE_ROW_HEIGHT_PX` (default `36`)
+  - `NEXT_PUBLIC_EXPLAIN_MD_TREE_VIEWPORT_ROWS` (default `18`)
+  - `NEXT_PUBLIC_EXPLAIN_MD_TREE_VIRTUALIZATION_OVERSCAN_ROWS` (default `6`)
 - Job IDs are deterministic and monotonic (`job-000001`, `job-000002`, ...).
 - Reproducibility contract values can be configured with:
   - `EXPLAIN_MD_VERIFICATION_PROJECT_ROOT`

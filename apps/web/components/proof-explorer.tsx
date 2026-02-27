@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import {
   fetchConfigProfiles,
   fetchDiff,
@@ -33,6 +33,11 @@ import {
   type TreeKeyboardRow,
 } from "../lib/tree-keyboard-navigation";
 import { planTreeRenderWindow, resolveTreeRenderSettings } from "../lib/tree-render-window";
+import {
+  planTreeVirtualizationWindow,
+  resolveTreeVirtualizationSettings,
+  resolveVirtualScrollTopForRowIndex,
+} from "../lib/tree-virtualization";
 
 export const DEFAULT_CONFIG: ProofConfigInput = {
   abstractionLevel: 3,
@@ -53,12 +58,14 @@ export const ENTAILMENT_MODE_OPTIONS: Array<{ value: NonNullable<ProofConfigInpu
   { value: "strict", label: "Strict" },
 ];
 export const TREE_RENDER_SETTINGS = resolveTreeRenderSettings(process.env);
+export const TREE_VIRTUALIZATION_SETTINGS = resolveTreeVirtualizationSettings(process.env);
 
 interface ProofExplorerProps {
   proofId: string;
 }
 
 export function ProofExplorer(props: ProofExplorerProps) {
+  const treeListRef = useRef<HTMLUListElement | null>(null);
   const [config, setConfig] = useState<ProofConfigInput>(DEFAULT_CONFIG);
   const [profileName, setProfileName] = useState<string>("Default profile");
   const [profileId, setProfileId] = useState<string>("default");
@@ -74,6 +81,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
   const [activeTreeNodeId, setActiveTreeNodeId] = useState<string | null>(null);
   const [treeA11yAnnouncement, setTreeA11yAnnouncement] = useState<string>("");
   const [renderAnchorRowIndex, setRenderAnchorRowIndex] = useState<number>(0);
+  const [treeScrollTopPx, setTreeScrollTopPx] = useState<number>(0);
   const [diff, setDiff] = useState<DiffResponse | null>(null);
   const [policyReport, setPolicyReport] = useState<PolicyReportResponse | null>(null);
   const [pathResult, setPathResult] = useState<NodePathResponse | null>(null);
@@ -352,10 +360,45 @@ export function ProofExplorer(props: ProofExplorerProps) {
     [renderWindow.endIndex, renderWindow.startIndex, visibleRows],
   );
 
+  const virtualizationPlan = useMemo(
+    () =>
+      planTreeVirtualizationWindow({
+        totalRowCount: visibleRows.length,
+        scrollTopPx: treeScrollTopPx,
+        settings: TREE_VIRTUALIZATION_SETTINGS,
+      }),
+    [treeScrollTopPx, visibleRows.length],
+  );
+
+  const isVirtualizedTree = virtualizationPlan.mode === "virtualized";
+
+  const displayedRows = useMemo(() => {
+    if (isVirtualizedTree) {
+      if (virtualizationPlan.endIndex < virtualizationPlan.startIndex) {
+        return [] as typeof visibleRows;
+      }
+      return visibleRows.slice(virtualizationPlan.startIndex, virtualizationPlan.endIndex + 1);
+    }
+    return renderedRows;
+  }, [isVirtualizedTree, renderedRows, virtualizationPlan.endIndex, virtualizationPlan.startIndex, visibleRows]);
+
   useEffect(() => {
     const maxIndex = Math.max(0, visibleRows.length - 1);
     setRenderAnchorRowIndex((current) => Math.max(0, Math.min(current, maxIndex)));
   }, [visibleRows.length]);
+
+  useEffect(() => {
+    setTreeScrollTopPx((current) => Math.max(0, Math.min(current, virtualizationPlan.maxScrollTopPx)));
+  }, [virtualizationPlan.maxScrollTopPx]);
+
+  useEffect(() => {
+    if (!isVirtualizedTree || !treeListRef.current) {
+      return;
+    }
+    if (treeListRef.current.scrollTop !== treeScrollTopPx) {
+      treeListRef.current.scrollTop = treeScrollTopPx;
+    }
+  }, [isVirtualizedTree, treeScrollTopPx]);
 
   useEffect(() => {
     if (visibleRows.length === 0) {
@@ -377,6 +420,25 @@ export function ProofExplorer(props: ProofExplorerProps) {
       setRenderAnchorRowIndex(selectedIndex);
     }
   }, [selectedLeafId, visibleRows]);
+
+  useEffect(() => {
+    if (!isVirtualizedTree || !activeTreeNodeId) {
+      return;
+    }
+    const activeIndex = visibleRows.findIndex((row) => row.node.id === activeTreeNodeId);
+    if (activeIndex < 0) {
+      return;
+    }
+    const nextScrollTop = resolveVirtualScrollTopForRowIndex(
+      treeScrollTopPx,
+      activeIndex,
+      visibleRows.length,
+      TREE_VIRTUALIZATION_SETTINGS,
+    );
+    if (nextScrollTop !== treeScrollTopPx) {
+      setTreeScrollTopPx(nextScrollTop);
+    }
+  }, [activeTreeNodeId, isVirtualizedTree, treeScrollTopPx, visibleRows]);
 
   function updateConfig<Key extends keyof ProofConfigInput>(key: Key, value: ProofConfigInput[Key]): void {
     setConfig((current) => ({
@@ -818,19 +880,29 @@ export function ProofExplorer(props: ProofExplorerProps) {
       <section
         className="panel tree"
         aria-label="Root-first explanation tree"
-        data-tree-render-mode={renderWindow.mode}
+        data-tree-render-mode={isVirtualizedTree ? "virtualized" : renderWindow.mode}
         data-tree-total-rows={visibleRows.length}
-        data-tree-rendered-rows={renderWindow.renderedRowCount}
-        data-tree-hidden-above={renderWindow.hiddenAboveCount}
-        data-tree-hidden-below={renderWindow.hiddenBelowCount}
+        data-tree-rendered-rows={isVirtualizedTree ? virtualizationPlan.renderedRowCount : renderWindow.renderedRowCount}
+        data-tree-hidden-above={isVirtualizedTree ? virtualizationPlan.hiddenAboveCount : renderWindow.hiddenAboveCount}
+        data-tree-hidden-below={isVirtualizedTree ? virtualizationPlan.hiddenBelowCount : renderWindow.hiddenBelowCount}
         data-tree-active-node-id={activeTreeNodeId ?? "none"}
         data-tree-active-row-index={visibleRows.findIndex((row) => row.node.id === activeTreeNodeId)}
         data-tree-live-message={treeA11yAnnouncement || "none"}
+        data-tree-virtual-start-index={isVirtualizedTree ? virtualizationPlan.startIndex : -1}
+        data-tree-virtual-end-index={isVirtualizedTree ? virtualizationPlan.endIndex : -1}
       >
         <h2>Tree</h2>
         <p className="meta">Config hash: {treeConfigHash || root?.configHash || "unavailable"}</p>
         <p className="meta">Snapshot hash: {treeSnapshotHash || root?.snapshotHash || "unavailable"}</p>
-        {renderWindow.mode === "windowed" ? (
+        {isVirtualizedTree ? (
+          <div className="tree-row">
+            <span className="meta">
+              Virtualized {virtualizationPlan.renderedRowCount}/{visibleRows.length} rows (hidden above{" "}
+              {virtualizationPlan.hiddenAboveCount}, below {virtualizationPlan.hiddenBelowCount})
+            </span>
+          </div>
+        ) : null}
+        {!isVirtualizedTree && renderWindow.mode === "windowed" ? (
           <div className="tree-row">
             <button
               type="button"
@@ -862,15 +934,39 @@ export function ProofExplorer(props: ProofExplorerProps) {
           </div>
         ) : null}
         <ul
+          ref={treeListRef}
           className="tree-list"
           role="tree"
           tabIndex={0}
           aria-activedescendant={activeTreeNodeId ? `treeitem-${activeTreeNodeId}` : undefined}
+          onScroll={(event) => {
+            if (!isVirtualizedTree) {
+              return;
+            }
+            setTreeScrollTopPx(event.currentTarget.scrollTop);
+          }}
+          style={
+            isVirtualizedTree
+              ? {
+                  maxHeight: `${virtualizationPlan.viewportHeightPx}px`,
+                  overflowY: "auto",
+                }
+              : undefined
+          }
           onKeyDown={(event) => {
             void handleTreeKeyDown(event);
           }}
         >
-          {renderedRows.map((row) => {
+          {isVirtualizedTree && virtualizationPlan.topSpacerHeightPx > 0 ? (
+            <li
+              role="presentation"
+              aria-hidden="true"
+              style={{
+                height: `${virtualizationPlan.topSpacerHeightPx}px`,
+              }}
+            />
+          ) : null}
+          {displayedRows.map((row) => {
             const { node } = row;
             const childrenState = childrenByParentId[node.id];
             const isExpanded = expandedNodeIds.includes(node.id);
@@ -884,6 +980,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
                 role="treeitem"
                 aria-expanded={node.kind === "parent" ? isExpanded : undefined}
                 aria-selected={isSelectedLeaf || isActiveRow}
+                style={isVirtualizedTree ? { minHeight: `${TREE_VIRTUALIZATION_SETTINGS.rowHeightPx}px` } : undefined}
               >
                 <div className="tree-row" style={indentStyle}>
                   {node.kind === "parent" ? (
@@ -960,6 +1057,15 @@ export function ProofExplorer(props: ProofExplorerProps) {
               </li>
             );
           })}
+          {isVirtualizedTree && virtualizationPlan.bottomSpacerHeightPx > 0 ? (
+            <li
+              role="presentation"
+              aria-hidden="true"
+              style={{
+                height: `${virtualizationPlan.bottomSpacerHeightPx}px`,
+              }}
+            />
+          ) : null}
         </ul>
         <p
           aria-live="polite"
