@@ -43,6 +43,17 @@ Optional threshold overrides (non-negative integer):
 - `report` (`evaluateExplanationTreeQuality` payload)
   - includes `repartitionMetrics` derived from `groupingDiagnostics[].repartitionEvents`
   - `repartitionMetrics.depthMetrics[]` is grouped by depth and reports event counts split by `pre_summary_policy` vs `post_summary_policy`
+  - `thresholdFailures[].code` is deterministic and currently uses:
+    - `unsupported_parent_rate`
+    - `prerequisite_violation_rate`
+    - `policy_violation_rate`
+    - `term_jump_rate`
+    - `complexity_spread_mean`
+    - `evidence_coverage_mean`
+    - `vocabulary_continuity_mean`
+    - `min_repartition_event_rate`
+    - `repartition_event_rate`
+    - `repartition_max_round`
 
 ## Determinism and provenance
 - Tree quality report is derived from a deterministic tree snapshot keyed by `proofId + configHash`.

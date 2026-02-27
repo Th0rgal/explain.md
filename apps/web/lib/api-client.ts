@@ -245,15 +245,7 @@ export interface PolicyReportResponse {
       maxRepartitionMaxRound: number;
     };
     thresholdPass: boolean;
-    thresholdFailures: Array<{
-      code: string;
-      message: string;
-      details: {
-        actual: number;
-        expected: number;
-        comparator: "<=" | ">=";
-      };
-    }>;
+    thresholdFailures: PolicyThresholdFailure[];
     parentSamples: Array<{
       parentId: string;
       depth: number;
@@ -291,6 +283,16 @@ export interface PolicyReportResponse {
         maxRound: number;
       }>;
     };
+  };
+}
+
+export interface PolicyThresholdFailure {
+  code: string;
+  message: string;
+  details: {
+    actual: number;
+    expected: number;
+    comparator: "<=" | ">=";
   };
 }
 

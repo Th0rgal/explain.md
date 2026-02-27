@@ -26,6 +26,7 @@ import {
   type VerificationJobResponse,
   type VerificationJobsResponse,
 } from "../lib/api-client";
+import { formatPolicyThresholdFailure } from "../lib/policy-thresholds";
 
 const DEFAULT_CONFIG: ProofConfigInput = {
   abstractionLevel: 3,
@@ -758,7 +759,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
         <ul>
           {(policyReport?.report.thresholdFailures ?? []).slice(0, 6).map((failure) => (
             <li key={failure.code}>
-              {failure.code}: {failure.details.actual} {failure.details.comparator} {failure.details.expected}
+              {formatPolicyThresholdFailure(failure)} [{failure.code}]
             </li>
           ))}
         </ul>
