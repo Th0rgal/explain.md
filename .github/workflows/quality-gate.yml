@@ -36,9 +36,9 @@ jobs:
       - name: Run deterministic quality gate
         run: npm run eval:quality:ci
 
-      - name: Upload quality gate report
+      - name: Upload quality gate reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: quality-gate-report
-          path: .explain-md/quality-gate-report.json
+          name: quality-gate-reports
+          path: .explain-md/quality-gate-report-*.json

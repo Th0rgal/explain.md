@@ -10,6 +10,18 @@ export interface QualityBenchmarkPreset {
 }
 
 const PRESET_DEFINITIONS: Record<string, Omit<QualityBenchmarkPreset, "name">> = {
+  "fixture-verity-broad": {
+    description:
+      "Broader deterministic Verity fixture benchmark (core + loop + invariants + cycle pressure) for CI coverage.",
+    projectRoot: "tests/fixtures/lean-broad-project",
+    includePaths: ["Verity"],
+    thresholdOverrides: {
+      maxUnsupportedParentRate: 1,
+      minRepartitionEventRate: 0.1,
+      maxRepartitionEventRate: 0.6,
+      maxRepartitionMaxRound: 1,
+    },
+  },
   "fixture-verity-core": {
     description: "Deterministic fixture benchmark covering the Verity mini corpus in tests/fixtures/lean-project.",
     projectRoot: "tests/fixtures/lean-project",

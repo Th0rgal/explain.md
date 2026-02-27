@@ -88,13 +88,19 @@ npm run eval:quality -- --list-presets
 Run with a deterministic preset and emit an auditable artifact JSON:
 
 ```bash
-npm run eval:quality -- --preset=fixture-verity-core --out=.explain-md/quality-gate-report.json
+npm run eval:quality -- --preset=fixture-verity-core --out=.explain-md/quality-gate-report-core.json
 ```
 
 Pressure-focused preset (expects bounded but non-zero repartition pressure):
 
 ```bash
-npm run eval:quality -- --preset=fixture-verity-pressure --out=.explain-md/quality-gate-report.json
+npm run eval:quality -- --preset=fixture-verity-pressure --out=.explain-md/quality-gate-report-pressure.json
+```
+
+Broader Verity fixture preset (core + loop + invariants + cycle pressure):
+
+```bash
+npm run eval:quality -- --preset=fixture-verity-broad --out=.explain-md/quality-gate-report-broad.json
 ```
 
 Optional threshold overrides:
@@ -122,8 +128,8 @@ GitHub Actions runs `.github/workflows/quality-gate.yml` on PRs and `main` pushe
 - `npm test`
 - `npm run eval:quality:ci`
 
-The workflow uploads `.explain-md/quality-gate-report.json` as `quality-gate-report`.
-The report includes:
+The workflow uploads `.explain-md/quality-gate-report-*.json` as `quality-gate-reports`.
+Each report includes:
 - `qualityReportHash` (canonical report hash)
 - `preset.name` + `preset.hash`
 - threshold pass/failure and metrics summary
