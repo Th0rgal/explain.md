@@ -97,6 +97,10 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 - Lean fixture datasets are persisted under `.explain-md/web-proof-cache` (override with `EXPLAIN_MD_WEB_PROOF_CACHE_DIR`) and invalidated by source fingerprint + config hash.
 - Lean fixture root lookup can be overridden with `EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT` for deterministic benchmark/invalidation runs against temporary fixture copies.
 - UI interaction durable telemetry ledger defaults to `.explain-md/web-ui-interaction-ledger.ndjson` and can be overridden with `EXPLAIN_MD_UI_INTERACTION_LEDGER_PATH` (disabled by default under `NODE_ENV=test` unless explicitly set).
+- Optional deterministic ledger compaction policies are supported:
+  - `EXPLAIN_MD_UI_INTERACTION_LEDGER_MAX_EVENTS` to retain only the latest N events.
+  - `EXPLAIN_MD_UI_INTERACTION_LEDGER_TTL_SECONDS` to prune entries older than a fixed age.
+  - `GET /api/observability/ui-interaction-ledger` exports compaction evidence (`policy`, `runCount`, `rewriteCount`, `prunedEventCount`, `invalidLineDropCount`, `lastCompactionHash`) with canonical `snapshotHash`.
 - Deterministic benchmark artifact generation is available via `npm run web:bench:cache` (writes `docs/benchmarks/proof-cache-benchmark.json`).
 - Deterministic assistive-tech interaction benchmark is available via `npm run web:bench:tree-a11y` (writes `docs/benchmarks/tree-a11y-evaluation.json`).
 - Deterministic observability SLO benchmark is available via `npm run web:bench:observability-slo` (writes `docs/benchmarks/observability-slo-benchmark.json`).

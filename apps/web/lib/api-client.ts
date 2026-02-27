@@ -593,6 +593,17 @@ export interface UiInteractionObservabilityLedgerResponse {
     enabled: boolean;
     mode: "disabled" | "ndjson";
     pathHash?: string;
+    compaction: {
+      enabled: boolean;
+      policy: "disabled" | "max_events" | "ttl_seconds" | "ttl_and_max_events";
+      maxEvents?: number;
+      ttlSeconds?: number;
+      runCount: number;
+      rewriteCount: number;
+      prunedEventCount: number;
+      invalidLineDropCount: number;
+      lastCompactionHash?: string;
+    };
   };
   generatedAt: string;
   snapshotHash: string;

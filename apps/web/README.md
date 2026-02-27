@@ -154,6 +154,10 @@ The tree panel uses incremental root/children/path queries:
 - Lean fixture project root can be overridden with `EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT` (used by benchmark/invalidation harness).
 - Config profiles are persisted to `.explain-md/web-config-profiles.json` (override with `EXPLAIN_MD_WEB_CONFIG_PROFILE_LEDGER`).
 - UI interaction observability ledger defaults to `.explain-md/web-ui-interaction-ledger.ndjson` and can be overridden with `EXPLAIN_MD_UI_INTERACTION_LEDGER_PATH` (test environment defaults to disabled unless set).
+- Optional deterministic retention compaction policies:
+  - `EXPLAIN_MD_UI_INTERACTION_LEDGER_MAX_EVENTS` keeps only the latest persisted N ledger entries.
+  - `EXPLAIN_MD_UI_INTERACTION_LEDGER_TTL_SECONDS` prunes persisted entries older than the configured age.
+  - ledger export includes machine-checkable compaction diagnostics: `policy`, `runCount`, `rewriteCount`, `prunedEventCount`, `invalidLineDropCount`, `lastCompactionHash`.
 - Tree render window thresholds can be configured with:
   - `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_MAX_ROWS` (default `120`)
   - `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_OVERSCAN_ROWS` (default `24`)

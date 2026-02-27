@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 const UI_INTERACTION_SAMPLE_WINDOW = 1024;
@@ -41,6 +41,7 @@ interface UiInteractionEventRecord {
 interface UiInteractionLedgerEntry extends UiInteractionEventRecord {
   schemaVersion: "1.0.0";
   sequence: number;
+  recordedAt: string;
 }
 
 export interface UiInteractionEventReceipt {
@@ -81,6 +82,17 @@ export interface UiInteractionObservabilityLedgerSnapshot {
     enabled: boolean;
     mode: "disabled" | "ndjson";
     pathHash?: string;
+    compaction: {
+      enabled: boolean;
+      policy: "disabled" | "max_events" | "ttl_seconds" | "ttl_and_max_events";
+      maxEvents?: number;
+      ttlSeconds?: number;
+      runCount: number;
+      rewriteCount: number;
+      prunedEventCount: number;
+      invalidLineDropCount: number;
+      lastCompactionHash?: string;
+    };
   };
   generatedAt: string;
   snapshotHash: string;
@@ -90,16 +102,29 @@ const uiInteractionEvents: UiInteractionEventRecord[] = [];
 const uiInteractionLedgerState: {
   initialized: boolean;
   path: string | undefined;
+  maxEvents: number | undefined;
+  ttlSeconds: number | undefined;
   nextSequence: number;
   persistedEventCount: number;
   appendFailureCount: number;
+  compactionRunCount: number;
+  compactionRewriteCount: number;
+  compactionPrunedEventCount: number;
+  compactionInvalidLineDropCount: number;
+  lastCompactionHash?: string;
   latestRequestId?: string;
 } = {
   initialized: false,
   path: undefined,
+  maxEvents: undefined,
+  ttlSeconds: undefined,
   nextSequence: 0,
   persistedEventCount: 0,
   appendFailureCount: 0,
+  compactionRunCount: 0,
+  compactionRewriteCount: 0,
+  compactionPrunedEventCount: 0,
+  compactionInvalidLineDropCount: 0,
 };
 
 export function recordUiInteractionEvent(input: UiInteractionEventInput): UiInteractionEventReceipt {
@@ -218,6 +243,17 @@ export function exportUiInteractionObservabilityLedger(
       enabled: Boolean(uiInteractionLedgerState.path),
       mode: uiInteractionLedgerState.path ? "ndjson" : "disabled",
       pathHash: uiInteractionLedgerState.path ? computeHash(uiInteractionLedgerState.path) : undefined,
+      compaction: {
+        enabled: hasLedgerCompactionPolicy(uiInteractionLedgerState),
+        policy: resolveCompactionPolicyLabel(uiInteractionLedgerState),
+        maxEvents: uiInteractionLedgerState.maxEvents,
+        ttlSeconds: uiInteractionLedgerState.ttlSeconds,
+        runCount: uiInteractionLedgerState.compactionRunCount,
+        rewriteCount: uiInteractionLedgerState.compactionRewriteCount,
+        prunedEventCount: uiInteractionLedgerState.compactionPrunedEventCount,
+        invalidLineDropCount: uiInteractionLedgerState.compactionInvalidLineDropCount,
+        lastCompactionHash: uiInteractionLedgerState.lastCompactionHash,
+      },
     },
     generatedAt,
   } as const;
@@ -278,9 +314,11 @@ function persistUiInteractionLedgerEvent(event: UiInteractionEventRecord): void 
   if (!uiInteractionLedgerState.path) {
     return;
   }
+  const recordedAt = new Date().toISOString();
   const ledgerEntry: UiInteractionLedgerEntry = {
     schemaVersion: UI_INTERACTION_LEDGER_SCHEMA_VERSION,
     sequence: uiInteractionLedgerState.nextSequence,
+    recordedAt,
     ...event,
   };
   try {
@@ -289,6 +327,7 @@ function persistUiInteractionLedgerEvent(event: UiInteractionEventRecord): void 
     uiInteractionLedgerState.nextSequence += 1;
     uiInteractionLedgerState.persistedEventCount += 1;
     uiInteractionLedgerState.latestRequestId = event.requestId;
+    compactUiInteractionLedgerIfNeeded(recordedAt);
   } catch {
     uiInteractionLedgerState.appendFailureCount += 1;
   }
@@ -296,12 +335,21 @@ function persistUiInteractionLedgerEvent(event: UiInteractionEventRecord): void 
 
 function ensureLedgerStateInitialized(): void {
   const resolvedPath = resolveLedgerPath();
-  if (uiInteractionLedgerState.initialized && resolvedPath === uiInteractionLedgerState.path) {
+  const resolvedMaxEvents = parsePositiveInteger(process.env.EXPLAIN_MD_UI_INTERACTION_LEDGER_MAX_EVENTS, 1, 1_000_000);
+  const resolvedTtlSeconds = parsePositiveInteger(process.env.EXPLAIN_MD_UI_INTERACTION_LEDGER_TTL_SECONDS, 1, 31_536_000);
+  if (
+    uiInteractionLedgerState.initialized &&
+    resolvedPath === uiInteractionLedgerState.path &&
+    resolvedMaxEvents === uiInteractionLedgerState.maxEvents &&
+    resolvedTtlSeconds === uiInteractionLedgerState.ttlSeconds
+  ) {
     return;
   }
 
   uiInteractionLedgerState.initialized = true;
   uiInteractionLedgerState.path = resolvedPath;
+  uiInteractionLedgerState.maxEvents = resolvedMaxEvents;
+  uiInteractionLedgerState.ttlSeconds = resolvedTtlSeconds;
   uiInteractionLedgerState.nextSequence = 0;
   uiInteractionLedgerState.persistedEventCount = 0;
   uiInteractionLedgerState.latestRequestId = undefined;
@@ -311,34 +359,34 @@ function ensureLedgerStateInitialized(): void {
   }
 
   const raw = readFileSync(resolvedPath, "utf8");
-  const lines = raw
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-  for (const line of lines) {
-    try {
-      const parsed = JSON.parse(line) as Partial<UiInteractionLedgerEntry>;
-      if (typeof parsed.sequence !== "number" || !Number.isFinite(parsed.sequence) || parsed.sequence < 0) {
-        continue;
-      }
-      if (typeof parsed.requestId !== "string" || parsed.requestId.length === 0) {
-        continue;
-      }
-      uiInteractionLedgerState.persistedEventCount += 1;
-      uiInteractionLedgerState.nextSequence = Math.max(uiInteractionLedgerState.nextSequence, Math.floor(parsed.sequence) + 1);
-      uiInteractionLedgerState.latestRequestId = parsed.requestId;
-    } catch {
-      uiInteractionLedgerState.appendFailureCount += 1;
-    }
+  const parsed = parseLedgerEntries(raw);
+  uiInteractionLedgerState.persistedEventCount = parsed.entries.length;
+  uiInteractionLedgerState.nextSequence = parsed.entries.reduce(
+    (maxSequence, entry) => Math.max(maxSequence, Math.floor(entry.sequence) + 1),
+    0,
+  );
+  uiInteractionLedgerState.latestRequestId = parsed.entries.at(-1)?.requestId;
+  if (parsed.invalidLineCount > 0) {
+    uiInteractionLedgerState.appendFailureCount += parsed.invalidLineCount;
+  }
+  if (hasLedgerCompactionPolicy(uiInteractionLedgerState)) {
+    compactUiInteractionLedgerIfNeeded(new Date().toISOString());
   }
 }
 
 function resetLedgerState(): void {
   uiInteractionLedgerState.initialized = false;
   uiInteractionLedgerState.path = undefined;
+  uiInteractionLedgerState.maxEvents = undefined;
+  uiInteractionLedgerState.ttlSeconds = undefined;
   uiInteractionLedgerState.nextSequence = 0;
   uiInteractionLedgerState.persistedEventCount = 0;
   uiInteractionLedgerState.appendFailureCount = 0;
+  uiInteractionLedgerState.compactionRunCount = 0;
+  uiInteractionLedgerState.compactionRewriteCount = 0;
+  uiInteractionLedgerState.compactionPrunedEventCount = 0;
+  uiInteractionLedgerState.compactionInvalidLineDropCount = 0;
+  uiInteractionLedgerState.lastCompactionHash = undefined;
   uiInteractionLedgerState.latestRequestId = undefined;
 }
 
@@ -355,6 +403,158 @@ function resolveLedgerPath(): string | undefined {
 
 function computeHash(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value, stableReplacer)).digest("hex");
+}
+
+function compactUiInteractionLedgerIfNeeded(nowIso: string): void {
+  if (!uiInteractionLedgerState.path || !hasLedgerCompactionPolicy(uiInteractionLedgerState)) {
+    return;
+  }
+  uiInteractionLedgerState.compactionRunCount += 1;
+
+  try {
+    const raw = existsSync(uiInteractionLedgerState.path) ? readFileSync(uiInteractionLedgerState.path, "utf8") : "";
+    const parsed = parseLedgerEntries(raw);
+    const compacted = applyCompactionPolicy({
+      entries: parsed.entries,
+      maxEvents: uiInteractionLedgerState.maxEvents,
+      ttlSeconds: uiInteractionLedgerState.ttlSeconds,
+      nowIso,
+    });
+    if (!compacted.rewriteRequired && parsed.invalidLineCount === 0) {
+      return;
+    }
+
+    const payload = compacted.entries.map((entry) => JSON.stringify(entry)).join("\n");
+    writeFileSync(uiInteractionLedgerState.path, payload.length > 0 ? `${payload}\n` : "", "utf8");
+    uiInteractionLedgerState.compactionRewriteCount += 1;
+    uiInteractionLedgerState.compactionPrunedEventCount += compacted.prunedCount;
+    uiInteractionLedgerState.compactionInvalidLineDropCount += parsed.invalidLineCount;
+    uiInteractionLedgerState.persistedEventCount = compacted.entries.length;
+    uiInteractionLedgerState.nextSequence = Math.max(
+      uiInteractionLedgerState.nextSequence,
+      compacted.entries.reduce((maxSequence, entry) => Math.max(maxSequence, Math.floor(entry.sequence) + 1), 0),
+    );
+    uiInteractionLedgerState.latestRequestId = compacted.entries.at(-1)?.requestId;
+    uiInteractionLedgerState.lastCompactionHash = computeHash({
+      policy: resolveCompactionPolicyLabel(uiInteractionLedgerState),
+      nowIso,
+      beforeCount: parsed.entries.length,
+      invalidLineCount: parsed.invalidLineCount,
+      afterCount: compacted.entries.length,
+      prunedCount: compacted.prunedCount,
+      maxEvents: uiInteractionLedgerState.maxEvents,
+      ttlSeconds: uiInteractionLedgerState.ttlSeconds,
+    });
+  } catch {
+    uiInteractionLedgerState.appendFailureCount += 1;
+  }
+}
+
+function parseLedgerEntries(raw: string): {
+  entries: UiInteractionLedgerEntry[];
+  invalidLineCount: number;
+} {
+  const entries: UiInteractionLedgerEntry[] = [];
+  let invalidLineCount = 0;
+  const lines = raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  for (const line of lines) {
+    try {
+      const parsed = JSON.parse(line) as Partial<UiInteractionLedgerEntry>;
+      if (typeof parsed.sequence !== "number" || !Number.isFinite(parsed.sequence) || parsed.sequence < 0) {
+        invalidLineCount += 1;
+        continue;
+      }
+      if (typeof parsed.requestId !== "string" || parsed.requestId.length === 0) {
+        invalidLineCount += 1;
+        continue;
+      }
+      entries.push({
+        schemaVersion: UI_INTERACTION_LEDGER_SCHEMA_VERSION,
+        sequence: Math.floor(parsed.sequence),
+        recordedAt: typeof parsed.recordedAt === "string" ? parsed.recordedAt : "",
+        requestId: parsed.requestId,
+        traceId: typeof parsed.traceId === "string" ? parsed.traceId : "",
+        proofId: typeof parsed.proofId === "string" ? parsed.proofId : "",
+        interaction: (parsed.interaction as UiInteractionKind | undefined) ?? "tree_keyboard",
+        source: parsed.source === "mouse" || parsed.source === "keyboard" || parsed.source === "programmatic" ? parsed.source : "programmatic",
+        success: parsed.success !== false,
+        parentTraceProvided: parsed.parentTraceProvided === true,
+        durationMs: typeof parsed.durationMs === "number" && Number.isFinite(parsed.durationMs) ? Math.max(0, parsed.durationMs) : 0,
+      });
+    } catch {
+      invalidLineCount += 1;
+    }
+  }
+  return { entries, invalidLineCount };
+}
+
+function applyCompactionPolicy(input: {
+  entries: UiInteractionLedgerEntry[];
+  maxEvents: number | undefined;
+  ttlSeconds: number | undefined;
+  nowIso: string;
+}): { entries: UiInteractionLedgerEntry[]; prunedCount: number; rewriteRequired: boolean } {
+  const nowMs = Date.parse(input.nowIso);
+  const ttlCutoffMs =
+    typeof input.ttlSeconds === "number" && Number.isFinite(nowMs) ? nowMs - input.ttlSeconds * 1000 : undefined;
+  let compacted = input.entries;
+  if (typeof ttlCutoffMs === "number") {
+    compacted = compacted.filter((entry) => {
+      const recordedAtMs = Date.parse(entry.recordedAt);
+      if (!Number.isFinite(recordedAtMs)) {
+        return true;
+      }
+      return recordedAtMs >= ttlCutoffMs;
+    });
+  }
+  if (typeof input.maxEvents === "number" && compacted.length > input.maxEvents) {
+    compacted = compacted.slice(compacted.length - input.maxEvents);
+  }
+  return {
+    entries: compacted,
+    prunedCount: Math.max(0, input.entries.length - compacted.length),
+    rewriteRequired: compacted.length !== input.entries.length,
+  };
+}
+
+function hasLedgerCompactionPolicy(state: { maxEvents: number | undefined; ttlSeconds: number | undefined }): boolean {
+  return typeof state.maxEvents === "number" || typeof state.ttlSeconds === "number";
+}
+
+function resolveCompactionPolicyLabel(state: {
+  maxEvents: number | undefined;
+  ttlSeconds: number | undefined;
+}): "disabled" | "max_events" | "ttl_seconds" | "ttl_and_max_events" {
+  const hasMaxEvents = typeof state.maxEvents === "number";
+  const hasTtlSeconds = typeof state.ttlSeconds === "number";
+  if (hasMaxEvents && hasTtlSeconds) {
+    return "ttl_and_max_events";
+  }
+  if (hasTtlSeconds) {
+    return "ttl_seconds";
+  }
+  if (hasMaxEvents) {
+    return "max_events";
+  }
+  return "disabled";
+}
+
+function parsePositiveInteger(value: string | undefined, min: number, max: number): number | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const normalized = value.trim();
+  if (normalized.length === 0) {
+    return undefined;
+  }
+  const parsed = Number.parseInt(normalized, 10);
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+  return Math.max(min, Math.min(max, parsed));
 }
 
 function stableReplacer(_key: string, value: unknown): unknown {
