@@ -35,6 +35,11 @@ The tree panel uses incremental root/children/path queries:
 - Expand parent nodes with bounded child pages (`/api/proofs/nodes/:nodeId/children`, `limit=maxChildrenPerParent`).
 - Resolve selected leaf ancestry (`/api/proofs/nodes/:nodeId/path`) to expand prerequisite parents deterministically.
 - Keep leaf-detail and diff panels wired to provenance-aware contracts (`/api/proofs/leaves/:leafId`, `/api/proofs/diff`).
+  - Diff panel rendering is deterministic and auditable:
+    - canonical change ordering by `key/type/kind`
+    - sorted `supportLeafIds`
+    - highlighted before/after deltas for `changed` statements
+    - machine-checkable truncation counters via `data-diff-*` attributes
 - Query dependency reachability/SCC evidence deterministically with `/api/proofs/dependency-graph`.
 - Surface per-parent policy diagnostics (pre/post compliance + metrics) directly in tree rows.
 - Query deterministic pedagogy calibration metrics + threshold gates with `/api/proofs/policy-report`.
@@ -87,6 +92,8 @@ The tree panel uses incremental root/children/path queries:
   - `NEXT_PUBLIC_EXPLAIN_MD_TREE_ROW_HEIGHT_PX` (default `36`)
   - `NEXT_PUBLIC_EXPLAIN_MD_TREE_VIEWPORT_ROWS` (default `18`)
   - `NEXT_PUBLIC_EXPLAIN_MD_TREE_VIRTUALIZATION_OVERSCAN_ROWS` (default `6`)
+- Diff panel truncation threshold can be configured with:
+  - `NEXT_PUBLIC_EXPLAIN_MD_DIFF_MAX_CHANGES` (default `24`, clamped to `1..200`)
 - Job IDs are deterministic and monotonic (`job-000001`, `job-000002`, ...).
 - Reproducibility contract values can be configured with:
   - `EXPLAIN_MD_VERIFICATION_PROJECT_ROOT`

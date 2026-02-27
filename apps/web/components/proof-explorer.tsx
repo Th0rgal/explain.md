@@ -39,6 +39,10 @@ import {
   resolveVirtualScrollTopForRowIndex,
 } from "../lib/tree-virtualization";
 import { buildTreeAccessibilityMetadata } from "../lib/tree-accessibility";
+import {
+  buildExplanationDiffPanelView,
+  resolveExplanationDiffPanelSettings,
+} from "../lib/explanation-diff-view";
 
 export const DEFAULT_CONFIG: ProofConfigInput = {
   abstractionLevel: 3,
@@ -60,6 +64,7 @@ export const ENTAILMENT_MODE_OPTIONS: Array<{ value: NonNullable<ProofConfigInpu
 ];
 export const TREE_RENDER_SETTINGS = resolveTreeRenderSettings(process.env);
 export const TREE_VIRTUALIZATION_SETTINGS = resolveTreeVirtualizationSettings(process.env);
+export const DIFF_PANEL_SETTINGS = resolveExplanationDiffPanelSettings(process.env);
 
 interface ProofExplorerProps {
   proofId: string;
@@ -402,6 +407,11 @@ export function ProofExplorer(props: ProofExplorerProps) {
     }
     return renderedRows;
   }, [isVirtualizedTree, renderedRows, virtualizationPlan.endIndex, virtualizationPlan.startIndex, visibleRows]);
+
+  const diffPanelView = useMemo(
+    () => (diff ? buildExplanationDiffPanelView(diff.report, { maxChanges: DIFF_PANEL_SETTINGS.maxChanges }) : null),
+    [diff],
+  );
 
   useEffect(() => {
     const maxIndex = Math.max(0, visibleRows.length - 1);
@@ -1113,14 +1123,75 @@ export function ProofExplorer(props: ProofExplorerProps) {
       <section className="panel diff" aria-label="Explanation diff">
         <h2>Diff</h2>
         <p className="meta">Diff hash: {diff?.diffHash ?? "unavailable"}</p>
-        <p className="meta">Changed statements: {diff?.report.summary.changed ?? 0}</p>
-        <ul>
-          {(diff?.report.changes ?? []).slice(0, 8).map((change) => (
-            <li key={change.key}>
-              <strong>{change.type}</strong> {change.kind} ({change.supportLeafIds.join(", ")})
-            </li>
-          ))}
-        </ul>
+        <p className="meta">
+          Changed statements: {diff?.report.summary.changed ?? 0} | Added: {diff?.report.summary.added ?? 0} | Removed:{" "}
+          {diff?.report.summary.removed ?? 0}
+        </p>
+        <p
+          className="meta"
+          data-diff-total-changes={diffPanelView?.totalChanges ?? 0}
+          data-diff-rendered-changes={diffPanelView?.renderedChanges ?? 0}
+          data-diff-truncated-changes={diffPanelView?.truncatedChangeCount ?? 0}
+        >
+          Showing {diffPanelView?.renderedChanges ?? 0}/{diffPanelView?.totalChanges ?? 0} changes
+          {diffPanelView && diffPanelView.truncatedChangeCount > 0
+            ? ` (truncated ${diffPanelView.truncatedChangeCount} by deterministic max=${DIFF_PANEL_SETTINGS.maxChanges})`
+            : ""}
+        </p>
+        {diffPanelView?.changed.length ? (
+          <>
+            <h3>Changed</h3>
+            <ul className="diff-list">
+              {diffPanelView.changed.map((change) => (
+                <li key={change.key} className="diff-change diff-change-changed">
+                  <p className="meta">
+                    <strong>{change.kind}</strong> {change.key} | support leaves: {change.supportLeafIds.join(", ") || "none"}
+                  </p>
+                  <p className="meta">
+                    Before: {change.statementDelta?.prefix}
+                    <mark className="diff-mark-removed">{change.statementDelta?.beforeChanged || "(empty)"}</mark>
+                    {change.statementDelta?.suffix}
+                  </p>
+                  <p className="meta">
+                    After: {change.statementDelta?.prefix}
+                    <mark className="diff-mark-added">{change.statementDelta?.afterChanged || "(empty)"}</mark>
+                    {change.statementDelta?.suffix}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+        {diffPanelView?.added.length ? (
+          <>
+            <h3>Added</h3>
+            <ul className="diff-list">
+              {diffPanelView.added.map((change) => (
+                <li key={change.key} className="diff-change diff-change-added">
+                  <p className="meta">
+                    <strong>{change.kind}</strong> {change.key} | support leaves: {change.supportLeafIds.join(", ") || "none"}
+                  </p>
+                  <p>{change.statementAfter ?? "(missing candidate statement)"}</p>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+        {diffPanelView?.removed.length ? (
+          <>
+            <h3>Removed</h3>
+            <ul className="diff-list">
+              {diffPanelView.removed.map((change) => (
+                <li key={change.key} className="diff-change diff-change-removed">
+                  <p className="meta">
+                    <strong>{change.kind}</strong> {change.key} | support leaves: {change.supportLeafIds.join(", ") || "none"}
+                  </p>
+                  <p>{change.statementBefore ?? "(missing baseline statement)"}</p>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
       </section>
 
       <section className="panel diff" aria-label="Policy calibration report">

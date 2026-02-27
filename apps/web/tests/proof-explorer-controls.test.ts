@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_CONFIG, ENTAILMENT_MODE_OPTIONS } from "../components/proof-explorer";
+import { DEFAULT_CONFIG, DIFF_PANEL_SETTINGS, ENTAILMENT_MODE_OPTIONS } from "../components/proof-explorer";
 
 describe("proof explorer controls contract", () => {
   it("defaults to calibrated entailment mode", () => {
@@ -11,5 +11,9 @@ describe("proof explorer controls contract", () => {
       { value: "calibrated", label: "Calibrated" },
       { value: "strict", label: "Strict" },
     ]);
+  });
+
+  it("uses deterministic diff panel truncation settings", () => {
+    expect(DIFF_PANEL_SETTINGS.maxChanges).toBe(24);
   });
 });

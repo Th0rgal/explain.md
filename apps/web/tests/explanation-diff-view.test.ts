@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildExplanationDiffPanelView, computeStatementDelta } from "../lib/explanation-diff-view";
+import {
+  buildExplanationDiffPanelView,
+  computeStatementDelta,
+  resolveExplanationDiffPanelSettings,
+} from "../lib/explanation-diff-view";
 
 describe("explanation diff view", () => {
   it("computes deterministic statement deltas", () => {
@@ -57,6 +61,7 @@ describe("explanation diff view", () => {
     expect(view.truncatedChangeCount).toBe(0);
     expect(view.changed).toHaveLength(1);
     expect(view.changed[0]?.supportLeafCount).toBe(2);
+    expect(view.changed[0]?.supportLeafIds).toEqual(["leaf_1", "leaf_2"]);
     expect(view.changed[0]?.statementDelta).toEqual({
       prefix: "",
       beforeChanged: "Old",
@@ -98,5 +103,56 @@ describe("explanation diff view", () => {
 
     expect(clamped.renderedChanges).toBe(1);
     expect(clamped.truncatedChangeCount).toBe(3);
+  });
+
+  it("sorts changes deterministically before truncation", () => {
+    const view = buildExplanationDiffPanelView(
+      {
+        summary: { total: 3, added: 1, removed: 1, changed: 1 },
+        changes: [
+          {
+            key: "z-key",
+            type: "removed",
+            kind: "leaf",
+            supportLeafIds: ["leaf_3"],
+            baselineStatement: "z",
+          },
+          {
+            key: "a-key",
+            type: "added",
+            kind: "leaf",
+            supportLeafIds: ["leaf_1"],
+            candidateStatement: "a",
+          },
+          {
+            key: "m-key",
+            type: "changed",
+            kind: "parent",
+            supportLeafIds: ["leaf_2"],
+            baselineStatement: "m0",
+            candidateStatement: "m1",
+          },
+        ],
+      },
+      { maxChanges: 2 },
+    );
+
+    expect(view.renderedChanges).toBe(2);
+    expect(view.truncatedChangeCount).toBe(1);
+    expect(view.added.map((change) => change.key)).toEqual(["a-key"]);
+    expect(view.changed.map((change) => change.key)).toEqual(["m-key"]);
+    expect(view.removed).toHaveLength(0);
+  });
+});
+
+describe("explanation diff settings", () => {
+  it("uses deterministic defaults and clamps invalid values", () => {
+    expect(resolveExplanationDiffPanelSettings({})).toEqual({ maxChanges: 24 });
+    expect(resolveExplanationDiffPanelSettings({ NEXT_PUBLIC_EXPLAIN_MD_DIFF_MAX_CHANGES: "0" })).toEqual({
+      maxChanges: 1,
+    });
+    expect(resolveExplanationDiffPanelSettings({ NEXT_PUBLIC_EXPLAIN_MD_DIFF_MAX_CHANGES: "999" })).toEqual({
+      maxChanges: 200,
+    });
   });
 });

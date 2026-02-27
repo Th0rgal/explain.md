@@ -88,6 +88,11 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - active-row diagnostics remain machine-checkable (`data-tree-active-node-id`, `data-tree-active-row-index`)
   - assistive-tech announcements are deterministic and surfaced on the tree panel as `data-tree-live-message`
   - `Enter` / `Space` applies the active row action (parent expand/collapse, leaf selection)
+- Explanation diff panel rendering is deterministic and provenance-auditable:
+  - canonical ordering by `key`, then `type`, then `kind`
+  - sorted per-change `supportLeafIds`
+  - highlighted before/after statement deltas for `changed` entries
+  - machine-checkable truncation diagnostics (`data-diff-total-changes`, `data-diff-rendered-changes`, `data-diff-truncated-changes`)
 - Sibling complexity remains bounded by `maxChildrenPerParent` during child-page fetches.
 - This keeps behavior auditable while issue #15 iterates on richer interaction patterns.
 
@@ -101,6 +106,9 @@ Public env knobs for deterministic virtualization bounds:
 - `NEXT_PUBLIC_EXPLAIN_MD_TREE_ROW_HEIGHT_PX` (default `36`)
 - `NEXT_PUBLIC_EXPLAIN_MD_TREE_VIEWPORT_ROWS` (default `18`)
 - `NEXT_PUBLIC_EXPLAIN_MD_TREE_VIRTUALIZATION_OVERSCAN_ROWS` (default `6`)
+
+Public env knob for deterministic diff rendering bounds:
+- `NEXT_PUBLIC_EXPLAIN_MD_DIFF_MAX_CHANGES` (default `24`, clamped to `1..200`)
 
 ## Local verification
 From repository root:
