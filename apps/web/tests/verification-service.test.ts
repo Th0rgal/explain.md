@@ -175,12 +175,19 @@ describe("verification service", () => {
     });
 
     const metrics = exportVerificationObservabilityMetrics();
+    const deterministicFirst = exportVerificationObservabilityMetrics({
+      generatedAt: "2026-02-27T00:00:00.000Z",
+    });
+    const deterministicSecond = exportVerificationObservabilityMetrics({
+      generatedAt: "2026-02-27T00:00:00.000Z",
+    });
     expect(metrics.requestCount).toBe(3);
     expect(metrics.failureCount).toBe(0);
     expect(metrics.correlation.parentTraceProvidedCount).toBe(2);
     expect(metrics.queries).toHaveLength(3);
     expect(metrics.queries.find((entry) => entry.query === "verify_leaf")?.meanLatencyMs).toBe(10);
     expect(metrics.snapshotHash).toHaveLength(64);
+    expect(deterministicFirst.snapshotHash).toBe(deterministicSecond.snapshotHash);
   });
 });
 

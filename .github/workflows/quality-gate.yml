@@ -48,6 +48,9 @@ jobs:
       - name: Run deterministic quality gate
         run: npm run eval:quality:ci
 
+      - name: Run observability SLO benchmark gate
+        run: npm run web:eval:observability-slo:ci
+
       - name: Upload quality gate reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -56,3 +59,4 @@ jobs:
           path: |
             .explain-md/quality-gate-report-*.json
             .explain-md/quality-gate-baseline-check.json
+            .explain-md/observability-slo-benchmark-report.json

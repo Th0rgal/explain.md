@@ -4348,8 +4348,8 @@ function buildProofQueryObservability(input: {
   };
 }
 
-export function exportProofQueryObservabilityMetrics(): ProofQueryObservabilityMetricsSnapshot {
-  const generatedAt = new Date().toISOString();
+export function exportProofQueryObservabilityMetrics(options: { generatedAt?: string } = {}): ProofQueryObservabilityMetricsSnapshot {
+  const generatedAt = options.generatedAt ?? new Date().toISOString();
   const requestCount = proofQueryObservabilityEvents.length;
   const uniqueRequestCount = new Set(proofQueryObservabilityEvents.map((event) => event.requestId)).size;
   const uniqueTraceCount = new Set(proofQueryObservabilityEvents.map((event) => event.traceId)).size;

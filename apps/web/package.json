@@ -11,7 +11,9 @@
     "typecheck": "tsc -p tsconfig.typecheck.json --noEmit --incremental false",
     "test": "vitest run",
     "benchmark:cache": "tsx scripts/proof-cache-benchmark.ts --out ../../docs/benchmarks/proof-cache-benchmark.json",
-    "benchmark:tree-a11y": "tsx scripts/tree-a11y-evaluation.ts --out ../../docs/benchmarks/tree-a11y-evaluation.json"
+    "benchmark:tree-a11y": "tsx scripts/tree-a11y-evaluation.ts --out ../../docs/benchmarks/tree-a11y-evaluation.json",
+    "benchmark:observability-slo": "tsx scripts/observability-slo-benchmark.ts --out ../../docs/benchmarks/observability-slo-benchmark.json",
+    "benchmark:observability-slo:ci": "tsx scripts/observability-slo-benchmark.ts --baseline ../../docs/benchmarks/observability-slo-benchmark.json --out ../../.explain-md/observability-slo-benchmark-report.json"
   },
   "dependencies": {
     "@react-three/drei": "^9.122.0",

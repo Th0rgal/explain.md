@@ -168,6 +168,12 @@ describe("proof service", () => {
 
     const first = exportProofQueryObservabilityMetrics();
     const second = exportProofQueryObservabilityMetrics();
+    const deterministicFirst = exportProofQueryObservabilityMetrics({
+      generatedAt: "2026-02-27T00:00:00.000Z",
+    });
+    const deterministicSecond = exportProofQueryObservabilityMetrics({
+      generatedAt: "2026-02-27T00:00:00.000Z",
+    });
     expect(first.schemaVersion).toBe("1.0.0");
     expect(first.requestCount).toBe(3);
     expect(first.uniqueRequestCount).toBe(3);
@@ -181,6 +187,7 @@ describe("proof service", () => {
     expect(first.queries.find((entry) => entry.query === "diff")?.requestCount).toBe(0);
     expect(first.snapshotHash).toHaveLength(64);
     expect(second.snapshotHash).toHaveLength(64);
+    expect(deterministicFirst.snapshotHash).toBe(deterministicSecond.snapshotHash);
   });
 
   it("lists both seed and Lean fixture proofs in catalog", async () => {

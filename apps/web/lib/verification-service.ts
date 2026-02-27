@@ -317,8 +317,10 @@ export async function getVerificationJobById(
   }
 }
 
-export function exportVerificationObservabilityMetrics(): VerificationObservabilityMetricsSnapshot {
-  const generatedAt = new Date().toISOString();
+export function exportVerificationObservabilityMetrics(
+  options: { generatedAt?: string } = {},
+): VerificationObservabilityMetricsSnapshot {
+  const generatedAt = options.generatedAt ?? new Date().toISOString();
   const requestCount = verificationObservabilityEvents.length;
   const failureCount = verificationObservabilityEvents.filter((event) => event.failed).length;
   const parentTraceProvidedCount = verificationObservabilityEvents.filter((event) => event.parentTraceProvided).length;

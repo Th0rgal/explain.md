@@ -24,7 +24,9 @@
     "web:typecheck": "npm --prefix apps/web run typecheck",
     "web:test": "npm --prefix apps/web run test",
     "web:bench:cache": "npm --prefix apps/web run benchmark:cache",
-    "web:bench:tree-a11y": "npm --prefix apps/web run benchmark:tree-a11y"
+    "web:bench:tree-a11y": "npm --prefix apps/web run benchmark:tree-a11y",
+    "web:bench:observability-slo": "npm --prefix apps/web run benchmark:observability-slo",
+    "web:eval:observability-slo:ci": "npm --prefix apps/web run benchmark:observability-slo:ci"
   },
   "devDependencies": {
     "@types/node": "^24.4.0",
