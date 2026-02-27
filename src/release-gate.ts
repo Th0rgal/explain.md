@@ -73,6 +73,28 @@ export interface VerificationReplayBenchmarkArtifact {
   };
 }
 
+export interface ExplanationDiffBenchmarkArtifact {
+  schemaVersion: string;
+  requestHash: string;
+  outcomeHash: string;
+  summary: {
+    profileCount: number;
+    totalChanges: number;
+    changedProfiles: number;
+    truncatedProfiles: number;
+    provenanceCoveredChanges: number;
+    zeroSupportChangeCount: number;
+    orderingPassProfiles: number;
+    coverage: {
+      abstractionLevel: boolean;
+      complexityLevel: boolean;
+      maxChildrenPerParent: boolean;
+      language: boolean;
+      audienceLevel: boolean;
+    };
+  };
+}
+
 export interface ObservabilitySloBenchmarkArtifact {
   schemaVersion: string;
   requestHash: string;
@@ -99,6 +121,7 @@ export interface ReleaseGateInput {
   qualityBaselineCheck: BaselineCheckArtifact;
   treeA11yBenchmark: TreeA11yBenchmarkArtifact;
   treeScaleBenchmark: TreeScaleBenchmarkArtifact;
+  explanationDiffBenchmark: ExplanationDiffBenchmarkArtifact;
   verificationReplayBenchmark: VerificationReplayBenchmarkArtifact;
   proofCacheBenchmark: ProofCacheBenchmarkArtifact;
   observabilitySloBaseline: ObservabilitySloBenchmarkArtifact;
@@ -113,6 +136,7 @@ export interface ReleaseGateCheck {
     | "strict_entailment_presets_present"
     | "tree_a11y_transcript_complete"
     | "tree_scale_profiles_cover_modes"
+    | "explanation_diff_profiles_cover_config_knobs"
     | "verification_replay_contract_complete"
     | "cache_warm_speedup"
     | "cache_recovery_hits"
@@ -136,6 +160,7 @@ export interface ReleaseGateReport {
     qualityOutcomeHash: string;
     treeA11yOutcomeHash: string;
     treeScaleOutcomeHash: string;
+    explanationDiffOutcomeHash: string;
     verificationReplayOutcomeHash: string;
     proofCacheOutcomeHash: string;
     observabilityOutcomeHash: string;
@@ -170,6 +195,7 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
   const qualityBaselineCheck = assertBaselineCheckArtifact(input.qualityBaselineCheck, "qualityBaselineCheck");
   const treeA11yBenchmark = assertTreeA11yBenchmarkArtifact(input.treeA11yBenchmark);
   const treeScaleBenchmark = assertTreeScaleBenchmarkArtifact(input.treeScaleBenchmark);
+  const explanationDiffBenchmark = assertExplanationDiffBenchmarkArtifact(input.explanationDiffBenchmark);
   const verificationReplayBenchmark = assertVerificationReplayBenchmarkArtifact(input.verificationReplayBenchmark);
   const proofCacheBenchmark = assertProofCacheBenchmarkArtifact(input.proofCacheBenchmark);
   const observabilitySloBaseline = assertObservabilitySloBenchmarkArtifact(input.observabilitySloBaseline);
@@ -218,6 +244,25 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
         treeScaleBenchmark.summary.virtualizedModeSampleCount > 0 &&
         treeScaleBenchmark.summary.boundedSampleCount === treeScaleBenchmark.summary.totalSamples,
       details: `profiles=${treeScaleBenchmark.summary.profileCount} total_samples=${treeScaleBenchmark.summary.totalSamples} modes=full:${treeScaleBenchmark.summary.fullModeSampleCount},windowed:${treeScaleBenchmark.summary.windowedModeSampleCount},virtualized:${treeScaleBenchmark.summary.virtualizedModeSampleCount} bounded=${treeScaleBenchmark.summary.boundedSampleCount}`,
+    },
+    {
+      code: "explanation_diff_profiles_cover_config_knobs",
+      pass:
+        explanationDiffBenchmark.summary.profileCount >= 3 &&
+        explanationDiffBenchmark.summary.changedProfiles === explanationDiffBenchmark.summary.profileCount &&
+        explanationDiffBenchmark.summary.truncatedProfiles > 0 &&
+        explanationDiffBenchmark.summary.provenanceCoveredChanges > 0 &&
+        explanationDiffBenchmark.summary.zeroSupportChangeCount === 0 &&
+        explanationDiffBenchmark.summary.orderingPassProfiles === explanationDiffBenchmark.summary.profileCount &&
+        explanationDiffBenchmark.summary.coverage.abstractionLevel &&
+        explanationDiffBenchmark.summary.coverage.complexityLevel &&
+        explanationDiffBenchmark.summary.coverage.maxChildrenPerParent &&
+        explanationDiffBenchmark.summary.coverage.language &&
+        explanationDiffBenchmark.summary.coverage.audienceLevel,
+      details:
+        `profiles=${explanationDiffBenchmark.summary.profileCount} changed_profiles=${explanationDiffBenchmark.summary.changedProfiles} ` +
+        `truncated_profiles=${explanationDiffBenchmark.summary.truncatedProfiles} total_changes=${explanationDiffBenchmark.summary.totalChanges} ` +
+        `provenance_changes=${explanationDiffBenchmark.summary.provenanceCoveredChanges}`,
     },
     {
       code: "verification_replay_contract_complete",
@@ -273,6 +318,7 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
     qualityOutcomeHash: qualityBaseline.outcomeHash,
     treeA11yRequestHash: treeA11yBenchmark.requestHash,
     treeScaleRequestHash: treeScaleBenchmark.requestHash,
+    explanationDiffRequestHash: explanationDiffBenchmark.requestHash,
     verificationReplayRequestHash: verificationReplayBenchmark.requestHash,
     proofCacheRequestHash: proofCacheBenchmark.requestHash,
     observabilityRequestHash: observabilitySloActual.requestHash,
@@ -292,6 +338,7 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
       qualityOutcomeHash: qualityBaseline.outcomeHash,
       treeA11yOutcomeHash: treeA11yBenchmark.outcomeHash,
       treeScaleOutcomeHash: treeScaleBenchmark.outcomeHash,
+      explanationDiffOutcomeHash: explanationDiffBenchmark.outcomeHash,
       verificationReplayOutcomeHash: verificationReplayBenchmark.outcomeHash,
       proofCacheOutcomeHash: proofCacheBenchmark.outcomeHash,
       observabilityOutcomeHash: observabilitySloActual.outcomeHash,
@@ -312,6 +359,7 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
       qualityOutcomeHash: qualityBaseline.outcomeHash,
       treeA11yOutcomeHash: treeA11yBenchmark.outcomeHash,
       treeScaleOutcomeHash: treeScaleBenchmark.outcomeHash,
+      explanationDiffOutcomeHash: explanationDiffBenchmark.outcomeHash,
       verificationReplayOutcomeHash: verificationReplayBenchmark.outcomeHash,
       proofCacheOutcomeHash: proofCacheBenchmark.outcomeHash,
       observabilityOutcomeHash: observabilitySloActual.outcomeHash,
@@ -458,6 +506,49 @@ export function assertVerificationReplayBenchmarkArtifact(input: unknown): Verif
       envKeyCount: expectFiniteNumber(input.summary.envKeyCount, "verificationReplay.summary.envKeyCount"),
       logLineCount: expectFiniteNumber(input.summary.logLineCount, "verificationReplay.summary.logLineCount"),
       jsonLineCount: expectFiniteNumber(input.summary.jsonLineCount, "verificationReplay.summary.jsonLineCount"),
+    },
+  };
+}
+
+export function assertExplanationDiffBenchmarkArtifact(input: unknown): ExplanationDiffBenchmarkArtifact {
+  if (!isObject(input)) {
+    throw new Error("explanation diff benchmark artifact must be an object");
+  }
+  if (expectString(input.schemaVersion, "explanationDiff.schemaVersion") !== "1.0.0") {
+    throw new Error("explanation diff benchmark schemaVersion must be 1.0.0");
+  }
+  if (!isObject(input.summary) || !isObject(input.summary.coverage)) {
+    throw new Error("explanationDiff.summary must contain coverage object");
+  }
+
+  return {
+    schemaVersion: "1.0.0",
+    requestHash: expectString(input.requestHash, "explanationDiff.requestHash"),
+    outcomeHash: expectString(input.outcomeHash, "explanationDiff.outcomeHash"),
+    summary: {
+      profileCount: expectFiniteNumber(input.summary.profileCount, "explanationDiff.summary.profileCount"),
+      totalChanges: expectFiniteNumber(input.summary.totalChanges, "explanationDiff.summary.totalChanges"),
+      changedProfiles: expectFiniteNumber(input.summary.changedProfiles, "explanationDiff.summary.changedProfiles"),
+      truncatedProfiles: expectFiniteNumber(input.summary.truncatedProfiles, "explanationDiff.summary.truncatedProfiles"),
+      provenanceCoveredChanges: expectFiniteNumber(
+        input.summary.provenanceCoveredChanges,
+        "explanationDiff.summary.provenanceCoveredChanges",
+      ),
+      zeroSupportChangeCount: expectFiniteNumber(
+        input.summary.zeroSupportChangeCount,
+        "explanationDiff.summary.zeroSupportChangeCount",
+      ),
+      orderingPassProfiles: expectFiniteNumber(input.summary.orderingPassProfiles, "explanationDiff.summary.orderingPassProfiles"),
+      coverage: {
+        abstractionLevel: expectBoolean(input.summary.coverage.abstractionLevel, "explanationDiff.summary.coverage.abstractionLevel"),
+        complexityLevel: expectBoolean(input.summary.coverage.complexityLevel, "explanationDiff.summary.coverage.complexityLevel"),
+        maxChildrenPerParent: expectBoolean(
+          input.summary.coverage.maxChildrenPerParent,
+          "explanationDiff.summary.coverage.maxChildrenPerParent",
+        ),
+        language: expectBoolean(input.summary.coverage.language, "explanationDiff.summary.coverage.language"),
+        audienceLevel: expectBoolean(input.summary.coverage.audienceLevel, "explanationDiff.summary.coverage.audienceLevel"),
+      },
     },
   };
 }
@@ -616,6 +707,7 @@ function isKnownCheckCode(value: string): value is ReleaseGateCheck["code"] {
     value === "strict_entailment_presets_present" ||
     value === "tree_a11y_transcript_complete" ||
     value === "tree_scale_profiles_cover_modes" ||
+    value === "explanation_diff_profiles_cover_config_knobs" ||
     value === "verification_replay_contract_complete" ||
     value === "cache_warm_speedup" ||
     value === "cache_recovery_hits" ||

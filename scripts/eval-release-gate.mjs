@@ -15,6 +15,7 @@ function parseArgs(argv) {
   let qualityBaselineCheckPath = path.resolve(cwd, ".explain-md/quality-gate-baseline-check.json");
   let treeA11yPath = path.resolve(cwd, "docs/benchmarks/tree-a11y-evaluation.json");
   let treeScalePath = path.resolve(cwd, "docs/benchmarks/tree-scale-evaluation.json");
+  let explanationDiffPath = path.resolve(cwd, "docs/benchmarks/explanation-diff-evaluation.json");
   let verificationReplayPath = path.resolve(cwd, "docs/benchmarks/verification-replay-evaluation.json");
   let proofCachePath = path.resolve(cwd, "docs/benchmarks/proof-cache-benchmark.json");
   let observabilityBaselinePath = path.resolve(cwd, "docs/benchmarks/observability-slo-benchmark.json");
@@ -42,6 +43,10 @@ function parseArgs(argv) {
     }
     if (arg.startsWith("--tree-scale=")) {
       treeScalePath = path.resolve(cwd, arg.slice("--tree-scale=".length));
+      continue;
+    }
+    if (arg.startsWith("--explanation-diff=")) {
+      explanationDiffPath = path.resolve(cwd, arg.slice("--explanation-diff=".length));
       continue;
     }
     if (arg.startsWith("--verification-replay=")) {
@@ -75,6 +80,7 @@ function parseArgs(argv) {
     qualityBaselineCheckPath,
     treeA11yPath,
     treeScalePath,
+    explanationDiffPath,
     verificationReplayPath,
     proofCachePath,
     observabilityBaselinePath,
@@ -97,6 +103,7 @@ async function main() {
   const qualityBaselineCheck = await readJson(args.qualityBaselineCheckPath);
   const treeA11yBenchmark = await readJson(args.treeA11yPath);
   const treeScaleBenchmark = await readJson(args.treeScalePath);
+  const explanationDiffBenchmark = await readJson(args.explanationDiffPath);
   const verificationReplayBenchmark = await readJson(args.verificationReplayPath);
   const proofCacheBenchmark = await readJson(args.proofCachePath);
   const observabilitySloBaseline = await readJson(args.observabilityBaselinePath);
@@ -107,6 +114,7 @@ async function main() {
     qualityBaselineCheck,
     treeA11yBenchmark,
     treeScaleBenchmark,
+    explanationDiffBenchmark,
     verificationReplayBenchmark,
     proofCacheBenchmark,
     observabilitySloBaseline,

@@ -107,6 +107,8 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 - CI enforces assistive-tech benchmark reproducibility via `npm run web:eval:tree-a11y:ci` (baseline-compares request/outcome hashes and emits `.explain-md/tree-a11y-evaluation-report.json`).
 - Deterministic large-tree render benchmark is available via `npm run web:bench:tree-scale` (writes `docs/benchmarks/tree-scale-evaluation.json`).
 - CI enforces large-tree render benchmark reproducibility via `npm run web:eval:tree-scale:ci` (baseline-compares request/outcome hashes and emits `.explain-md/tree-scale-evaluation-report.json`).
+- Deterministic explanation-diff benchmark is available via `npm run web:bench:explanation-diff` (writes `docs/benchmarks/explanation-diff-evaluation.json`).
+- CI enforces explanation-diff benchmark reproducibility via `npm run web:eval:explanation-diff:ci` (baseline-compares request/outcome hashes and emits `.explain-md/explanation-diff-evaluation-report.json`).
 - Deterministic verification replay benchmark is available via `npm run web:bench:verification-replay` (writes `docs/benchmarks/verification-replay-evaluation.json`).
 - CI enforces verification replay benchmark reproducibility via `npm run web:eval:verification-replay:ci` (baseline-compares request/outcome hashes and emits `.explain-md/verification-replay-evaluation-report.json`).
 - Deterministic observability SLO benchmark is available via `npm run web:bench:observability-slo` (writes `docs/benchmarks/observability-slo-benchmark.json`).
