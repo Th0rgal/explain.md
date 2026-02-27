@@ -82,6 +82,39 @@ describe("tree builder", () => {
     expect(first.nodes[first.rootId].statement).toBe(second.nodes[second.rootId].statement);
   });
 
+  test("reserves top-level group index when singleton passthrough precedes a parent group", async () => {
+    const config = normalizeConfig({
+      maxChildrenPerParent: 2,
+      complexityLevel: 1,
+      complexityBandWidth: 0,
+      audienceLevel: "expert",
+      proofDetailMode: "minimal",
+    });
+    const leaves = [
+      { id: "a", statement: "A standalone low-complexity lemma.", complexity: 1 },
+      { id: "b", statement: "B medium-complexity lemma.", complexity: 3 },
+      { id: "c", statement: "C medium-complexity lemma.", complexity: 3 },
+    ];
+
+    const first = await buildRecursiveExplanationTree(deterministicSummaryProvider({ complexityScore: 1 }), {
+      config,
+      leaves,
+    });
+    const second = await buildRecursiveExplanationTree(deterministicSummaryProvider({ complexityScore: 1 }), {
+      config,
+      leaves: leaves.slice().reverse(),
+    });
+
+    const depthOneParents = first.groupPlan.filter((step) => step.depth === 1);
+    expect(depthOneParents).toHaveLength(1);
+    expect(depthOneParents[0].index).toBe(1);
+    expect(depthOneParents[0].outputNodeId).toMatch(/^p_1_1_/);
+    expect(depthOneParents[0].inputNodeIds).toEqual(["b", "c"]);
+
+    expect(first.groupPlan).toEqual(second.groupPlan);
+    expect(first.rootId).toBe(second.rootId);
+  });
+
   test("validator reports disconnected leaves", () => {
     const tree: ExplanationTree = {
       rootId: "p1",
@@ -253,7 +286,8 @@ describe("tree builder", () => {
   });
 });
 
-function deterministicSummaryProvider(): ProviderClient {
+function deterministicSummaryProvider(options?: { complexityScore?: number }): ProviderClient {
+  const complexityScore = options?.complexityScore ?? 3;
   return {
     generate: async (request: GenerateRequest): Promise<GenerateResult> => {
       const childIds = extractChildIds(request);
@@ -264,7 +298,7 @@ function deterministicSummaryProvider(): ProviderClient {
           parent_statement: parentStatement,
           why_true_from_children: `${childIds.join(", ")} jointly entail the parent claim.`,
           new_terms_introduced: [],
-          complexity_score: 3,
+          complexity_score: complexityScore,
           abstraction_score: 3,
           evidence_refs: childIds,
           confidence: 0.9,

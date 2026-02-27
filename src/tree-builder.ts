@@ -182,7 +182,7 @@ export async function buildRecursiveExplanationTree(
     const nextLayerIds: string[] = [];
     const complexitySpreadByGroup: number[] = [];
     const repartitionEvents: RepartitionEvent[] = [];
-    let nextGroupIndex = 0;
+    let nextGroupIndex = groups.length;
 
     for (let index = 0; index < groups.length; index += 1) {
       const result = await buildGroupWithDeterministicRepartition({
@@ -398,7 +398,7 @@ async function buildGroupWithDeterministicRepartition(
     return mergeRepartitionResults(repartitionEvent, nestedResults);
   }
 
-  const groupIndex = request.getNextGroupIndex();
+  const groupIndex = request.round === 0 ? request.initialGroupIndex : request.getNextGroupIndex();
   const parentId = buildParentNodeId(request.depth, groupIndex, orderedGroupNodeIds);
   const parentNode: ExplanationTreeNode = {
     id: parentId,
