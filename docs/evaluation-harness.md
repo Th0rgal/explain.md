@@ -14,6 +14,10 @@ Issue #18 introduces deterministic quality scoring for generated explanation tre
   - Stable JSON rendering for reproducible artifacts (normalizes `generatedAt`).
 - `computeTreeQualityReportHash(report)`
   - SHA-256 hash of canonical report bytes.
+- `listQualityBenchmarkPresets()`, `resolveQualityBenchmarkPreset(name)`
+  - Deterministic benchmark corpus presets for repeatable CI runs.
+- `computeQualityBenchmarkPresetHash(preset)`
+  - SHA-256 hash of canonical preset bytes for audit trails.
 
 ## Metrics
 - `unsupportedParentRate`
@@ -74,6 +78,18 @@ Run a full deterministic ingest->tree->quality pipeline:
 npm run eval:quality -- /path/to/lean-project --include=Verity --include=Compiler/ContractSpec.lean
 ```
 
+Inspect built-in deterministic benchmark presets:
+
+```bash
+npm run eval:quality -- --list-presets
+```
+
+Run with a deterministic preset and emit an auditable artifact JSON:
+
+```bash
+npm run eval:quality -- --preset=fixture-verity-core --out=.explain-md/quality-gate-report.json
+```
+
 Optional threshold overrides:
 
 ```bash
@@ -90,6 +106,19 @@ Exit codes:
 - `1`: runtime error.
 
 CLI JSON output includes `repartitionMetrics` so CI and benchmark artifacts can audit rewrite/repartition-loop pressure without re-running tree construction.
+
+## CI quality gate
+GitHub Actions runs `.github/workflows/quality-gate.yml` on PRs and `main` pushes:
+- `npm ci`
+- `npm run build`
+- `npm test`
+- `npm run eval:quality:ci`
+
+The workflow uploads `.explain-md/quality-gate-report.json` as `quality-gate-report`.
+The report includes:
+- `qualityReportHash` (canonical report hash)
+- `preset.name` + `preset.hash`
+- threshold pass/failure and metrics summary
 
 ## Verity benchmark examples
 - Loop/arithmetic/conditional-heavy subset:
