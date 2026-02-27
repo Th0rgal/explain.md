@@ -62,6 +62,16 @@ export interface ProofCacheBenchmarkReport {
       beforeChangeStatus: "hit" | "miss";
       afterChangeStatus: "hit" | "miss";
       afterChangeDiagnostics: string[];
+      afterChangeRegenerationRecovery?: {
+        reusableParentSummaryCount: number;
+        reusedParentSummaryCount: number;
+        reusedParentSummaryByGroundingCount: number;
+        reusedParentSummaryByStatementSignatureCount: number;
+        generatedParentSummaryCount: number;
+        skippedAmbiguousStatementSignatureReuseCount: number;
+        skippedUnrebasableStatementSignatureReuseCount: number;
+        regenerationHash: string;
+      };
       afterChangeTopologyPlan?: {
         fullRebuildRequired: boolean;
         topologyShapeChanged: boolean;
@@ -190,6 +200,7 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
       beforeChangeStatus: beforeShapeChange.cache.status,
       afterChangeStatus: afterShapeChange.cache.status,
       afterChangeDiagnostics: afterShapeChange.cache.diagnostics.map((diagnostic) => diagnostic.code).sort(),
+      afterChangeRegenerationRecovery: extractTopologyRegenerationRecoveryDiagnostics(afterShapeChange.cache.diagnostics),
       afterChangeTopologyPlan: afterShapeChange.cache.blockedSubtreePlan
         ? {
             fullRebuildRequired: afterShapeChange.cache.blockedSubtreePlan.fullRebuildRequired,
@@ -229,6 +240,7 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
         beforeChangeStatus: topologyShapeInvalidation.beforeChangeStatus,
         afterChangeStatus: topologyShapeInvalidation.afterChangeStatus,
         afterChangeDiagnostics: topologyShapeInvalidation.afterChangeDiagnostics,
+        afterChangeRegenerationRecovery: topologyShapeInvalidation.afterChangeRegenerationRecovery,
         afterChangeTopologyPlan: topologyShapeInvalidation.afterChangeTopologyPlan,
         recoveryStatus: topologyShapeInvalidation.recoveryStatus,
         snapshotChangedOnMutation:
@@ -312,6 +324,31 @@ function summarizeScenario(samples: ScenarioSample[]): ScenarioSummary {
     medianMs: roundMs(median),
     minMs: roundMs(durations[0]),
     maxMs: roundMs(durations[durations.length - 1]),
+  };
+}
+
+function extractTopologyRegenerationRecoveryDiagnostics(
+  diagnostics: Array<{ code: string; details?: Record<string, unknown> }>,
+): ProofCacheBenchmarkReport["scenarios"]["topologyShapeInvalidation"]["afterChangeRegenerationRecovery"] {
+  const regeneration = diagnostics.find((diagnostic) => diagnostic.code === "cache_topology_regeneration_rebuild_hit");
+  if (!regeneration?.details) {
+    return undefined;
+  }
+  return {
+    reusableParentSummaryCount: Number(regeneration.details.reusableParentSummaryCount ?? 0),
+    reusedParentSummaryCount: Number(regeneration.details.reusedParentSummaryCount ?? 0),
+    reusedParentSummaryByGroundingCount: Number(regeneration.details.reusedParentSummaryByGroundingCount ?? 0),
+    reusedParentSummaryByStatementSignatureCount: Number(
+      regeneration.details.reusedParentSummaryByStatementSignatureCount ?? 0,
+    ),
+    generatedParentSummaryCount: Number(regeneration.details.generatedParentSummaryCount ?? 0),
+    skippedAmbiguousStatementSignatureReuseCount: Number(
+      regeneration.details.skippedAmbiguousStatementSignatureReuseCount ?? 0,
+    ),
+    skippedUnrebasableStatementSignatureReuseCount: Number(
+      regeneration.details.skippedUnrebasableStatementSignatureReuseCount ?? 0,
+    ),
+    regenerationHash: String(regeneration.details.regenerationHash ?? ""),
   };
 }
 

@@ -18,6 +18,15 @@ By default this writes:
   - expected status flow is `beforeChangeStatus=hit`, `afterChangeStatus=hit`, `recoveryStatus=hit`.
 - Topology-shape invalidation path (`topologyShapeInvalidation`): appends a declaration in `Verity/Core.lean` to force declaration-set shape change.
   - expected diagnostics include `cache_topology_regeneration_rebuild_hit`, and `afterChangeTopologyPlan.topologyShapeChanged=true`.
+  - `afterChangeRegenerationRecovery` records deterministic recovery telemetry:
+    - `reusableParentSummaryCount`
+    - `reusedParentSummaryCount`
+    - `reusedParentSummaryByGroundingCount`
+    - `reusedParentSummaryByStatementSignatureCount`
+    - `generatedParentSummaryCount`
+    - `skippedAmbiguousStatementSignatureReuseCount`
+    - `skippedUnrebasableStatementSignatureReuseCount`
+    - `regenerationHash`
   - expected status flow is `beforeChangeStatus=hit`, `afterChangeStatus=hit`, `recoveryStatus=hit`.
 
 ## Determinism and Auditability
@@ -25,7 +34,7 @@ By default this writes:
   - `requestHash`: canonical hash of benchmark inputs (`proofId`, `configHash`, iteration counts).
   - `outcomeHash`: canonical hash of machine-checkable outcomes:
     - cold/warm hit-miss status vectors
-    - invalidation + topology-shape invalidation status transitions, diagnostic codes, and topology-plan summaries
+    - invalidation + topology-shape invalidation status transitions, diagnostic codes, topology-plan summaries, and topology-regeneration recovery telemetry
 - Timing fields are informative but not included in `outcomeHash`, so run-to-run performance jitter does not break reproducibility checks.
 
 ## Environment

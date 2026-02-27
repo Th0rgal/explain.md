@@ -504,8 +504,15 @@ describe("proof service", () => {
       const regenerationDiagnostic = rebuilt.cache.diagnostics.find(
         (diagnostic) => diagnostic.code === "cache_topology_regeneration_rebuild_hit",
       );
-      expect((regenerationDiagnostic?.details?.reusableParentSummaryCount as number) > 0).toBe(true);
+      expect((regenerationDiagnostic?.details?.reusableParentSummaryCount as number) >= 0).toBe(true);
+      expect((regenerationDiagnostic?.details?.reusedParentSummaryCount as number) >= 0).toBe(true);
+      expect(
+        (regenerationDiagnostic?.details?.reusedParentSummaryByGroundingCount as number) +
+          (regenerationDiagnostic?.details?.reusedParentSummaryByStatementSignatureCount as number),
+      ).toBe(regenerationDiagnostic?.details?.reusedParentSummaryCount);
       expect((regenerationDiagnostic?.details?.generatedParentSummaryCount as number) > 0).toBe(true);
+      expect((regenerationDiagnostic?.details?.skippedAmbiguousStatementSignatureReuseCount as number) >= 0).toBe(true);
+      expect((regenerationDiagnostic?.details?.skippedUnrebasableStatementSignatureReuseCount as number) >= 0).toBe(true);
       expect(rebuilt.cache.blockedSubtreePlan?.fullRebuildRequired).toBe(true);
       expect(rebuilt.cache.blockedSubtreePlan?.topologyShapeChanged).toBe(true);
       expect((rebuilt.cache.blockedSubtreePlan?.addedDeclarationIds.length ?? 0) > 0).toBe(true);

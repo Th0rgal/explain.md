@@ -1079,7 +1079,14 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
           planHash: blockedSubtreePlan.planHash,
           reusableParentSummaryCount: topologyRegenerationRecovery.reusableParentSummaryCount,
           reusedParentSummaryCount: topologyRegenerationRecovery.reusedParentSummaryCount,
+          reusedParentSummaryByGroundingCount: topologyRegenerationRecovery.reusedParentSummaryByGroundingCount,
+          reusedParentSummaryByStatementSignatureCount:
+            topologyRegenerationRecovery.reusedParentSummaryByStatementSignatureCount,
           generatedParentSummaryCount: topologyRegenerationRecovery.generatedParentSummaryCount,
+          skippedAmbiguousStatementSignatureReuseCount:
+            topologyRegenerationRecovery.skippedAmbiguousStatementSignatureReuseCount,
+          skippedUnrebasableStatementSignatureReuseCount:
+            topologyRegenerationRecovery.skippedUnrebasableStatementSignatureReuseCount,
           regenerationHash: topologyRegenerationRecovery.regenerationHash,
         },
       });
@@ -1458,7 +1465,11 @@ interface TopologyRegenerationRecoveryResult {
   cacheEntry: ProofDatasetCacheEntry;
   reusableParentSummaryCount: number;
   reusedParentSummaryCount: number;
+  reusedParentSummaryByGroundingCount: number;
+  reusedParentSummaryByStatementSignatureCount: number;
   generatedParentSummaryCount: number;
+  skippedAmbiguousStatementSignatureReuseCount: number;
+  skippedUnrebasableStatementSignatureReuseCount: number;
   regenerationHash: string;
 }
 
@@ -1475,6 +1486,7 @@ interface TopologyRegenerationRecoveryRequest {
 
 interface ReusableParentSummary {
   parentId: string;
+  children: Array<{ id: string; statement: string }>;
   summary: {
     parent_statement: string;
     why_true_from_children: string;
@@ -1738,30 +1750,67 @@ async function attemptBlockedSubtreeRecovery(
 async function attemptTopologyRegenerationRecovery(
   request: TopologyRegenerationRecoveryRequest,
 ): Promise<TopologyRegenerationRecoveryResult | undefined> {
-  const reusableSummaryByKey = buildReusableParentSummaryByKey(request.cachedTree);
-  if (reusableSummaryByKey.size === 0) {
+  const reusableSummaryByGroundingKey = buildReusableParentSummaryByGroundingKey(request.cachedTree);
+  const reusableSummaryByStatementSignatureKey = buildReusableParentSummaryByStatementSignatureKey(request.cachedTree);
+  if (reusableSummaryByGroundingKey.size === 0 && reusableSummaryByStatementSignatureKey.size === 0) {
     return undefined;
   }
 
   const baseProvider = createDeterministicSummaryProvider();
   let generatedParentSummaryCount = 0;
-  const reusedParentIds: string[] = [];
+  let skippedAmbiguousStatementSignatureReuseCount = 0;
+  let skippedUnrebasableStatementSignatureReuseCount = 0;
+  const reusedParentIdsByGrounding = new Set<string>();
+  const reusedParentIdsByStatementSignature = new Set<string>();
   const provider: ProviderClient = {
     generate: async (generateRequest) => {
-      const key = buildParentReuseKeyFromGenerateRequest(generateRequest);
-      if (key) {
-        const reusable = reusableSummaryByKey.get(key);
-        if (reusable) {
-          reusedParentIds.push(reusable.parentId);
+      const prompt = generateRequest.messages[1]?.content;
+      const parsedChildren = prompt ? parseChildrenFromPrompt(prompt) : [];
+      if (parsedChildren.length > 0) {
+        const groundingKey = buildParentReuseKey(parsedChildren);
+        const reusableByGrounding = reusableSummaryByGroundingKey.get(groundingKey);
+        if (reusableByGrounding) {
+          reusedParentIdsByGrounding.add(reusableByGrounding.parentId);
           return {
-            text: JSON.stringify(reusable.summary),
+            text: JSON.stringify(reusableByGrounding.summary),
             model: "mock-deterministic-reuse",
             finishReason: "stop",
             raw: {
               source: "cache_parent_summary_reuse",
-              parentId: reusable.parentId,
+              reuseMode: "grounding",
+              parentId: reusableByGrounding.parentId,
             },
           };
+        }
+
+        const statementSignatureKey = buildParentStatementSignatureKey(parsedChildren);
+        const statementCandidates = reusableSummaryByStatementSignatureKey.get(statementSignatureKey) ?? [];
+        if (statementCandidates.length === 1) {
+          const reusableByStatementSignature = statementCandidates[0];
+          const rebasedEvidenceRefs = rebaseEvidenceRefsToCurrentChildren(
+            reusableByStatementSignature.summary.evidence_refs,
+            reusableByStatementSignature.children,
+            parsedChildren,
+          );
+          if (rebasedEvidenceRefs) {
+            reusedParentIdsByStatementSignature.add(reusableByStatementSignature.parentId);
+            return {
+              text: JSON.stringify({
+                ...reusableByStatementSignature.summary,
+                evidence_refs: rebasedEvidenceRefs,
+              }),
+              model: "mock-deterministic-reuse",
+              finishReason: "stop",
+              raw: {
+                source: "cache_parent_summary_reuse",
+                reuseMode: "statement_signature",
+                parentId: reusableByStatementSignature.parentId,
+              },
+            };
+          }
+          skippedUnrebasableStatementSignatureReuseCount += 1;
+        } else if (statementCandidates.length > 1) {
+          skippedAmbiguousStatementSignatureReuseCount += 1;
         }
       }
       generatedParentSummaryCount += 1;
@@ -1802,25 +1851,36 @@ async function attemptTopologyRegenerationRecovery(
     snapshot,
   };
 
-  const reusedParentSummaryCount = new Set(reusedParentIds).size;
+  const reusedParentSummaryByGroundingCount = reusedParentIdsByGrounding.size;
+  const reusedParentSummaryByStatementSignatureCount = reusedParentIdsByStatementSignature.size;
+  const reusedParentSummaryCount = reusedParentSummaryByGroundingCount + reusedParentSummaryByStatementSignatureCount;
 
   return {
     tree,
     cacheEntry,
-    reusableParentSummaryCount: reusableSummaryByKey.size,
+    reusableParentSummaryCount: reusableSummaryByGroundingKey.size,
     reusedParentSummaryCount,
+    reusedParentSummaryByGroundingCount,
+    reusedParentSummaryByStatementSignatureCount,
     generatedParentSummaryCount,
+    skippedAmbiguousStatementSignatureReuseCount,
+    skippedUnrebasableStatementSignatureReuseCount,
     regenerationHash: computeCanonicalRequestHash({
-      reusableParentSummaryCount: reusableSummaryByKey.size,
-      reusedParentIds: [...new Set(reusedParentIds)].sort((left, right) => left.localeCompare(right)),
+      reusableParentSummaryCount: reusableSummaryByGroundingKey.size,
+      reusedParentIdsByGrounding: [...reusedParentIdsByGrounding].sort((left, right) => left.localeCompare(right)),
+      reusedParentIdsByStatementSignature: [...reusedParentIdsByStatementSignature].sort((left, right) =>
+        left.localeCompare(right),
+      ),
       generatedParentSummaryCount,
+      skippedAmbiguousStatementSignatureReuseCount,
+      skippedUnrebasableStatementSignatureReuseCount,
       dependencyGraphHash: request.dependencyGraphHash,
       configHash: request.configHash,
     }),
   };
 }
 
-function buildReusableParentSummaryByKey(tree: ExplanationTree): Map<string, ReusableParentSummary> {
+function buildReusableParentSummaryByGroundingKey(tree: ExplanationTree): Map<string, ReusableParentSummary> {
   const reusable = new Map<string, ReusableParentSummary>();
   const parentNodes = Object.values(tree.nodes)
     .filter((node) => node.kind === "parent")
@@ -1849,6 +1909,7 @@ function buildReusableParentSummaryByKey(tree: ExplanationTree): Map<string, Reu
     const key = buildParentReuseKey(children);
     const nextValue: ReusableParentSummary = {
       parentId: parentNode.id,
+      children,
       summary: {
         parent_statement: parentNode.statement,
         why_true_from_children: parentNode.whyTrueFromChildren,
@@ -1868,16 +1929,17 @@ function buildReusableParentSummaryByKey(tree: ExplanationTree): Map<string, Reu
   return reusable;
 }
 
-function buildParentReuseKeyFromGenerateRequest(request: { messages: Array<{ content: string }> }): string | undefined {
-  const prompt = request.messages[1]?.content;
-  if (!prompt) {
-    return undefined;
+function buildReusableParentSummaryByStatementSignatureKey(tree: ExplanationTree): Map<string, ReusableParentSummary[]> {
+  const bySignature = new Map<string, ReusableParentSummary[]>();
+  const reusableByGrounding = buildReusableParentSummaryByGroundingKey(tree);
+  const values = [...reusableByGrounding.values()].sort((left, right) => left.parentId.localeCompare(right.parentId));
+  for (const reusable of values) {
+    const key = buildParentStatementSignatureKey(reusable.children);
+    const existing = bySignature.get(key) ?? [];
+    existing.push(reusable);
+    bySignature.set(key, existing);
   }
-  const children = parseChildrenFromPrompt(prompt);
-  if (children.length === 0) {
-    return undefined;
-  }
-  return buildParentReuseKey(children);
+  return bySignature;
 }
 
 function buildParentReuseKey(children: Array<{ id: string; statement: string }>): string {
@@ -1886,6 +1948,48 @@ function buildParentReuseKey(children: Array<{ id: string; statement: string }>)
       .map((child) => ({ id: child.id, statement: child.statement }))
       .sort((left, right) => left.id.localeCompare(right.id)),
   });
+}
+
+function buildParentStatementSignatureKey(children: Array<{ statement: string }>): string {
+  return computeCanonicalRequestHash({
+    statements: children.map((child) => child.statement).sort((left, right) => left.localeCompare(right)),
+  });
+}
+
+function rebaseEvidenceRefsToCurrentChildren(
+  priorEvidenceRefs: string[],
+  priorChildren: Array<{ id: string; statement: string }>,
+  currentChildren: Array<{ id: string; statement: string }>,
+): string[] | undefined {
+  const priorStatementById = new Map(priorChildren.map((child) => [child.id, child.statement]));
+  const availableCurrentIdsByStatement = new Map<string, string[]>();
+  for (const child of currentChildren) {
+    const existing = availableCurrentIdsByStatement.get(child.statement) ?? [];
+    existing.push(child.id);
+    availableCurrentIdsByStatement.set(child.statement, existing);
+  }
+  for (const [statement, childIds] of availableCurrentIdsByStatement.entries()) {
+    childIds.sort((left, right) => left.localeCompare(right));
+    availableCurrentIdsByStatement.set(statement, childIds);
+  }
+
+  const rebased: string[] = [];
+  const consumedIds = new Set<string>();
+  for (const evidenceRef of priorEvidenceRefs) {
+    const statement = priorStatementById.get(evidenceRef);
+    if (!statement) {
+      return undefined;
+    }
+    const candidates = availableCurrentIdsByStatement.get(statement) ?? [];
+    const next = candidates.find((candidate) => !consumedIds.has(candidate));
+    if (!next) {
+      return undefined;
+    }
+    consumedIds.add(next);
+    rebased.push(next);
+  }
+
+  return rebased;
 }
 
 function buildParentsByChildId(nodes: Record<string, ExplanationTreeNode>): Map<string, string[]> {

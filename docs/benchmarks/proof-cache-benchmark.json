@@ -1,18 +1,18 @@
 {
   "schemaVersion": "1.0.0",
-  "generatedAt": "2026-02-27T15:02:40.487Z",
+  "generatedAt": "2026-02-27T15:11:14.847Z",
   "proofId": "lean-verity-fixture",
   "configHash": "a75632c3c71bea58a13445a49951b87763ebd9e868fb4f51ac128e6c783e8af7",
   "requestHash": "3f46810b2ac7310b0662c6e01ba36ed7e2f53d0d01cd2f7653b72ffecf20dc0e",
-  "outcomeHash": "40881ee35aba078a459393f55f59862610de31bf3f8794e82cf2f00063126ccd",
+  "outcomeHash": "eedb44db55985743ff6bc3b5b3f31cc8e26a0c070c288087b2059d7d866c94de",
   "parameters": {
     "coldIterations": 3,
     "warmIterations": 3,
     "mutationTargetPath": "Verity/Core.lean"
   },
   "paths": {
-    "fixtureProjectRootHash": "39898decc00a7fb3f48f1062cfbaa8121b7bb9a1d83c468c35dcb14e216c093a",
-    "cacheDirHash": "76bf0c9efc49ddf82c365d3aafda428dad576864f0c3146eb40ba7496b7a61d8"
+    "fixtureProjectRootHash": "2455fc0eabfeda25fc4132000f6e5e9f93d5e183c2b55e2394a108b9c5f273b9",
+    "cacheDirHash": "914676278e23237185135b49b9f3e1798fb9a2b7b28e36104f1db4437fbc7347"
   },
   "scenarios": {
     "coldNoPersistentCache": {
@@ -22,10 +22,10 @@
         "miss",
         "miss"
       ],
-      "meanMs": 11.415,
-      "medianMs": 5.353,
-      "minMs": 5.292,
-      "maxMs": 23.601
+      "meanMs": 10.672,
+      "medianMs": 4.7,
+      "minMs": 4.435,
+      "maxMs": 22.881
     },
     "warmPersistentCache": {
       "iterations": 3,
@@ -34,10 +34,10 @@
         "hit",
         "hit"
       ],
-      "meanMs": 1.307,
-      "medianMs": 1.178,
-      "minMs": 1.023,
-      "maxMs": 1.721
+      "meanMs": 1.61,
+      "medianMs": 1.59,
+      "minMs": 1.53,
+      "maxMs": 1.71
     },
     "invalidation": {
       "beforeChangeStatus": "hit",
@@ -62,6 +62,16 @@
         "cache_miss",
         "cache_topology_regeneration_rebuild_hit"
       ],
+      "afterChangeRegenerationRecovery": {
+        "reusableParentSummaryCount": 1,
+        "reusedParentSummaryCount": 0,
+        "reusedParentSummaryByGroundingCount": 0,
+        "reusedParentSummaryByStatementSignatureCount": 0,
+        "generatedParentSummaryCount": 2,
+        "skippedAmbiguousStatementSignatureReuseCount": 0,
+        "skippedUnrebasableStatementSignatureReuseCount": 0,
+        "regenerationHash": "f168506143513650c9a59ce7455e44322439b33f2d001c45ff8dc37ab43cae8e"
+      },
       "afterChangeTopologyPlan": {
         "fullRebuildRequired": true,
         "topologyShapeChanged": true,
