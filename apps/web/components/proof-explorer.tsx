@@ -27,7 +27,11 @@ import {
   type VerificationJobsResponse,
 } from "../lib/api-client";
 import { formatPolicyThresholdFailure } from "../lib/policy-thresholds";
-import { resolveTreeKeyboardIndex } from "../lib/tree-keyboard-navigation";
+import {
+  formatTreeKeyboardAnnouncement,
+  resolveTreeKeyboardIntent,
+  type TreeKeyboardRow,
+} from "../lib/tree-keyboard-navigation";
 import { planTreeRenderWindow, resolveTreeRenderSettings } from "../lib/tree-render-window";
 
 export const DEFAULT_CONFIG: ProofConfigInput = {
@@ -68,6 +72,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
   const [nodesById, setNodesById] = useState<Record<string, TreeNodeRecord>>({});
   const [childrenByParentId, setChildrenByParentId] = useState<Record<string, NodeChildrenState>>({});
   const [activeTreeNodeId, setActiveTreeNodeId] = useState<string | null>(null);
+  const [treeA11yAnnouncement, setTreeA11yAnnouncement] = useState<string>("");
   const [renderAnchorRowIndex, setRenderAnchorRowIndex] = useState<number>(0);
   const [diff, setDiff] = useState<DiffResponse | null>(null);
   const [policyReport, setPolicyReport] = useState<PolicyReportResponse | null>(null);
@@ -328,6 +333,17 @@ export function ProofExplorer(props: ProofExplorerProps) {
     [renderAnchorRowIndex, visibleRows.length],
   );
 
+  const keyboardRows = useMemo<TreeKeyboardRow[]>(
+    () =>
+      visibleRows.map((row) => ({
+        nodeId: row.node.id,
+        parentId: row.parentId,
+        kind: row.node.kind,
+        isExpanded: row.node.kind === "parent" && expandedNodeIds.includes(row.node.id),
+      })),
+    [expandedNodeIds, visibleRows],
+  );
+
   const renderedRows = useMemo(
     () =>
       renderWindow.endIndex >= renderWindow.startIndex
@@ -505,19 +521,60 @@ export function ProofExplorer(props: ProofExplorerProps) {
       0,
       visibleRows.findIndex((row) => row.node.id === activeTreeNodeId),
     );
-    const nextIndex = resolveTreeKeyboardIndex({
+    const intent = resolveTreeKeyboardIntent({
       currentIndex,
       totalRows: visibleRows.length,
       key: event.key,
       pageSize: TREE_RENDER_SETTINGS.maxVisibleRows,
+      rows: keyboardRows,
     });
 
-    if (nextIndex !== null) {
+    if (intent !== null) {
       event.preventDefault();
-      const nextNodeId = visibleRows[nextIndex]?.node.id ?? null;
-      if (nextNodeId) {
-        setActiveTreeNodeId(nextNodeId);
-        setRenderAnchorRowIndex(nextIndex);
+      const activeRow = visibleRows[intent.index];
+      if (!activeRow) {
+        return;
+      }
+
+      if (intent.kind === "set-active-index") {
+        setActiveTreeNodeId(activeRow.node.id);
+        setRenderAnchorRowIndex(intent.index);
+        setTreeA11yAnnouncement(
+          formatTreeKeyboardAnnouncement({
+            action: "active",
+            statement: activeRow.node.statement,
+            depthFromRoot: activeRow.depthFromRoot,
+          }),
+        );
+        return;
+      }
+
+      if (intent.kind === "expand" && activeRow.node.kind === "parent") {
+        toggleExpansion(activeRow.node.id);
+        setActiveTreeNodeId(activeRow.node.id);
+        setRenderAnchorRowIndex(intent.index);
+        setTreeA11yAnnouncement(
+          formatTreeKeyboardAnnouncement({
+            action: "expand",
+            statement: activeRow.node.statement,
+            depthFromRoot: activeRow.depthFromRoot,
+            childCount: childrenByParentId[activeRow.node.id]?.childIds.length ?? 0,
+          }),
+        );
+        return;
+      }
+
+      if (intent.kind === "collapse" && activeRow.node.kind === "parent") {
+        toggleExpansion(activeRow.node.id);
+        setActiveTreeNodeId(activeRow.node.id);
+        setRenderAnchorRowIndex(intent.index);
+        setTreeA11yAnnouncement(
+          formatTreeKeyboardAnnouncement({
+            action: "collapse",
+            statement: activeRow.node.statement,
+            depthFromRoot: activeRow.depthFromRoot,
+          }),
+        );
       }
       return;
     }
@@ -534,9 +591,24 @@ export function ProofExplorer(props: ProofExplorerProps) {
 
     setActiveTreeNodeId(activeRow.node.id);
     if (activeRow.node.kind === "parent") {
+      setTreeA11yAnnouncement(
+        formatTreeKeyboardAnnouncement({
+          action: expandedNodeIds.includes(activeRow.node.id) ? "collapse" : "expand",
+          statement: activeRow.node.statement,
+          depthFromRoot: activeRow.depthFromRoot,
+          childCount: childrenByParentId[activeRow.node.id]?.childIds.length ?? 0,
+        }),
+      );
       toggleExpansion(activeRow.node.id);
       return;
     }
+    setTreeA11yAnnouncement(
+      formatTreeKeyboardAnnouncement({
+        action: "active",
+        statement: activeRow.node.statement,
+        depthFromRoot: activeRow.depthFromRoot,
+      }),
+    );
     await selectLeaf(activeRow.node.id);
   }
 
@@ -753,6 +825,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
         data-tree-hidden-below={renderWindow.hiddenBelowCount}
         data-tree-active-node-id={activeTreeNodeId ?? "none"}
         data-tree-active-row-index={visibleRows.findIndex((row) => row.node.id === activeTreeNodeId)}
+        data-tree-live-message={treeA11yAnnouncement || "none"}
       >
         <h2>Tree</h2>
         <p className="meta">Config hash: {treeConfigHash || root?.configHash || "unavailable"}</p>
@@ -888,6 +961,20 @@ export function ProofExplorer(props: ProofExplorerProps) {
             );
           })}
         </ul>
+        <p
+          aria-live="polite"
+          aria-atomic="true"
+          style={{
+            position: "absolute",
+            width: "1px",
+            height: "1px",
+            overflow: "hidden",
+            clip: "rect(0 0 0 0)",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {treeA11yAnnouncement}
+        </p>
       </section>
 
       <section className="panel diff" aria-label="Explanation diff">

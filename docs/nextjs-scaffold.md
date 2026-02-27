@@ -74,7 +74,12 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - planner inputs: `totalRowCount`, `anchorRowIndex`, `maxVisibleRows`, `overscanRows`
   - planner outputs: `mode`, `startIndex/endIndex`, `renderedRowCount`, `hiddenAboveCount`, `hiddenBelowCount`
   - tree panel exposes machine-checkable diagnostics via `data-tree-*` attributes
-  - keyboard navigation (`ArrowUp/ArrowDown`, `Home/End`, `PageUp/PageDown`) updates deterministic active-row diagnostics (`data-tree-active-node-id`, `data-tree-active-row-index`) and keeps window anchor/focus aligned for large trees
+  - keyboard navigation keeps deterministic tree semantics:
+    - `ArrowUp/ArrowDown`, `Home/End`, `PageUp/PageDown` move active row
+    - `ArrowRight` expands collapsed parents or enters first visible child
+    - `ArrowLeft` collapses expanded parents or moves to ancestor row
+  - active-row diagnostics remain machine-checkable (`data-tree-active-node-id`, `data-tree-active-row-index`)
+  - assistive-tech announcements are deterministic and surfaced on the tree panel as `data-tree-live-message`
   - `Enter` / `Space` applies the active row action (parent expand/collapse, leaf selection)
 - Sibling complexity remains bounded by `maxChildrenPerParent` during child-page fetches.
 - This keeps behavior auditable while issue #15 iterates on richer interaction patterns.

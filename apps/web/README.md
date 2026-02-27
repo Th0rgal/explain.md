@@ -51,7 +51,13 @@ The tree panel uses incremental root/children/path queries:
 - Large trees use deterministic render-window planning to bound DOM row count while preserving root-first ordering.
   - Window diagnostics are surfaced as `data-tree-*` attributes on the tree panel (`mode`, `total`, `rendered`, `hiddenAbove`, `hiddenBelow`).
   - Paging controls (`Show previous rows` / `Show next rows`) shift the window deterministically without mutating proof data.
-  - Keyboard navigation is deterministic and window-aware: `ArrowUp/ArrowDown`, `Home/End`, and `PageUp/PageDown` move an active tree row (`data-tree-active-node-id`, `data-tree-active-row-index`), and `Enter` / `Space` activate the row action (expand/collapse parent or select leaf).
+  - Keyboard navigation is deterministic and window-aware:
+    - `ArrowUp/ArrowDown`, `Home/End`, and `PageUp/PageDown` move the active tree row.
+    - `ArrowRight` expands a collapsed parent, or moves to its first visible child when already expanded.
+    - `ArrowLeft` collapses an expanded parent, or moves focus to its parent row.
+    - `Enter` / `Space` activate the row action (expand/collapse parent or select leaf).
+  - Active-row diagnostics remain machine-checkable via `data-tree-active-node-id` and `data-tree-active-row-index`.
+  - Screen-reader activity announcements are deterministic and queryable via `data-tree-live-message`.
 - Config profile persistence/query is deterministic and file-backed:
   - per-project/user profile scope
   - canonical storage keys via `buildProfileStorageKey(...)`
