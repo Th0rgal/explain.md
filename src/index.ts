@@ -13,3 +13,4 @@ export * from "./verification-flow.js";
 export * from "./verification-api.js";
 export * from "./pedagogical-policy.js";
 export * from "./progressive-disclosure.js";
+export * from "./tree-storage.js";

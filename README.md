@@ -15,12 +15,20 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #25: pedagogical policy engine with deterministic pre/post summary checks, node-level diagnostics, and bounded rewrite retry.
 - Issue #25 follow-up: prerequisite-order policy now evaluates deterministic grouping order (not lexical IDs) and waives cyclic in-group edges, fixing real Verity SCC compatibility.
 - Issue #25 follow-up: tree builder now reorders each group by local prerequisites and uses a safe depth guard with explicit no-progress failure diagnostics for large Lean corpora.
+- Issue #25 follow-up: web proof service now exposes deterministic pedagogy policy reports (threshold-calibrated quality metrics + canonical report hashing) via `GET /api/proofs/policy-report`.
+- Issue #23 follow-up: web config/query contracts now expose advanced pedagogy knobs (`readingLevelTarget`, `complexityBandWidth`, `proofDetailMode`) with strict deterministic parsing across routes and explorer controls.
+- Issue #23 follow-up: `/api/proofs/view` and `/api/proofs/diff` now share the same full-knob parser as query routes, so regeneration planning cannot drift from configured pedagogy controls.
+- Issue #23 follow-up: web config profile APIs now persist/query deterministic per-project/user profile records with canonical storage keys, `configHash`, and response-level `requestHash`/`ledgerHash`.
 - Issue #17: browser-triggered verification workflow core with deterministic queue/status lifecycle, reproducibility contracts, and canonical ledger persistence.
 - Issue #17 follow-up: browser-callable verification HTTP API with deterministic route payloads, persisted ledger-backed job querying, and command-runner integration.
 - Issue #16: deterministic leaf-detail/provenance contract for theorem inspection, source linking/share references, and verification-job binding for browser panels.
 - Issue #18: deterministic faithfulness/simplicity evaluation harness with per-parent/per-depth quality metrics, threshold gating, and canonical report hashing.
 - Issue #15 (backend contract): deterministic progressive-disclosure projection and config-aware explanation diff contract for root-first UI rendering.
 - Issue #14: Next.js App Router scaffold with deterministic seeded-proof API adapters, frontend client layer, and accessible loading/error shell.
+- Issue #3 follow-up: web proof service now exposes a deterministic Lean-ingested Verity fixture (`lean-verity-fixture`) through the same root/children/path/diff/leaf contracts as seed data.
+- Issue #4 follow-up: web proof service now exposes deterministic dependency graph query views (SCC/cycle totals + per-declaration support closure) via `GET /api/proofs/dependency-graph`.
+- Issue #12: Lean fixture web proof datasets now support deterministic persistent cache reuse/invalidation (source-fingerprint + config-hash keyed) with auditable cache telemetry via `GET /api/proofs/cache-report`.
+- Issue #13: deterministic tree storage/query contract with versioned snapshot schema, root/children/ancestry/leaf-provenance reads, and canonical import/export hashing.
 
 ## Local checks
 ```bash
@@ -58,8 +66,12 @@ EXPLAIN_MD_LIVE_RPC_API_KEY=... npm run test:live:summary
 - [Recursive tree builder](docs/tree-builder.md)
 - [Evaluation harness](docs/evaluation-harness.md)
 - [Pedagogical policy engine](docs/pedagogical-policy.md)
+- [Policy report API](docs/policy-report-api.md)
+- [Proof cache report API](docs/proof-cache-api.md)
+- [Config profile API](docs/config-profile-api.md)
 - [Browser-triggered verification flow](docs/verification-flow.md)
 - [Verification HTTP API service](docs/verification-api.md)
 - [Leaf detail contract](docs/leaf-detail.md)
 - [Progressive disclosure + explanation diff](docs/progressive-disclosure.md)
+- [Tree storage + query APIs](docs/tree-storage.md)
 - [Next.js web scaffold](docs/nextjs-scaffold.md)

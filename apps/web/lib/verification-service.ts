@@ -13,7 +13,7 @@ import {
   type VerificationWorkflowOptions,
 } from "../../../dist/verification-flow";
 import { createChildProcessVerificationRunner } from "../../../dist/verification-api";
-import { findSeedLeaf, SEED_PROOF_ID } from "./proof-service";
+import { findProofLeaf, getSupportedProofIds } from "./proof-service";
 
 interface VerificationServiceContext {
   ledgerPath: string;
@@ -64,7 +64,7 @@ export async function verifyLeafProof(request: VerifyLeafRequest): Promise<Verif
   assertSupportedProof(proofId);
 
   const context = await getContext();
-  const queueEntry = buildQueueEntry(proofId, leafId);
+  const queueEntry = await buildQueueEntryAsync(proofId, leafId);
   const queuedJob = context.workflow.enqueue(queueEntry);
   await persist(context);
 
@@ -162,8 +162,8 @@ async function persist(context: VerificationServiceContext): Promise<void> {
   await writeVerificationLedger(context.ledgerPath, context.workflow.toLedger());
 }
 
-function buildQueueEntry(proofId: string, leafId: string) {
-  const leaf = findSeedLeaf(proofId, leafId);
+async function buildQueueEntryAsync(proofId: string, leafId: string) {
+  const leaf = await findProofLeaf(proofId, leafId);
   if (!leaf) {
     throw new Error(`Leaf '${leafId}' was not found for proof '${proofId}'.`);
   }
@@ -211,8 +211,9 @@ async function readLedgerIfExists(ledgerPath: string) {
 }
 
 function assertSupportedProof(proofId: string): void {
-  if (proofId !== SEED_PROOF_ID) {
-    throw new Error(`Unsupported proofId '${proofId}'. Supported proofs: ${SEED_PROOF_ID}.`);
+  const supported = getSupportedProofIds();
+  if (!supported.includes(proofId)) {
+    throw new Error(`Unsupported proofId '${proofId}'. Supported proofs: ${supported.join(", ")}.`);
   }
 }
 

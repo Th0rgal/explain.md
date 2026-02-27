@@ -19,6 +19,35 @@ interface SeedTreeNode {
   whyTrueFromChildren?: string;
   newTermsIntroduced?: string[];
   evidenceRefs: string[];
+  policyDiagnostics?: {
+    depth: number;
+    groupIndex: number;
+    retriesUsed: number;
+    preSummary: {
+      ok: boolean;
+      violations: Array<{ code: string; message: string; details?: Record<string, unknown> }>;
+      metrics: {
+        complexitySpread: number;
+        prerequisiteOrderViolations: number;
+        introducedTermCount: number;
+        evidenceCoverageRatio: number;
+        vocabularyContinuityRatio: number;
+        vocabularyContinuityFloor: number;
+      };
+    };
+    postSummary: {
+      ok: boolean;
+      violations: Array<{ code: string; message: string; details?: Record<string, unknown> }>;
+      metrics: {
+        complexitySpread: number;
+        prerequisiteOrderViolations: number;
+        introducedTermCount: number;
+        evidenceCoverageRatio: number;
+        vocabularyContinuityRatio: number;
+        vocabularyContinuityFloor: number;
+      };
+    };
+  };
 }
 
 interface SeedTree {
@@ -159,6 +188,35 @@ const BASE_NODES: SeedTree["nodes"] = {
     whyTrueFromChildren: "Child theorems establish base and step preservation.",
     newTermsIntroduced: ["invariant preservation"],
     evidenceRefs: ["Verity.ContractSpec.init_sound", "Verity.ContractSpec.loop_preserves"],
+    policyDiagnostics: {
+      depth: 1,
+      groupIndex: 0,
+      retriesUsed: 0,
+      preSummary: {
+        ok: true,
+        violations: [],
+        metrics: {
+          complexitySpread: 1,
+          prerequisiteOrderViolations: 0,
+          introducedTermCount: 0,
+          evidenceCoverageRatio: 1,
+          vocabularyContinuityRatio: 1,
+          vocabularyContinuityFloor: 0.6,
+        },
+      },
+      postSummary: {
+        ok: true,
+        violations: [],
+        metrics: {
+          complexitySpread: 1,
+          prerequisiteOrderViolations: 0,
+          introducedTermCount: 1,
+          evidenceCoverageRatio: 1,
+          vocabularyContinuityRatio: 0.72,
+          vocabularyContinuityFloor: 0.6,
+        },
+      },
+    },
   },
   "p1_safety": {
     id: "p1_safety",
@@ -172,6 +230,35 @@ const BASE_NODES: SeedTree["nodes"] = {
     whyTrueFromChildren: "Exit safety combines with composition to reach final safety.",
     newTermsIntroduced: ["end-to-end safety"],
     evidenceRefs: ["Verity.ContractSpec.exit_safe", "Verity.ContractSpec.composition_sound"],
+    policyDiagnostics: {
+      depth: 1,
+      groupIndex: 1,
+      retriesUsed: 0,
+      preSummary: {
+        ok: true,
+        violations: [],
+        metrics: {
+          complexitySpread: 1,
+          prerequisiteOrderViolations: 0,
+          introducedTermCount: 0,
+          evidenceCoverageRatio: 1,
+          vocabularyContinuityRatio: 1,
+          vocabularyContinuityFloor: 0.6,
+        },
+      },
+      postSummary: {
+        ok: true,
+        violations: [],
+        metrics: {
+          complexitySpread: 1,
+          prerequisiteOrderViolations: 0,
+          introducedTermCount: 1,
+          evidenceCoverageRatio: 1,
+          vocabularyContinuityRatio: 0.68,
+          vocabularyContinuityFloor: 0.6,
+        },
+      },
+    },
   },
   "p2_root": {
     id: "p2_root",
@@ -190,6 +277,35 @@ const BASE_NODES: SeedTree["nodes"] = {
       "Verity.ContractSpec.exit_safe",
       "Verity.ContractSpec.composition_sound"
     ],
+    policyDiagnostics: {
+      depth: 2,
+      groupIndex: 0,
+      retriesUsed: 0,
+      preSummary: {
+        ok: true,
+        violations: [],
+        metrics: {
+          complexitySpread: 1,
+          prerequisiteOrderViolations: 0,
+          introducedTermCount: 0,
+          evidenceCoverageRatio: 1,
+          vocabularyContinuityRatio: 1,
+          vocabularyContinuityFloor: 0.6,
+        },
+      },
+      postSummary: {
+        ok: true,
+        violations: [],
+        metrics: {
+          complexitySpread: 1,
+          prerequisiteOrderViolations: 0,
+          introducedTermCount: 1,
+          evidenceCoverageRatio: 1,
+          vocabularyContinuityRatio: 0.7,
+          vocabularyContinuityFloor: 0.6,
+        },
+      },
+    },
   }
 };
 

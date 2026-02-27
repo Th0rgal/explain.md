@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import type { ExplanationConfigInput } from "../../../../../../src/config-contract";
 import { jsonError, jsonSuccess, normalizeInteger, normalizeOptionalInteger, normalizeString } from "../../../../lib/http-contract";
-import { listSeedProofs } from "../../../../lib/proof-service";
+import { listProofs } from "../../../../lib/proof-service";
 
 function readConfigFromSearch(request: NextRequest): ExplanationConfigInput {
   const search = request.nextUrl.searchParams;
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
   try {
     const config = readConfigFromSearch(request);
     return jsonSuccess({
-      proofs: listSeedProofs(config),
+      proofs: await listProofs(config),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
