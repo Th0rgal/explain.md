@@ -60,4 +60,5 @@ Diff semantics:
 ## UI Hand-off
 - UI can request projection with current expansion state and child cap.
 - UI can hash projection (`computeProgressiveDisclosureHash`) for stable cache keys.
-- Diff panel can display `changes[]` and `summary` with config-aware `regenerationPlan`.
+- Diff panel can display grouped `changes[]` (`changed`/`added`/`removed`) and `summary` with config-aware `regenerationPlan`.
+- Statement-level changed highlights should be derived deterministically from longest common prefix/suffix split of baseline/candidate statements.

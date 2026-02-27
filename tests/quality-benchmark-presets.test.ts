@@ -86,14 +86,21 @@ describe("quality-benchmark-presets", () => {
   });
 
   it("computes stable hash independent of include path ordering", () => {
-    const preset = resolveQualityBenchmarkPreset("fixture-verity-loop");
-    expect(preset).toBeDefined();
+    const preset: QualityBenchmarkPreset = {
+      name: "test-multi-path",
+      description: "Synthetic preset with multiple include paths for ordering test",
+      projectRoot: "tests/fixtures/lean-project",
+      includePaths: ["Verity/Core.lean", "Verity/Loop.lean", "Verity/Base.lean"],
+      configOverrides: {},
+      thresholdOverrides: {},
+    };
 
-    const shuffled = cloneWithShuffledIncludes(preset as QualityBenchmarkPreset);
-    expect(renderQualityBenchmarkPresetCanonical(preset as QualityBenchmarkPreset)).toBe(
+    const shuffled = cloneWithShuffledIncludes(preset);
+    expect(shuffled.includePaths).not.toEqual(preset.includePaths);
+    expect(renderQualityBenchmarkPresetCanonical(preset)).toBe(
       renderQualityBenchmarkPresetCanonical(shuffled),
     );
-    expect(computeQualityBenchmarkPresetHash(preset as QualityBenchmarkPreset)).toBe(
+    expect(computeQualityBenchmarkPresetHash(preset)).toBe(
       computeQualityBenchmarkPresetHash(shuffled),
     );
   });
