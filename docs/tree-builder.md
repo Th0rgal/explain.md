@@ -15,8 +15,9 @@ Issue: #9
 - Each sibling group is re-ordered locally by in-group prerequisites before policy checks and parent synthesis.
 - If local cycles remain, order is completed with deterministic cycle-break picks (lexical) so downstream dependents still follow released prerequisites.
 - Parent IDs are deterministic hashes of `(depth, groupIndex, childIds)`.
-- Parent generation runs in deterministic request order.
+- Parent generation runs in deterministic batch order (`summaryBatchSize`, default `4`) while preserving stable `groupIndex` ordering.
 - Grouping diagnostics are preserved per depth for auditability.
+- Grouping diagnostics include `summaryBatches[]` with batch/group cardinalities for reproducible batching audits.
 - Policy diagnostics are attached per parent (`preSummary`, `postSummary`, `retriesUsed`).
 
 ## Tree validity checks
@@ -57,6 +58,7 @@ Request shape:
 - `leaves`: `[{ id, statement, complexity? }]`
 - `config`: normalized `ExplanationConfig`
 - `maxDepth?`: optional explicit depth guard
+- `summaryBatchSize?`: optional integer `1..32` controlling max concurrent parent summaries per depth
 
 Output includes:
 - `rootId`, `leafIds`, `nodes`, `configHash`, `groupPlan`, `groupingDiagnostics`, `maxDepth`

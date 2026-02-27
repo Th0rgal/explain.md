@@ -203,6 +203,54 @@ describe("tree builder", () => {
       }),
     ).rejects.toThrow("maxChildrenPerParent");
   });
+
+  test("runs parent summary generation in deterministic bounded batches", async () => {
+    const config = normalizeConfig({ maxChildrenPerParent: 2, complexityBandWidth: 2 });
+    const tracker = { inFlight: 0, maxInFlight: 0 };
+
+    const tree = await buildRecursiveExplanationTree(concurrencyTrackingProvider(tracker), {
+      config,
+      summaryBatchSize: 2,
+      leaves: [
+        { id: "l1", statement: "Leaf one." },
+        { id: "l2", statement: "Leaf two." },
+        { id: "l3", statement: "Leaf three." },
+        { id: "l4", statement: "Leaf four." },
+        { id: "l5", statement: "Leaf five." },
+        { id: "l6", statement: "Leaf six." },
+      ],
+    });
+
+    expect(tracker.maxInFlight).toBe(2);
+    expect(tree.groupingDiagnostics[0].summaryBatches).toEqual([
+      {
+        batchIndex: 0,
+        groupIndexes: [0, 1],
+        groupCount: 2,
+        inputNodeCount: 4,
+      },
+      {
+        batchIndex: 1,
+        groupIndexes: [2],
+        groupCount: 1,
+        inputNodeCount: 2,
+      },
+    ]);
+  });
+
+  test("rejects invalid summaryBatchSize", async () => {
+    const config = normalizeConfig({});
+    await expect(
+      buildRecursiveExplanationTree(deterministicSummaryProvider(), {
+        config,
+        summaryBatchSize: 0,
+        leaves: [
+          { id: "l1", statement: "A" },
+          { id: "l2", statement: "B" },
+        ],
+      }),
+    ).rejects.toThrow("summaryBatchSize");
+  });
 });
 
 function deterministicSummaryProvider(): ProviderClient {
@@ -254,6 +302,37 @@ function nonCompliantEvidenceProvider(): ProviderClient {
       finishReason: "stop",
       raw: {},
     }),
+    stream: async function* () {
+      return;
+    },
+  };
+}
+
+function concurrencyTrackingProvider(tracker: { inFlight: number; maxInFlight: number }): ProviderClient {
+  return {
+    generate: async (request: GenerateRequest): Promise<GenerateResult> => {
+      tracker.inFlight += 1;
+      tracker.maxInFlight = Math.max(tracker.maxInFlight, tracker.inFlight);
+
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      const childIds = extractChildIds(request);
+
+      tracker.inFlight -= 1;
+      return {
+        text: JSON.stringify({
+          parent_statement: `Parent(${childIds.join("+")})`,
+          why_true_from_children: `${childIds.join(", ")} jointly entail the parent claim.`,
+          new_terms_introduced: [],
+          complexity_score: 3,
+          abstraction_score: 3,
+          evidence_refs: childIds,
+          confidence: 0.9,
+        }),
+        model: "mock",
+        finishReason: "stop",
+        raw: {},
+      };
+    },
     stream: async function* () {
       return;
     },

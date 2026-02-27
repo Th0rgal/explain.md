@@ -46,6 +46,14 @@ export interface GroupingLayerDiagnostics {
   orderedNodeIds: string[];
   complexitySpreadByGroup: number[];
   warnings: GroupingWarning[];
+  summaryBatches?: SummaryBatchDiagnostics[];
+}
+
+export interface SummaryBatchDiagnostics {
+  batchIndex: number;
+  groupIndexes: number[];
+  groupCount: number;
+  inputNodeCount: number;
 }
 
 export interface ExplanationTree {
@@ -63,6 +71,7 @@ export interface TreeBuildRequest {
   leaves: LeafNodeInput[];
   config: ExplanationConfig;
   maxDepth?: number;
+  summaryBatchSize?: number;
 }
 
 export interface TreeValidationIssue {
@@ -91,6 +100,14 @@ export class TreePolicyError extends Error {
     this.name = "TreePolicyError";
     this.diagnostics = diagnostics;
   }
+}
+
+interface PendingSummaryTask {
+  groupIndex: number;
+  orderedGroupNodeIds: string[];
+  children: Array<{ id: string; statement: string; complexity?: number; prerequisiteIds?: string[] }>;
+  preSummaryDecision: ParentPolicyDiagnostics["preSummary"];
+  complexitySpread: number;
 }
 
 export async function buildRecursiveExplanationTree(
@@ -142,6 +159,7 @@ export async function buildRecursiveExplanationTree(
   }
 
   const hardDepthLimit = request.maxDepth ?? computeDepthLimit(leaves.length, request.config.maxChildrenPerParent);
+  const summaryBatchSize = normalizeSummaryBatchSize(request.summaryBatchSize);
 
   let depth = 0;
   let activeNodeIds = leafIds.slice();
@@ -167,18 +185,13 @@ export async function buildRecursiveExplanationTree(
       complexityBandWidth: request.config.complexityBandWidth,
     });
     const groups = groupingResult.groups;
-    groupingDiagnostics.push({
-      depth,
-      orderedNodeIds: groupingResult.diagnostics.orderedNodeIds,
-      complexitySpreadByGroup: groupingResult.diagnostics.complexitySpreadByGroup,
-      warnings: groupingResult.diagnostics.warnings,
-    });
-    const nextLayerIds: string[] = [];
+    const summaryTasks: PendingSummaryTask[] = [];
+    const nextLayerByGroupIndex: Array<string | undefined> = new Array(groups.length);
 
     for (let index = 0; index < groups.length; index += 1) {
       const groupNodeIds = groups[index];
       if (groupNodeIds.length === 1) {
-        nextLayerIds.push(groupNodeIds[0]);
+        nextLayerByGroupIndex[index] = groupNodeIds[0];
         continue;
       }
 
@@ -217,42 +230,78 @@ export async function buildRecursiveExplanationTree(
         });
       }
 
-      const parentSummary = await generatePolicyCompliantParentSummary(
-        provider,
+      summaryTasks.push({
+        groupIndex: index,
+        orderedGroupNodeIds,
         children,
-        request.config,
-        depth,
-        index,
         preSummaryDecision,
-      );
-
-      const parentId = buildParentNodeId(depth, index, orderedGroupNodeIds);
-      const parentNode: ExplanationTreeNode = {
-        id: parentId,
-        kind: "parent",
-        statement: parentSummary.summary.parent_statement,
-        childIds: orderedGroupNodeIds.slice(),
-        depth,
-        complexityScore: parentSummary.summary.complexity_score,
-        abstractionScore: parentSummary.summary.abstraction_score,
-        confidence: parentSummary.summary.confidence,
-        whyTrueFromChildren: parentSummary.summary.why_true_from_children,
-        newTermsIntroduced: parentSummary.summary.new_terms_introduced,
-        evidenceRefs: parentSummary.summary.evidence_refs,
-        policyDiagnostics: parentSummary.policyDiagnostics,
-      };
-
-      nodes[parentId] = parentNode;
-      policyDiagnosticsByParent[parentId] = parentSummary.policyDiagnostics;
-      nextLayerIds.push(parentId);
-      groupPlan.push({
-        depth,
-        index,
-        inputNodeIds: orderedGroupNodeIds.slice(),
-        outputNodeId: parentId,
         complexitySpread: groupingResult.diagnostics.complexitySpreadByGroup[index] ?? 0,
       });
     }
+
+    const summaryBatches: SummaryBatchDiagnostics[] = [];
+    for (let start = 0, batchIndex = 0; start < summaryTasks.length; start += summaryBatchSize, batchIndex += 1) {
+      const batchTasks = summaryTasks.slice(start, start + summaryBatchSize);
+      const parentSummaries = await Promise.all(
+        batchTasks.map((task) =>
+          generatePolicyCompliantParentSummary(
+            provider,
+            task.children,
+            request.config,
+            depth,
+            task.groupIndex,
+            task.preSummaryDecision,
+          ),
+        ),
+      );
+
+      summaryBatches.push({
+        batchIndex,
+        groupIndexes: batchTasks.map((task) => task.groupIndex),
+        groupCount: batchTasks.length,
+        inputNodeCount: batchTasks.reduce((sum, task) => sum + task.orderedGroupNodeIds.length, 0),
+      });
+
+      for (let taskIndex = 0; taskIndex < batchTasks.length; taskIndex += 1) {
+        const task = batchTasks[taskIndex];
+        const parentSummary = parentSummaries[taskIndex];
+        const parentId = buildParentNodeId(depth, task.groupIndex, task.orderedGroupNodeIds);
+        const parentNode: ExplanationTreeNode = {
+          id: parentId,
+          kind: "parent",
+          statement: parentSummary.summary.parent_statement,
+          childIds: task.orderedGroupNodeIds.slice(),
+          depth,
+          complexityScore: parentSummary.summary.complexity_score,
+          abstractionScore: parentSummary.summary.abstraction_score,
+          confidence: parentSummary.summary.confidence,
+          whyTrueFromChildren: parentSummary.summary.why_true_from_children,
+          newTermsIntroduced: parentSummary.summary.new_terms_introduced,
+          evidenceRefs: parentSummary.summary.evidence_refs,
+          policyDiagnostics: parentSummary.policyDiagnostics,
+        };
+
+        nodes[parentId] = parentNode;
+        policyDiagnosticsByParent[parentId] = parentSummary.policyDiagnostics;
+        nextLayerByGroupIndex[task.groupIndex] = parentId;
+        groupPlan.push({
+          depth,
+          index: task.groupIndex,
+          inputNodeIds: task.orderedGroupNodeIds.slice(),
+          outputNodeId: parentId,
+          complexitySpread: task.complexitySpread,
+        });
+      }
+    }
+
+    const nextLayerIds = nextLayerByGroupIndex.filter((nodeId): nodeId is string => typeof nodeId === "string");
+    groupingDiagnostics.push({
+      depth,
+      orderedNodeIds: groupingResult.diagnostics.orderedNodeIds,
+      complexitySpreadByGroup: groupingResult.diagnostics.complexitySpreadByGroup,
+      warnings: groupingResult.diagnostics.warnings,
+      summaryBatches,
+    });
 
     if (nextLayerIds.length >= activeNodeIds.length) {
       throw new Error(
@@ -472,6 +521,18 @@ function computeDepthLimit(leafCount: number, maxChildrenPerParent: number): num
   const optimistic = Math.ceil(Math.log(leafCount) / Math.log(base)) + 2;
   const safeUpperBound = Math.min(2048, leafCount);
   return Math.max(optimistic, safeUpperBound);
+}
+
+function normalizeSummaryBatchSize(summaryBatchSize: number | undefined): number {
+  if (summaryBatchSize === undefined) {
+    return 4;
+  }
+
+  if (!Number.isInteger(summaryBatchSize) || summaryBatchSize < 1 || summaryBatchSize > 32) {
+    throw new Error("summaryBatchSize must be an integer in [1, 32] when provided.");
+  }
+
+  return summaryBatchSize;
 }
 
 function insertSorted(values: string[], value: string): void {
