@@ -113,13 +113,18 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
     const beforeChange = await buildProofCacheReportView({ proofId, config: normalizedConfig });
     const mutationPath = path.join(fixtureProjectRoot, MUTATION_TARGET_RELATIVE_PATH);
     const originalContent = await fs.readFile(mutationPath, "utf8");
-    await fs.writeFile(mutationPath, `${originalContent.trimEnd()}\n${MUTATION_COMMENT}\n`, "utf8");
+    let afterChange: Awaited<ReturnType<typeof buildProofCacheReportView>>;
+    let recovery: Awaited<ReturnType<typeof buildProofCacheReportView>>;
+    try {
+      await fs.writeFile(mutationPath, `${originalContent.trimEnd()}\n${MUTATION_COMMENT}\n`, "utf8");
 
-    clearProofDatasetCacheForTests();
-    const afterChange = await buildProofCacheReportView({ proofId, config: normalizedConfig });
-    clearProofDatasetCacheForTests();
-    const recovery = await buildProofCacheReportView({ proofId, config: normalizedConfig });
-    await fs.writeFile(mutationPath, originalContent, "utf8");
+      clearProofDatasetCacheForTests();
+      afterChange = await buildProofCacheReportView({ proofId, config: normalizedConfig });
+      clearProofDatasetCacheForTests();
+      recovery = await buildProofCacheReportView({ proofId, config: normalizedConfig });
+    } finally {
+      await fs.writeFile(mutationPath, originalContent, "utf8");
+    }
 
     const coldSummary = summarizeScenario(coldSamples);
     const warmSummary = summarizeScenario(warmSamples);
