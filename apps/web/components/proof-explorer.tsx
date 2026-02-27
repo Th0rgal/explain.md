@@ -27,6 +27,7 @@ import {
   type VerificationJobsResponse,
 } from "../lib/api-client";
 import { formatPolicyThresholdFailure } from "../lib/policy-thresholds";
+import { planTreeRenderWindow, resolveTreeRenderSettings } from "../lib/tree-render-window";
 
 export const DEFAULT_CONFIG: ProofConfigInput = {
   abstractionLevel: 3,
@@ -46,6 +47,7 @@ export const ENTAILMENT_MODE_OPTIONS: Array<{ value: NonNullable<ProofConfigInpu
   { value: "calibrated", label: "Calibrated" },
   { value: "strict", label: "Strict" },
 ];
+export const TREE_RENDER_SETTINGS = resolveTreeRenderSettings(process.env);
 
 interface ProofExplorerProps {
   proofId: string;
@@ -64,6 +66,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
   const [treeSnapshotHash, setTreeSnapshotHash] = useState<string>("");
   const [nodesById, setNodesById] = useState<Record<string, TreeNodeRecord>>({});
   const [childrenByParentId, setChildrenByParentId] = useState<Record<string, NodeChildrenState>>({});
+  const [renderAnchorRowIndex, setRenderAnchorRowIndex] = useState<number>(0);
   const [diff, setDiff] = useState<DiffResponse | null>(null);
   const [policyReport, setPolicyReport] = useState<PolicyReportResponse | null>(null);
   const [pathResult, setPathResult] = useState<NodePathResponse | null>(null);
@@ -310,6 +313,40 @@ export function ProofExplorer(props: ProofExplorerProps) {
 
     return rows;
   }, [childrenByParentId, expandedNodeIds, nodesById, root]);
+
+  const renderWindow = useMemo(
+    () =>
+      planTreeRenderWindow({
+        totalRowCount: visibleRows.length,
+        anchorRowIndex: renderAnchorRowIndex,
+        maxVisibleRows: TREE_RENDER_SETTINGS.maxVisibleRows,
+        overscanRows: TREE_RENDER_SETTINGS.overscanRows,
+      }),
+    [renderAnchorRowIndex, visibleRows.length],
+  );
+
+  const renderedRows = useMemo(
+    () =>
+      renderWindow.endIndex >= renderWindow.startIndex
+        ? visibleRows.slice(renderWindow.startIndex, renderWindow.endIndex + 1)
+        : [],
+    [renderWindow.endIndex, renderWindow.startIndex, visibleRows],
+  );
+
+  useEffect(() => {
+    const maxIndex = Math.max(0, visibleRows.length - 1);
+    setRenderAnchorRowIndex((current) => Math.max(0, Math.min(current, maxIndex)));
+  }, [visibleRows.length]);
+
+  useEffect(() => {
+    if (!selectedLeafId) {
+      return;
+    }
+    const selectedIndex = visibleRows.findIndex((row) => row.node.id === selectedLeafId);
+    if (selectedIndex >= 0) {
+      setRenderAnchorRowIndex(selectedIndex);
+    }
+  }, [selectedLeafId, visibleRows]);
 
   function updateConfig<Key extends keyof ProofConfigInput>(key: Key, value: ProofConfigInput[Key]): void {
     setConfig((current) => ({
@@ -648,12 +685,51 @@ export function ProofExplorer(props: ProofExplorerProps) {
         {profileError ? <p className="meta">Profile error: {profileError}</p> : null}
       </section>
 
-      <section className="panel tree" aria-label="Root-first explanation tree">
+      <section
+        className="panel tree"
+        aria-label="Root-first explanation tree"
+        data-tree-render-mode={renderWindow.mode}
+        data-tree-total-rows={visibleRows.length}
+        data-tree-rendered-rows={renderWindow.renderedRowCount}
+        data-tree-hidden-above={renderWindow.hiddenAboveCount}
+        data-tree-hidden-below={renderWindow.hiddenBelowCount}
+      >
         <h2>Tree</h2>
         <p className="meta">Config hash: {treeConfigHash || root?.configHash || "unavailable"}</p>
         <p className="meta">Snapshot hash: {treeSnapshotHash || root?.snapshotHash || "unavailable"}</p>
+        {renderWindow.mode === "windowed" ? (
+          <div className="tree-row">
+            <button
+              type="button"
+              onClick={() =>
+                setRenderAnchorRowIndex(Math.max(0, renderWindow.startIndex - TREE_RENDER_SETTINGS.maxVisibleRows))
+              }
+              disabled={renderWindow.hiddenAboveCount === 0}
+            >
+              Show previous rows
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setRenderAnchorRowIndex(
+                  Math.min(
+                    Math.max(0, visibleRows.length - 1),
+                    renderWindow.endIndex + TREE_RENDER_SETTINGS.maxVisibleRows,
+                  ),
+                )
+              }
+              disabled={renderWindow.hiddenBelowCount === 0}
+            >
+              Show next rows
+            </button>
+            <span className="meta">
+              Rendering {renderWindow.renderedRowCount}/{visibleRows.length} rows (hidden above {renderWindow.hiddenAboveCount}, below{" "}
+              {renderWindow.hiddenBelowCount})
+            </span>
+          </div>
+        ) : null}
         <ul className="tree-list" role="tree">
-          {visibleRows.map((row) => {
+          {renderedRows.map((row) => {
             const { node } = row;
             const childrenState = childrenByParentId[node.id];
             const isExpanded = expandedNodeIds.includes(node.id);

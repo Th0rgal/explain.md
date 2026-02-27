@@ -48,6 +48,9 @@ The tree panel uses incremental root/children/path queries:
   - `audienceLevel`, `language`, `readingLevelTarget`
   - `complexityBandWidth`, `termIntroductionBudget`, `proofDetailMode`, `entailmentMode`
 - Proof Explorer controls expose an explicit `entailmentMode` selector (`calibrated` vs `strict`) and propagate it through root/tree/policy queries.
+- Large trees use deterministic render-window planning to bound DOM row count while preserving root-first ordering.
+  - Window diagnostics are surfaced as `data-tree-*` attributes on the tree panel (`mode`, `total`, `rendered`, `hiddenAbove`, `hiddenBelow`).
+  - Paging controls (`Show previous rows` / `Show next rows`) shift the window deterministically without mutating proof data.
 - Config profile persistence/query is deterministic and file-backed:
   - per-project/user profile scope
   - canonical storage keys via `buildProfileStorageKey(...)`
@@ -61,6 +64,9 @@ The tree panel uses incremental root/children/path queries:
 - Lean fixture proof datasets are persisted to `.explain-md/web-proof-cache` (override with `EXPLAIN_MD_WEB_PROOF_CACHE_DIR`).
 - Lean fixture project root can be overridden with `EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT` (used by benchmark/invalidation harness).
 - Config profiles are persisted to `.explain-md/web-config-profiles.json` (override with `EXPLAIN_MD_WEB_CONFIG_PROFILE_LEDGER`).
+- Tree render window thresholds can be configured with:
+  - `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_MAX_ROWS` (default `120`)
+  - `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_OVERSCAN_ROWS` (default `24`)
 - Job IDs are deterministic and monotonic (`job-000001`, `job-000002`, ...).
 - Reproducibility contract values can be configured with:
   - `EXPLAIN_MD_VERIFICATION_PROJECT_ROOT`

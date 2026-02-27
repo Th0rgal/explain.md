@@ -70,8 +70,16 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - root snapshot from `GET /api/proofs/root`
   - per-parent child pages from `GET /api/proofs/nodes/:nodeId/children`
   - ancestry expansion from `GET /api/proofs/nodes/:nodeId/path`
+- Large-tree rendering is deterministically windowed in-browser:
+  - planner inputs: `totalRowCount`, `anchorRowIndex`, `maxVisibleRows`, `overscanRows`
+  - planner outputs: `mode`, `startIndex/endIndex`, `renderedRowCount`, `hiddenAboveCount`, `hiddenBelowCount`
+  - tree panel exposes machine-checkable diagnostics via `data-tree-*` attributes
 - Sibling complexity remains bounded by `maxChildrenPerParent` during child-page fetches.
 - This keeps behavior auditable while issue #15 iterates on richer interaction patterns.
+
+Public env knobs for deterministic window bounds:
+- `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_MAX_ROWS` (default `120`)
+- `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_OVERSCAN_ROWS` (default `24`)
 
 ## Local verification
 From repository root:
