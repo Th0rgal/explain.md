@@ -494,6 +494,7 @@ describe("proof service", () => {
       expect(typeof topologyDiagnostic?.details?.frontierPartitionLeafCount).toBe("number");
       expect(typeof topologyDiagnostic?.details?.frontierPartitionBlockedGroupCount).toBe("number");
       expect(typeof topologyDiagnostic?.details?.frontierPartitionRecoveredLeafCount).toBe("number");
+      expect(typeof topologyDiagnostic?.details?.frontierPartitionRecoveredSummaryCount).toBe("number");
       expect(typeof topologyDiagnostic?.details?.frontierPartitionRecoveryPassCount).toBe("number");
       expect(typeof topologyDiagnostic?.details?.frontierPartitionRecoveryScheduledGroupCount).toBe("number");
       expect(topologyDiagnostic?.details?.frontierPartitionRecoveryStrategy).toBe("minimal_blocked_group");
@@ -510,6 +511,7 @@ describe("proof service", () => {
       expect((topologyDiagnostic?.details?.frontierPartitionLeafCount as number) >= 0).toBe(true);
       expect((topologyDiagnostic?.details?.frontierPartitionBlockedGroupCount as number) >= 0).toBe(true);
       expect((topologyDiagnostic?.details?.frontierPartitionRecoveredLeafCount as number) >= 0).toBe(true);
+      expect((topologyDiagnostic?.details?.frontierPartitionRecoveredSummaryCount as number) >= 0).toBe(true);
       expect((topologyDiagnostic?.details?.frontierPartitionRecoveryPassCount as number) >= 0).toBe(true);
       expect((topologyDiagnostic?.details?.frontierPartitionRecoveryScheduledGroupCount as number) >= 0).toBe(true);
       if ((topologyDiagnostic?.details?.frontierPartitionRecoveryPassCount as number) > 0) {

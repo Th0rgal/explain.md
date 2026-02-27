@@ -143,11 +143,17 @@ export interface FrontierGenerationBlockedGroup {
 
 export class TreeFrontierPartitionError extends Error {
   public readonly blockedGroups: FrontierGenerationBlockedGroup[];
+  public readonly reusableParentSummaries: Record<string, ReusableParentSummary>;
 
-  public constructor(message: string, blockedGroups: FrontierGenerationBlockedGroup[]) {
+  public constructor(
+    message: string,
+    blockedGroups: FrontierGenerationBlockedGroup[],
+    reusableParentSummaries: Record<string, ReusableParentSummary> = {},
+  ) {
     super(message);
     this.name = "TreeFrontierPartitionError";
     this.blockedGroups = blockedGroups;
+    this.reusableParentSummaries = reusableParentSummaries;
   }
 }
 
@@ -450,6 +456,7 @@ export async function buildRecursiveExplanationTree(
       throw new TreeFrontierPartitionError(
         "Deterministic frontier-partition mode blocked summary generation outside changed frontier.",
         blockedGenerationGroups,
+        buildReusableParentSummariesFromNodes(nodes, policyDiagnosticsByParent),
       );
     }
 
@@ -724,6 +731,65 @@ function computeFrontierHashesForGroup(
       .update(leafStatements.map((statement, index) => `${index}:${statement}`).join("\n"))
       .digest("hex"),
   };
+}
+
+function buildReusableParentSummariesFromNodes(
+  nodes: Record<string, ExplanationTreeNode>,
+  policyDiagnosticsByParent: Record<string, ParentPolicyDiagnostics>,
+): Record<string, ReusableParentSummary> {
+  const summaries: Record<string, ReusableParentSummary> = {};
+  const frontierMemo = new Map<string, { leafIds: string[]; leafStatements: string[] }>();
+  const parentIds = Object.keys(nodes)
+    .filter((nodeId) => nodes[nodeId]?.kind === "parent")
+    .sort((left, right) => left.localeCompare(right));
+  for (const parentId of parentIds) {
+    const parent = nodes[parentId];
+    if (
+      !parent ||
+      parent.kind !== "parent" ||
+      parent.whyTrueFromChildren === undefined ||
+      parent.complexityScore === undefined ||
+      parent.abstractionScore === undefined ||
+      parent.confidence === undefined
+    ) {
+      continue;
+    }
+    const children: Array<{ id: string; statement: string }> = [];
+    let missingChild = false;
+    for (const childId of parent.childIds) {
+      const child = nodes[childId];
+      if (!child) {
+        missingChild = true;
+        break;
+      }
+      children.push({ id: child.id, statement: child.statement });
+    }
+    if (missingChild) {
+      continue;
+    }
+    const frontier = collectLeafFrontier(parent.id, nodes, frontierMemo);
+    summaries[parent.id] = {
+      childStatementHash: computeChildStatementHash(children),
+      childStatementTextHash: computeChildStatementTextHash(children),
+      frontierLeafIdHash: createHash("sha256")
+        .update(frontier.leafIds.map((leafId, index) => `${index}:${leafId}`).join("\n"))
+        .digest("hex"),
+      frontierLeafStatementHash: createHash("sha256")
+        .update(frontier.leafStatements.map((statement, index) => `${index}:${statement}`).join("\n"))
+        .digest("hex"),
+      summary: {
+        parent_statement: parent.statement,
+        why_true_from_children: parent.whyTrueFromChildren,
+        new_terms_introduced: (parent.newTermsIntroduced ?? []).slice(),
+        complexity_score: parent.complexityScore,
+        abstraction_score: parent.abstractionScore,
+        evidence_refs: parent.evidenceRefs.slice(),
+        confidence: parent.confidence,
+      },
+      policyDiagnostics: policyDiagnosticsByParent[parent.id] ?? parent.policyDiagnostics,
+    };
+  }
+  return summaries;
 }
 
 function collectLeafFrontier(

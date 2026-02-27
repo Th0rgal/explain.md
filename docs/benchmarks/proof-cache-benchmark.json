@@ -1,18 +1,18 @@
 {
   "schemaVersion": "1.0.0",
-  "generatedAt": "2026-02-27T11:34:58.687Z",
+  "generatedAt": "2026-02-27T11:41:36.147Z",
   "proofId": "lean-verity-fixture",
   "configHash": "1b1e2b9ff73897b141a9f88c8d23a3b884495340813865fd955fa8fc3eaa4da2",
   "requestHash": "e6f53e14545f9579927084e1924992e7294f331551f9b89f4e93dc25669d6696",
-  "outcomeHash": "ad0be28a1fe26c2db73504bfc890e6ba0455a08d14c27454b11c143e39511190",
+  "outcomeHash": "5bb56b4f787bc545b2dbc79e4c33539d44d50594ff83c6939b65c3997c437ef5",
   "parameters": {
     "coldIterations": 3,
     "warmIterations": 3,
     "mutationTargetPath": "Verity/Core.lean"
   },
   "paths": {
-    "fixtureProjectRootHash": "2783d61bda288d08566e3daff41e5d615f943b7c5fd867e9389cc905de57b3cd",
-    "cacheDirHash": "fab37e0ac15b7292778d4928b9234b507790b344a13825849e04c2f9a7fd5843"
+    "fixtureProjectRootHash": "646b499576f631cca458fec481c374f986307d0c049f1a0d4aca370607e3b963",
+    "cacheDirHash": "2a753e1c3eaaf4169fda65b3757ecdfe596619f5624938df2e5cac3f10974ba6"
   },
   "scenarios": {
     "coldNoPersistentCache": {
@@ -22,10 +22,10 @@
         "miss",
         "miss"
       ],
-      "meanMs": 15.763,
-      "medianMs": 5.916,
-      "minMs": 5.842,
-      "maxMs": 35.53
+      "meanMs": 12.245,
+      "medianMs": 6.632,
+      "minMs": 5.877,
+      "maxMs": 24.226
     },
     "warmPersistentCache": {
       "iterations": 3,
@@ -34,10 +34,10 @@
         "hit",
         "hit"
       ],
-      "meanMs": 1.788,
-      "medianMs": 1.776,
-      "minMs": 1.589,
-      "maxMs": 1.999
+      "meanMs": 1.328,
+      "medianMs": 1.29,
+      "minMs": 1.128,
+      "maxMs": 1.565
     },
     "semanticNoop": {
       "beforeChangeStatus": "hit",
@@ -77,6 +77,7 @@
       "frontierPartitionLeafCount": 1,
       "frontierPartitionBlockedGroupCount": 0,
       "frontierPartitionRecoveredLeafCount": 0,
+      "frontierPartitionRecoveredSummaryCount": 0,
       "frontierPartitionRecoveryPassCount": 0,
       "frontierPartitionRecoveryScheduledGroupCount": 0,
       "frontierPartitionRecoveryStrategy": "minimal_blocked_group",

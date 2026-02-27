@@ -36,6 +36,7 @@ describe("proof cache benchmark", () => {
     expect(report.scenarios.topologyChange.frontierPartitionLeafCount).toBeGreaterThanOrEqual(0);
     expect(report.scenarios.topologyChange.frontierPartitionBlockedGroupCount).toBeGreaterThanOrEqual(0);
     expect(report.scenarios.topologyChange.frontierPartitionRecoveredLeafCount).toBeGreaterThanOrEqual(0);
+    expect(report.scenarios.topologyChange.frontierPartitionRecoveredSummaryCount).toBeGreaterThanOrEqual(0);
     expect(report.scenarios.topologyChange.frontierPartitionRecoveryPassCount).toBeGreaterThanOrEqual(0);
     expect(report.scenarios.topologyChange.frontierPartitionRecoveryScheduledGroupCount).toBeGreaterThanOrEqual(0);
     expect(report.scenarios.topologyChange.frontierPartitionRecoveryStrategy).toBe("minimal_blocked_group");

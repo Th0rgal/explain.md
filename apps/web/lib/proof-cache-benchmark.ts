@@ -77,6 +77,7 @@ export interface ProofCacheBenchmarkReport {
       frontierPartitionLeafCount: number;
       frontierPartitionBlockedGroupCount: number;
       frontierPartitionRecoveredLeafCount: number;
+      frontierPartitionRecoveredSummaryCount: number;
       frontierPartitionRecoveryPassCount: number;
       frontierPartitionRecoveryScheduledGroupCount: number;
       frontierPartitionRecoveryStrategy: "minimal_blocked_group" | "unknown";
@@ -229,6 +230,10 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
         afterTopologyChange.cache.diagnostics,
         "frontierPartitionRecoveredLeafCount",
       ),
+      frontierPartitionRecoveredSummaryCount: readNumericTopologyDetail(
+        afterTopologyChange.cache.diagnostics,
+        "frontierPartitionRecoveredSummaryCount",
+      ),
       frontierPartitionRecoveryPassCount: readNumericTopologyDetail(
         afterTopologyChange.cache.diagnostics,
         "frontierPartitionRecoveryPassCount",
@@ -281,6 +286,7 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
         frontierPartitionLeafCount: topologyChange.frontierPartitionLeafCount,
         frontierPartitionBlockedGroupCount: topologyChange.frontierPartitionBlockedGroupCount,
         frontierPartitionRecoveredLeafCount: topologyChange.frontierPartitionRecoveredLeafCount,
+        frontierPartitionRecoveredSummaryCount: topologyChange.frontierPartitionRecoveredSummaryCount,
         frontierPartitionRecoveryPassCount: topologyChange.frontierPartitionRecoveryPassCount,
         frontierPartitionRecoveryScheduledGroupCount: topologyChange.frontierPartitionRecoveryScheduledGroupCount,
         frontierPartitionRecoveryStrategy: topologyChange.frontierPartitionRecoveryStrategy,
@@ -351,6 +357,7 @@ function readNumericTopologyDetail(
     | "frontierPartitionLeafCount"
     | "frontierPartitionBlockedGroupCount"
     | "frontierPartitionRecoveredLeafCount"
+    | "frontierPartitionRecoveredSummaryCount"
     | "frontierPartitionRecoveryPassCount"
     | "frontierPartitionRecoveryScheduledGroupCount",
 ): number {

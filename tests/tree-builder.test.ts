@@ -600,6 +600,14 @@ describe("tree builder", () => {
       const sortedLeafIds = blockedGroup.frontierLeafIds.slice().sort((left, right) => left.localeCompare(right));
       expect(blockedGroup.frontierLeafIds).toEqual(sortedLeafIds);
     }
+    const reusableParentIds = Object.keys(partitionError.reusableParentSummaries).sort((left, right) =>
+      left.localeCompare(right),
+    );
+    expect(reusableParentIds.length).toBeGreaterThanOrEqual(0);
+    if (reusableParentIds.length > 0) {
+      expect(reusableParentIds[0]).toMatch(/^p_/);
+      expect(partitionError.reusableParentSummaries[reusableParentIds[0]]?.summary.evidence_refs.length).toBeGreaterThan(0);
+    }
     expect(provider.counter.count).toBe(0);
   });
 });

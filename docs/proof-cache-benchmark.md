@@ -18,7 +18,7 @@ By default this writes:
 - Topology change path (`topologyChange`): applies a theorem-addition mutation and verifies deterministic topology-aware rebuild diagnostics (`cache_incremental_topology_rebuild`) with explicit stable-id reuse, child-hash reuse, and ambiguity-skip counters.
   - Includes child-statement-hash reuse fallback counters for deterministic reindex-heavy topology shifts.
   - Includes frontier-disambiguated fallback counters for ambiguity-safe reuse under deep multi-frontier reindexing.
-  - Includes frontier-partition scheduling counters (`frontierPartitionLeafCount`, `frontierPartitionBlockedGroupCount`, `frontierPartitionRecoveredLeafCount`, `frontierPartitionRecoveryPassCount`, `frontierPartitionRecoveryScheduledGroupCount`, `frontierPartitionRecoveryStrategy`, `frontierPartitionFallbackUsed`) to audit minimal-subtree generation attempts and deterministic blocked-group recovery scheduling.
+  - Includes frontier-partition scheduling counters (`frontierPartitionLeafCount`, `frontierPartitionBlockedGroupCount`, `frontierPartitionRecoveredLeafCount`, `frontierPartitionRecoveredSummaryCount`, `frontierPartitionRecoveryPassCount`, `frontierPartitionRecoveryScheduledGroupCount`, `frontierPartitionRecoveryStrategy`, `frontierPartitionFallbackUsed`) to audit minimal-subtree generation attempts, retry warm-start summary carry-over, and deterministic blocked-group recovery scheduling.
 
 ## Determinism and Auditability
 - Report includes:
@@ -27,7 +27,7 @@ By default this writes:
     - cold/warm hit-miss status vectors
     - semantic noop status transition + diagnostics
     - invalidation status transitions and diagnostic codes
-    - topology-change status transitions, diagnostic codes, reuse counters (`reusedParentByStableIdCount`, `reusedParentByChildHashCount`, `reusedParentByChildStatementHashCount`, `reusedParentByFrontierChildHashCount`, `reusedParentByFrontierChildStatementHashCount`, `skippedAmbiguousChildHashReuseCount`, `skippedAmbiguousChildStatementHashReuseCount`) and frontier-partition counters (`frontierPartitionLeafCount`, `frontierPartitionBlockedGroupCount`, `frontierPartitionRecoveredLeafCount`, `frontierPartitionRecoveryPassCount`, `frontierPartitionRecoveryScheduledGroupCount`, `frontierPartitionRecoveryStrategy`, `frontierPartitionFallbackUsed`)
+    - topology-change status transitions, diagnostic codes, reuse counters (`reusedParentByStableIdCount`, `reusedParentByChildHashCount`, `reusedParentByChildStatementHashCount`, `reusedParentByFrontierChildHashCount`, `reusedParentByFrontierChildStatementHashCount`, `skippedAmbiguousChildHashReuseCount`, `skippedAmbiguousChildStatementHashReuseCount`) and frontier-partition counters (`frontierPartitionLeafCount`, `frontierPartitionBlockedGroupCount`, `frontierPartitionRecoveredLeafCount`, `frontierPartitionRecoveredSummaryCount`, `frontierPartitionRecoveryPassCount`, `frontierPartitionRecoveryScheduledGroupCount`, `frontierPartitionRecoveryStrategy`, `frontierPartitionFallbackUsed`)
 - Timing fields are informative but not included in `outcomeHash`, so run-to-run performance jitter does not break reproducibility checks.
 
 ## Environment

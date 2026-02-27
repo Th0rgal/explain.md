@@ -1047,6 +1047,7 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
             frontierPartitionLeafCount: topologyRebuild.frontierPartitionLeafCount,
             frontierPartitionBlockedGroupCount: topologyRebuild.frontierPartitionBlockedGroupCount,
             frontierPartitionRecoveredLeafCount: topologyRebuild.frontierPartitionRecoveredLeafCount,
+            frontierPartitionRecoveredSummaryCount: topologyRebuild.frontierPartitionRecoveredSummaryCount,
             frontierPartitionRecoveryPassCount: topologyRebuild.frontierPartitionRecoveryPassCount,
             frontierPartitionRecoveryScheduledGroupCount: topologyRebuild.frontierPartitionRecoveryScheduledGroupCount,
             frontierPartitionRecoveryStrategy: topologyRebuild.frontierPartitionRecoveryStrategy,
@@ -1597,9 +1598,9 @@ async function rebuildSnapshotForChangedLeaves(input: {
 
 interface ParentSummaryRecord {
   childStatementHash: string;
-  childStatementTextHash: string;
-  frontierLeafIdHash: string;
-  frontierLeafStatementHash: string;
+  childStatementTextHash?: string;
+  frontierLeafIdHash?: string;
+  frontierLeafStatementHash?: string;
   summary: {
     parent_statement: string;
     why_true_from_children: string;
@@ -1637,6 +1638,7 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
       frontierPartitionLeafCount: number;
       frontierPartitionBlockedGroupCount: number;
       frontierPartitionRecoveredLeafCount: number;
+      frontierPartitionRecoveredSummaryCount: number;
       frontierPartitionRecoveryPassCount: number;
       frontierPartitionRecoveryScheduledGroupCount: number;
       frontierPartitionRecoveryStrategy: "minimal_blocked_group";
@@ -1660,8 +1662,10 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
   let frontierPartitionFallbackUsed = false;
   let frontierPartitionBlockedGroupCount = 0;
   let frontierPartitionRecoveredLeafCount = 0;
+  let frontierPartitionRecoveredSummaryCount = 0;
   let frontierPartitionRecoveryPassCount = 0;
   let frontierPartitionRecoveryScheduledGroupCount = 0;
+  let recoveryReusableParentSummaries = { ...reusableParentSummaries };
 
   let tree: ExplanationTree | undefined;
   const nextLeafIdSetForRecovery = new Set(input.leaves.map((leaf) => leaf.id));
@@ -1672,7 +1676,7 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
         tree = await buildRecursiveExplanationTree(createDeterministicSummaryProvider(), {
           leaves: mapTheoremLeavesToTreeLeaves(input.leaves),
           config: input.config,
-          reusableParentSummaries,
+          reusableParentSummaries: recoveryReusableParentSummaries,
           generationFrontierLeafIds: frontierLeafIds,
         });
         break;
@@ -1680,6 +1684,10 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
         if (!(error instanceof TreeFrontierPartitionError)) {
           throw error;
         }
+        frontierPartitionRecoveredSummaryCount += mergeRecoveryReusableSummaries(
+          recoveryReusableParentSummaries,
+          error.reusableParentSummaries,
+        );
         frontierPartitionBlockedGroupCount += error.blockedGroups.length;
         const scheduledExpansion = selectMinimalBlockedFrontierExpansion({
           blockedGroups: error.blockedGroups,
@@ -1701,7 +1709,7 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
     tree = await buildRecursiveExplanationTree(createDeterministicSummaryProvider(), {
       leaves: mapTheoremLeavesToTreeLeaves(input.leaves),
       config: input.config,
-      reusableParentSummaries,
+      reusableParentSummaries: recoveryReusableParentSummaries,
     });
   }
   if (!tree) {
@@ -1739,6 +1747,7 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
     frontierPartitionLeafCount: changedFrontierLeafIds.length,
     frontierPartitionBlockedGroupCount,
     frontierPartitionRecoveredLeafCount,
+    frontierPartitionRecoveredSummaryCount,
     frontierPartitionRecoveryPassCount,
     frontierPartitionRecoveryScheduledGroupCount,
     frontierPartitionRecoveryStrategy: "minimal_blocked_group",
@@ -1803,6 +1812,27 @@ export function selectMinimalBlockedFrontierExpansion(input: {
     expandedLeafIds: selected.expandedLeafIds,
     nextFrontierLeafIds: [...nextFrontier].sort((left, right) => left.localeCompare(right)),
   };
+}
+
+function mergeRecoveryReusableSummaries(
+  target: Record<string, ParentSummaryRecord>,
+  injected: Record<string, ParentSummaryRecord>,
+): number {
+  let mergedCount = 0;
+  const parentIds = Object.keys(injected).sort((left, right) => left.localeCompare(right));
+  for (const parentId of parentIds) {
+    const nextSummary = injected[parentId];
+    const previousSummary = target[parentId];
+    if (!previousSummary || !areParentSummaryRecordsEqual(previousSummary, nextSummary)) {
+      target[parentId] = nextSummary;
+      mergedCount += 1;
+    }
+  }
+  return mergedCount;
+}
+
+function areParentSummaryRecordsEqual(left: ParentSummaryRecord, right: ParentSummaryRecord): boolean {
+  return JSON.stringify(left, stableReplacer) === JSON.stringify(right, stableReplacer);
 }
 
 function buildReusableParentSummaryMap(tree: ExplanationTree): Record<string, ParentSummaryRecord> {
