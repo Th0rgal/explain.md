@@ -22,7 +22,9 @@ Issue: #9
 - `summaryReuse` also reports deterministic reuse origin:
   - `reusedByParentIdGroupIndexes` when stable parent IDs match.
   - `reusedByChildHashGroupIndexes` when parent IDs changed but same-depth child-grounding hashes still match.
+  - `reusedByChildStatementHashGroupIndexes` when parent IDs and child IDs changed but same-depth ordered child statements still match.
   - `skippedAmbiguousChildHashGroupIndexes` when child-hash fallback has multiple deterministic candidates at a depth and reuse is intentionally skipped.
+  - `skippedAmbiguousChildStatementHashGroupIndexes` when child-statement-hash fallback has multiple deterministic candidates at a depth and reuse is intentionally skipped.
 - Policy diagnostics are attached per parent (`preSummary`, `postSummary`, `retriesUsed`).
 
 ## Tree validity checks
@@ -65,10 +67,11 @@ Request shape:
 - `maxDepth?`: optional explicit depth guard
 - `summaryBatchSize?`: optional integer `1..32` controlling max concurrent parent summaries per depth
 - `reusableParentSummaries?`: optional map keyed by deterministic parent id (`p_<depth>_<groupIndex>_<digest>`) for stable-id parent reuse
-  - each entry includes `childStatementHash` and previously validated summary payload
+  - each entry includes `childStatementHash`, optional `childStatementTextHash`, and previously validated summary payload
   - reuse is accepted only when the current child statement hash matches and post-summary policy still passes
-  - when stable IDs do not match (for example after deterministic topology reindexing), reuse falls back to deterministic same-depth child-statement-hash matching
-  - child-hash fallback reuse is skipped for ambiguous (multi-candidate) matches to preserve provenance determinism
+  - when stable IDs do not match (for example after deterministic topology reindexing), reuse falls back first to deterministic same-depth child-grounding hash matching, then to same-depth child-statement hash matching
+  - statement-hash fallback deterministically re-bases `evidence_refs` to current child IDs before policy validation
+  - both fallback tiers skip ambiguous (multi-candidate) matches to preserve provenance determinism
 
 Output includes:
 - `rootId`, `leafIds`, `nodes`, `configHash`, `groupPlan`, `groupingDiagnostics`, `maxDepth`

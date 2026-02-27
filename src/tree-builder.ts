@@ -62,7 +62,9 @@ export interface SummaryReuseDiagnostics {
   generatedGroupIndexes: number[];
   reusedByParentIdGroupIndexes?: number[];
   reusedByChildHashGroupIndexes?: number[];
+  reusedByChildStatementHashGroupIndexes?: number[];
   skippedAmbiguousChildHashGroupIndexes?: number[];
+  skippedAmbiguousChildStatementHashGroupIndexes?: number[];
 }
 
 export interface ExplanationTree {
@@ -86,6 +88,7 @@ export interface TreeBuildRequest {
 
 export interface ReusableParentSummary {
   childStatementHash: string;
+  childStatementTextHash?: string;
   summary: {
     parent_statement: string;
     why_true_from_children: string;
@@ -196,7 +199,7 @@ export async function buildRecursiveExplanationTree(
   const hardDepthLimit = request.maxDepth ?? computeDepthLimit(leaves.length, request.config.maxChildrenPerParent);
   const summaryBatchSize = normalizeSummaryBatchSize(request.summaryBatchSize);
   const reusableParentSummaries = request.reusableParentSummaries ?? {};
-  const reusableSummaryPoolByDepthAndChildHash = buildReusableSummaryPoolByDepthAndChildHash(reusableParentSummaries);
+  const reusableSummaryPools = buildReusableSummaryPools(reusableParentSummaries);
   const consumedReusableSummaryKeys = new Set<string>();
 
   let depth = 0;
@@ -229,7 +232,9 @@ export async function buildRecursiveExplanationTree(
     const generatedGroupIndexes: number[] = [];
     const reusedByParentIdGroupIndexes: number[] = [];
     const reusedByChildHashGroupIndexes: number[] = [];
+    const reusedByChildStatementHashGroupIndexes: number[] = [];
     const skippedAmbiguousChildHashGroupIndexes: number[] = [];
+    const skippedAmbiguousChildStatementHashGroupIndexes: number[] = [];
 
     for (let index = 0; index < groups.length; index += 1) {
       const groupNodeIds = groups[index];
@@ -275,30 +280,60 @@ export async function buildRecursiveExplanationTree(
       }
 
       const childStatementHash = computeChildStatementHash(children);
+      const childStatementTextHash = computeChildStatementTextHash(children);
       let reusableParent = reusableParentSummaries[parentId];
       let reusableParentKey = parentId;
-      let reusedByParentId = true;
+      let reuseMatchKind: "parent_id" | "child_hash" | "child_statement_hash" = "parent_id";
       if (
         !reusableParent || reusableParent.childStatementHash !== childStatementHash
       ) {
         const poolKey = buildReusableSummaryPoolKey(depth, childStatementHash);
-        if (reusableSummaryPoolByDepthAndChildHash.has(poolKey)) {
+        if (reusableSummaryPools.byDepthAndChildHash.has(poolKey)) {
           const selection = selectReusableSummaryCandidate(
-            reusableSummaryPoolByDepthAndChildHash.get(poolKey) as ReusableSummaryCandidate[],
+            reusableSummaryPools.byDepthAndChildHash.get(poolKey) as ReusableSummaryCandidate[],
             consumedReusableSummaryKeys,
           );
           if (selection.candidate) {
             reusableParent = selection.candidate.summary;
             reusableParentKey = selection.candidate.key;
-            reusedByParentId = false;
+            reuseMatchKind = "child_hash";
           } else if (selection.ambiguous) {
             skippedAmbiguousChildHashGroupIndexes.push(index);
           }
         }
       }
+      if (
+        (!reusableParent || reusableParent.childStatementHash !== childStatementHash) &&
+        reuseMatchKind !== "child_hash"
+      ) {
+        const statementPoolKey = buildReusableSummaryPoolKey(depth, childStatementTextHash);
+        if (reusableSummaryPools.byDepthAndChildStatementHash.has(statementPoolKey)) {
+          const selection = selectReusableSummaryCandidate(
+            reusableSummaryPools.byDepthAndChildStatementHash.get(statementPoolKey) as ReusableSummaryCandidate[],
+            consumedReusableSummaryKeys,
+          );
+          if (selection.candidate) {
+            reusableParent = selection.candidate.summary;
+            reusableParentKey = selection.candidate.key;
+            reuseMatchKind = "child_statement_hash";
+          } else if (selection.ambiguous) {
+            skippedAmbiguousChildStatementHashGroupIndexes.push(index);
+          }
+        }
+      }
 
-      if (reusableParent && reusableParent.childStatementHash === childStatementHash) {
-        const postSummaryDecision = evaluatePostSummaryPolicy(children, reusableParent.summary, request.config);
+      const matchesByChildHash = reusableParent?.childStatementHash === childStatementHash;
+      const matchesByChildStatementHash =
+        reusableParent?.childStatementTextHash !== undefined && reusableParent.childStatementTextHash === childStatementTextHash;
+      if (reusableParent && (matchesByChildHash || matchesByChildStatementHash)) {
+        const summaryForPolicy =
+          matchesByChildHash || !matchesByChildStatementHash
+            ? reusableParent.summary
+            : {
+                ...reusableParent.summary,
+                evidence_refs: children.map((child) => child.id),
+              };
+        const postSummaryDecision = evaluatePostSummaryPolicy(children, summaryForPolicy, request.config);
         if (postSummaryDecision.ok) {
           const policyDiagnostics = reusableParent.policyDiagnostics
             ? cloneParentPolicyDiagnostics(reusableParent.policyDiagnostics, depth, index)
@@ -312,15 +347,15 @@ export async function buildRecursiveExplanationTree(
           const parentNode: ExplanationTreeNode = {
             id: parentId,
             kind: "parent",
-            statement: reusableParent.summary.parent_statement,
+            statement: summaryForPolicy.parent_statement,
             childIds: orderedGroupNodeIds.slice(),
             depth,
-            complexityScore: reusableParent.summary.complexity_score,
-            abstractionScore: reusableParent.summary.abstraction_score,
-            confidence: reusableParent.summary.confidence,
-            whyTrueFromChildren: reusableParent.summary.why_true_from_children,
-            newTermsIntroduced: reusableParent.summary.new_terms_introduced.slice(),
-            evidenceRefs: reusableParent.summary.evidence_refs.slice(),
+            complexityScore: summaryForPolicy.complexity_score,
+            abstractionScore: summaryForPolicy.abstraction_score,
+            confidence: summaryForPolicy.confidence,
+            whyTrueFromChildren: summaryForPolicy.why_true_from_children,
+            newTermsIntroduced: summaryForPolicy.new_terms_introduced.slice(),
+            evidenceRefs: summaryForPolicy.evidence_refs.slice(),
             policyDiagnostics,
           };
 
@@ -336,10 +371,12 @@ export async function buildRecursiveExplanationTree(
           });
           consumedReusableSummaryKeys.add(reusableParentKey);
           reusedGroupIndexes.push(index);
-          if (reusedByParentId) {
+          if (reuseMatchKind === "parent_id") {
             reusedByParentIdGroupIndexes.push(index);
-          } else {
+          } else if (reuseMatchKind === "child_hash") {
             reusedByChildHashGroupIndexes.push(index);
+          } else {
+            reusedByChildStatementHashGroupIndexes.push(index);
           }
           continue;
         }
@@ -425,7 +462,9 @@ export async function buildRecursiveExplanationTree(
               generatedGroupIndexes,
               reusedByParentIdGroupIndexes,
               reusedByChildHashGroupIndexes,
+              reusedByChildStatementHashGroupIndexes,
               skippedAmbiguousChildHashGroupIndexes,
+              skippedAmbiguousChildStatementHashGroupIndexes,
             }
           : undefined,
     });
@@ -458,10 +497,14 @@ export async function buildRecursiveExplanationTree(
   return tree;
 }
 
-function buildReusableSummaryPoolByDepthAndChildHash(
+function buildReusableSummaryPools(
   reusableParentSummaries: Record<string, ReusableParentSummary>,
-): Map<string, ReusableSummaryCandidate[]> {
-  const pool = new Map<string, ReusableSummaryCandidate[]>();
+): {
+  byDepthAndChildHash: Map<string, ReusableSummaryCandidate[]>;
+  byDepthAndChildStatementHash: Map<string, ReusableSummaryCandidate[]>;
+} {
+  const byDepthAndChildHash = new Map<string, ReusableSummaryCandidate[]>();
+  const byDepthAndChildStatementHash = new Map<string, ReusableSummaryCandidate[]>();
   const orderedParentIds = Object.keys(reusableParentSummaries).sort((left, right) => left.localeCompare(right));
   for (const parentId of orderedParentIds) {
     const summary = reusableParentSummaries[parentId];
@@ -469,16 +512,29 @@ function buildReusableSummaryPoolByDepthAndChildHash(
     if (depth === undefined) {
       continue;
     }
-    const poolKey = buildReusableSummaryPoolKey(depth, summary.childStatementHash);
-    const existing = pool.get(poolKey);
+    const childHashPoolKey = buildReusableSummaryPoolKey(depth, summary.childStatementHash);
+    const existingByChildHash = byDepthAndChildHash.get(childHashPoolKey);
     const candidate: ReusableSummaryCandidate = { key: parentId, summary };
-    if (existing) {
-      existing.push(candidate);
+    if (existingByChildHash) {
+      existingByChildHash.push(candidate);
     } else {
-      pool.set(poolKey, [candidate]);
+      byDepthAndChildHash.set(childHashPoolKey, [candidate]);
+    }
+
+    if (summary.childStatementTextHash !== undefined) {
+      const childStatementHashPoolKey = buildReusableSummaryPoolKey(depth, summary.childStatementTextHash);
+      const existingByChildStatementHash = byDepthAndChildStatementHash.get(childStatementHashPoolKey);
+      if (existingByChildStatementHash) {
+        existingByChildStatementHash.push(candidate);
+      } else {
+        byDepthAndChildStatementHash.set(childStatementHashPoolKey, [candidate]);
+      }
     }
   }
-  return pool;
+  return {
+    byDepthAndChildHash,
+    byDepthAndChildStatementHash,
+  };
 }
 
 function selectReusableSummaryCandidate(
@@ -656,6 +712,16 @@ function computeChildStatementHash(children: Array<{ id: string; statement: stri
     .update(
       children
         .map((child) => `${child.id}:${child.statement}`)
+        .join("\n"),
+    )
+    .digest("hex");
+}
+
+function computeChildStatementTextHash(children: Array<{ statement: string }>): string {
+  return createHash("sha256")
+    .update(
+      children
+        .map((child, index) => `${index}:${child.statement}`)
         .join("\n"),
     )
     .digest("hex");

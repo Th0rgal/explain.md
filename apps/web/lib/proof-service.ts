@@ -94,7 +94,7 @@ export interface ProofDatasetCacheDiagnostic {
     | "cache_hit"
     | "cache_semantic_hit"
     | "cache_incremental_subtree_rebuild"
-    | "cache_incremental_topology_rebuild"
+        | "cache_incremental_topology_rebuild"
     | "cache_incremental_rebuild"
     | "cache_miss"
     | "cache_write_failed"
@@ -1037,7 +1037,9 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
             generatedParentNodeCount: topologyRebuild.generatedParentNodeCount,
             reusedParentByStableIdCount: topologyRebuild.reusedParentByStableIdCount,
             reusedParentByChildHashCount: topologyRebuild.reusedParentByChildHashCount,
+            reusedParentByChildStatementHashCount: topologyRebuild.reusedParentByChildStatementHashCount,
             skippedAmbiguousChildHashReuseCount: topologyRebuild.skippedAmbiguousChildHashReuseCount,
+            skippedAmbiguousChildStatementHashReuseCount: topologyRebuild.skippedAmbiguousChildStatementHashReuseCount,
             previousParentCount: topologyRebuild.previousParentCount,
             nextParentCount: topologyRebuild.nextParentCount,
           },
@@ -1584,6 +1586,7 @@ async function rebuildSnapshotForChangedLeaves(input: {
 
 interface ParentSummaryRecord {
   childStatementHash: string;
+  childStatementTextHash: string;
   summary: {
     parent_statement: string;
     why_true_from_children: string;
@@ -1612,7 +1615,9 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
       generatedParentNodeCount: number;
       reusedParentByStableIdCount: number;
       reusedParentByChildHashCount: number;
+      reusedParentByChildStatementHashCount: number;
       skippedAmbiguousChildHashReuseCount: number;
+      skippedAmbiguousChildStatementHashReuseCount: number;
       previousParentCount: number;
       nextParentCount: number;
     }
@@ -1653,7 +1658,9 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
     generatedParentNodeCount: reuseStats.generatedGroupCount,
     reusedParentByStableIdCount: reuseStats.reusedByParentIdGroupCount,
     reusedParentByChildHashCount: reuseStats.reusedByChildHashGroupCount,
+    reusedParentByChildStatementHashCount: reuseStats.reusedByChildStatementHashGroupCount,
     skippedAmbiguousChildHashReuseCount: reuseStats.skippedAmbiguousChildHashGroupCount,
+    skippedAmbiguousChildStatementHashReuseCount: reuseStats.skippedAmbiguousChildStatementHashGroupCount,
     previousParentCount: Object.values(imported.tree.nodes).filter((node) => node.kind === "parent").length,
     nextParentCount: Object.values(tree.nodes).filter((node) => node.kind === "parent").length,
   };
@@ -1688,6 +1695,7 @@ function buildReusableParentSummaryMap(tree: ExplanationTree): Record<string, Pa
     }
     const summary: ParentSummaryRecord = {
       childStatementHash: computeChildStatementHash(children),
+      childStatementTextHash: computeChildStatementTextHash(children),
       summary: {
         parent_statement: parent.statement,
         why_true_from_children: parent.whyTrueFromChildren,
@@ -1717,27 +1725,42 @@ function summarizeTreeSummaryReuse(groupingDiagnostics: ExplanationTree["groupin
   generatedGroupCount: number;
   reusedByParentIdGroupCount: number;
   reusedByChildHashGroupCount: number;
+  reusedByChildStatementHashGroupCount: number;
   skippedAmbiguousChildHashGroupCount: number;
+  skippedAmbiguousChildStatementHashGroupCount: number;
 } {
   let reusedGroupCount = 0;
   let generatedGroupCount = 0;
   let reusedByParentIdGroupCount = 0;
   let reusedByChildHashGroupCount = 0;
+  let reusedByChildStatementHashGroupCount = 0;
   let skippedAmbiguousChildHashGroupCount = 0;
+  let skippedAmbiguousChildStatementHashGroupCount = 0;
   for (const layer of groupingDiagnostics) {
     reusedGroupCount += layer.summaryReuse?.reusedGroupIndexes.length ?? 0;
     generatedGroupCount += layer.summaryReuse?.generatedGroupIndexes.length ?? 0;
     reusedByParentIdGroupCount += layer.summaryReuse?.reusedByParentIdGroupIndexes?.length ?? 0;
     reusedByChildHashGroupCount += layer.summaryReuse?.reusedByChildHashGroupIndexes?.length ?? 0;
+    reusedByChildStatementHashGroupCount += layer.summaryReuse?.reusedByChildStatementHashGroupIndexes?.length ?? 0;
     skippedAmbiguousChildHashGroupCount += layer.summaryReuse?.skippedAmbiguousChildHashGroupIndexes?.length ?? 0;
+    skippedAmbiguousChildStatementHashGroupCount +=
+      layer.summaryReuse?.skippedAmbiguousChildStatementHashGroupIndexes?.length ?? 0;
   }
   return {
     reusedGroupCount,
     generatedGroupCount,
     reusedByParentIdGroupCount,
     reusedByChildHashGroupCount,
+    reusedByChildStatementHashGroupCount,
     skippedAmbiguousChildHashGroupCount,
+    skippedAmbiguousChildStatementHashGroupCount,
   };
+}
+
+function computeChildStatementTextHash(children: Array<{ statement: string }>): string {
+  return createHash("sha256")
+    .update(children.map((child, index) => `${index}:${child.statement}`).join("\n"))
+    .digest("hex");
 }
 
 function parseParentGroupIndex(parentId: string): number {

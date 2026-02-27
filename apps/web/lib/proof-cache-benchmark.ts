@@ -69,7 +69,9 @@ export interface ProofCacheBenchmarkReport {
       afterChangeSnapshotHash: string;
       reusedParentByStableIdCount: number;
       reusedParentByChildHashCount: number;
+      reusedParentByChildStatementHashCount: number;
       skippedAmbiguousChildHashReuseCount: number;
+      skippedAmbiguousChildStatementHashReuseCount: number;
       recoveryStatus: "hit" | "miss";
       recoverySnapshotHash: string;
     };
@@ -189,9 +191,17 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
       afterChangeSnapshotHash: afterTopologyChange.cache.snapshotHash,
       reusedParentByStableIdCount: readNumericTopologyDetail(afterTopologyChange.cache.diagnostics, "reusedParentByStableIdCount"),
       reusedParentByChildHashCount: readNumericTopologyDetail(afterTopologyChange.cache.diagnostics, "reusedParentByChildHashCount"),
+      reusedParentByChildStatementHashCount: readNumericTopologyDetail(
+        afterTopologyChange.cache.diagnostics,
+        "reusedParentByChildStatementHashCount",
+      ),
       skippedAmbiguousChildHashReuseCount: readNumericTopologyDetail(
         afterTopologyChange.cache.diagnostics,
         "skippedAmbiguousChildHashReuseCount",
+      ),
+      skippedAmbiguousChildStatementHashReuseCount: readNumericTopologyDetail(
+        afterTopologyChange.cache.diagnostics,
+        "skippedAmbiguousChildStatementHashReuseCount",
       ),
       recoveryStatus: topologyRecovery.cache.status,
       recoverySnapshotHash: topologyRecovery.cache.snapshotHash,
@@ -224,7 +234,9 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
         afterChangeDiagnostics: topologyChange.afterChangeDiagnostics,
         reusedParentByStableIdCount: topologyChange.reusedParentByStableIdCount,
         reusedParentByChildHashCount: topologyChange.reusedParentByChildHashCount,
+        reusedParentByChildStatementHashCount: topologyChange.reusedParentByChildStatementHashCount,
         skippedAmbiguousChildHashReuseCount: topologyChange.skippedAmbiguousChildHashReuseCount,
+        skippedAmbiguousChildStatementHashReuseCount: topologyChange.skippedAmbiguousChildStatementHashReuseCount,
         recoveryStatus: topologyChange.recoveryStatus,
         snapshotChangedOnMutation: topologyChange.afterChangeSnapshotHash !== beforeTopologyChange.cache.snapshotHash,
       },
@@ -280,7 +292,12 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
 
 function readNumericTopologyDetail(
   diagnostics: Array<{ code: string; details?: Record<string, unknown> }>,
-  key: "reusedParentByStableIdCount" | "reusedParentByChildHashCount" | "skippedAmbiguousChildHashReuseCount",
+  key:
+    | "reusedParentByStableIdCount"
+    | "reusedParentByChildHashCount"
+    | "reusedParentByChildStatementHashCount"
+    | "skippedAmbiguousChildHashReuseCount"
+    | "skippedAmbiguousChildStatementHashReuseCount",
 ): number {
   const topologyDiagnostic = diagnostics.find((diagnostic) => diagnostic.code === "cache_incremental_topology_rebuild");
   const value = topologyDiagnostic?.details?.[key];
@@ -343,7 +360,7 @@ function stableStringify(value: unknown): string {
     return `[${value.map((entry) => stableStringify(entry)).join(",")}]`;
   }
   const objectValue = value as Record<string, unknown>;
-  const keys = Object.keys(objectValue).sort((left, right) => left.localeCompare(right));
+  const keys = Object.keys(objectValue).sort();
   return `{${keys.map((key) => `${JSON.stringify(key)}:${stableStringify(objectValue[key])}`).join(",")}}`;
 }
 
