@@ -1048,6 +1048,8 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
             frontierPartitionBlockedGroupCount: topologyRebuild.frontierPartitionBlockedGroupCount,
             frontierPartitionRecoveredLeafCount: topologyRebuild.frontierPartitionRecoveredLeafCount,
             frontierPartitionRecoveryPassCount: topologyRebuild.frontierPartitionRecoveryPassCount,
+            frontierPartitionRecoveryScheduledGroupCount: topologyRebuild.frontierPartitionRecoveryScheduledGroupCount,
+            frontierPartitionRecoveryStrategy: topologyRebuild.frontierPartitionRecoveryStrategy,
             frontierPartitionFallbackUsed: topologyRebuild.frontierPartitionFallbackUsed,
             previousParentCount: topologyRebuild.previousParentCount,
             nextParentCount: topologyRebuild.nextParentCount,
@@ -1636,6 +1638,8 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
       frontierPartitionBlockedGroupCount: number;
       frontierPartitionRecoveredLeafCount: number;
       frontierPartitionRecoveryPassCount: number;
+      frontierPartitionRecoveryScheduledGroupCount: number;
+      frontierPartitionRecoveryStrategy: "minimal_blocked_group";
       frontierPartitionFallbackUsed: boolean;
       previousParentCount: number;
       nextParentCount: number;
@@ -1657,6 +1661,7 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
   let frontierPartitionBlockedGroupCount = 0;
   let frontierPartitionRecoveredLeafCount = 0;
   let frontierPartitionRecoveryPassCount = 0;
+  let frontierPartitionRecoveryScheduledGroupCount = 0;
 
   let tree: ExplanationTree | undefined;
   const nextLeafIdSetForRecovery = new Set(input.leaves.map((leaf) => leaf.id));
@@ -1676,22 +1681,19 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
           throw error;
         }
         frontierPartitionBlockedGroupCount += error.blockedGroups.length;
-        const expandedFrontier = new Set(frontierLeafIds);
-        for (const blockedGroup of error.blockedGroups) {
-          for (const leafId of blockedGroup.frontierLeafIds) {
-            if (nextLeafIdSetForRecovery.has(leafId)) {
-              expandedFrontier.add(leafId);
-            }
-          }
-        }
-        const expandedFrontierLeafIds = [...expandedFrontier].sort((left, right) => left.localeCompare(right));
-        if (expandedFrontierLeafIds.length === frontierLeafIds.length) {
+        const scheduledExpansion = selectMinimalBlockedFrontierExpansion({
+          blockedGroups: error.blockedGroups,
+          frontierLeafIdSet: new Set(frontierLeafIds),
+          availableLeafIdSet: nextLeafIdSetForRecovery,
+        });
+        if (!scheduledExpansion) {
           frontierPartitionFallbackUsed = true;
           break;
         }
+        frontierPartitionRecoveryScheduledGroupCount += 1;
         frontierPartitionRecoveryPassCount += 1;
-        frontierPartitionRecoveredLeafCount += expandedFrontierLeafIds.length - frontierLeafIds.length;
-        frontierLeafIds = expandedFrontierLeafIds;
+        frontierPartitionRecoveredLeafCount += scheduledExpansion.expandedLeafIds.length;
+        frontierLeafIds = scheduledExpansion.nextFrontierLeafIds;
       }
     }
   }
@@ -1738,9 +1740,68 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
     frontierPartitionBlockedGroupCount,
     frontierPartitionRecoveredLeafCount,
     frontierPartitionRecoveryPassCount,
+    frontierPartitionRecoveryScheduledGroupCount,
+    frontierPartitionRecoveryStrategy: "minimal_blocked_group",
     frontierPartitionFallbackUsed,
     previousParentCount: Object.values(imported.tree.nodes).filter((node) => node.kind === "parent").length,
     nextParentCount: Object.values(builtTree.nodes).filter((node) => node.kind === "parent").length,
+  };
+}
+
+export function selectMinimalBlockedFrontierExpansion(input: {
+  blockedGroups: TreeFrontierPartitionError["blockedGroups"];
+  frontierLeafIdSet: Set<string>;
+  availableLeafIdSet: Set<string>;
+}):
+  | {
+      expandedLeafIds: string[];
+      nextFrontierLeafIds: string[];
+    }
+  | undefined {
+  const candidates = input.blockedGroups
+    .map((blockedGroup) => {
+      const expandedLeafIds = blockedGroup.frontierLeafIds.filter(
+        (leafId) => input.availableLeafIdSet.has(leafId) && !input.frontierLeafIdSet.has(leafId),
+      );
+      return {
+        blockedGroup,
+        expandedLeafIds,
+      };
+    })
+    .filter((candidate) => candidate.expandedLeafIds.length > 0)
+    .sort((left, right) => {
+      if (left.expandedLeafIds.length !== right.expandedLeafIds.length) {
+        return left.expandedLeafIds.length - right.expandedLeafIds.length;
+      }
+      if (left.blockedGroup.frontierLeafIds.length !== right.blockedGroup.frontierLeafIds.length) {
+        return left.blockedGroup.frontierLeafIds.length - right.blockedGroup.frontierLeafIds.length;
+      }
+      if (left.blockedGroup.depth !== right.blockedGroup.depth) {
+        return left.blockedGroup.depth - right.blockedGroup.depth;
+      }
+      if (left.blockedGroup.groupIndex !== right.blockedGroup.groupIndex) {
+        return left.blockedGroup.groupIndex - right.blockedGroup.groupIndex;
+      }
+      const parentOrder = left.blockedGroup.parentId.localeCompare(right.blockedGroup.parentId);
+      if (parentOrder !== 0) {
+        return parentOrder;
+      }
+      return left.expandedLeafIds.join("\n").localeCompare(right.expandedLeafIds.join("\n"));
+    });
+
+  const selected = candidates[0];
+  if (!selected) {
+    return undefined;
+  }
+
+  const nextFrontier = new Set(input.frontierLeafIdSet);
+  for (const leafId of selected.expandedLeafIds) {
+    nextFrontier.add(leafId);
+  }
+
+  return {
+    expandedLeafIds: selected.expandedLeafIds,
+    nextFrontierLeafIds: [...nextFrontier].sort((left, right) => left.localeCompare(right)),
   };
 }
 

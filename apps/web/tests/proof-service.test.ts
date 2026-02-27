@@ -21,6 +21,7 @@ import {
   listProofs,
   listSeedProofs,
   SEED_PROOF_ID,
+  selectMinimalBlockedFrontierExpansion,
 } from "../lib/proof-service";
 
 describe("proof service", () => {
@@ -52,6 +53,56 @@ describe("proof service", () => {
     expect(first.viewHash).toBe(second.viewHash);
     expect(first.requestHash).toBe(second.requestHash);
     expect(first.view.visibleNodes.length).toBeGreaterThan(1);
+  });
+
+  it("selects minimal blocked-group frontier expansion deterministically", () => {
+    const selected = selectMinimalBlockedFrontierExpansion({
+      blockedGroups: [
+        {
+          depth: 2,
+          groupIndex: 1,
+          parentId: "p_2_1_a",
+          frontierLeafIds: ["l1", "l2", "l3"],
+        },
+        {
+          depth: 2,
+          groupIndex: 0,
+          parentId: "p_2_0_b",
+          frontierLeafIds: ["l1", "l2"],
+        },
+      ],
+      frontierLeafIdSet: new Set(["l1"]),
+      availableLeafIdSet: new Set(["l1", "l2", "l3"]),
+    });
+
+    expect(selected).toBeDefined();
+    expect(selected?.expandedLeafIds).toEqual(["l2"]);
+    expect(selected?.nextFrontierLeafIds).toEqual(["l1", "l2"]);
+  });
+
+  it("breaks blocked-group recovery ties by stable metadata order", () => {
+    const selected = selectMinimalBlockedFrontierExpansion({
+      blockedGroups: [
+        {
+          depth: 3,
+          groupIndex: 2,
+          parentId: "p_3_2_z",
+          frontierLeafIds: ["l2"],
+        },
+        {
+          depth: 2,
+          groupIndex: 9,
+          parentId: "p_2_9_a",
+          frontierLeafIds: ["l2"],
+        },
+      ],
+      frontierLeafIdSet: new Set<string>(),
+      availableLeafIdSet: new Set(["l2"]),
+    });
+
+    expect(selected).toBeDefined();
+    expect(selected?.expandedLeafIds).toEqual(["l2"]);
+    expect(selected?.nextFrontierLeafIds).toEqual(["l2"]);
   });
 
   it("computes deterministic diff hash and reports config changes", () => {
@@ -444,6 +495,8 @@ describe("proof service", () => {
       expect(typeof topologyDiagnostic?.details?.frontierPartitionBlockedGroupCount).toBe("number");
       expect(typeof topologyDiagnostic?.details?.frontierPartitionRecoveredLeafCount).toBe("number");
       expect(typeof topologyDiagnostic?.details?.frontierPartitionRecoveryPassCount).toBe("number");
+      expect(typeof topologyDiagnostic?.details?.frontierPartitionRecoveryScheduledGroupCount).toBe("number");
+      expect(topologyDiagnostic?.details?.frontierPartitionRecoveryStrategy).toBe("minimal_blocked_group");
       expect(typeof topologyDiagnostic?.details?.frontierPartitionFallbackUsed).toBe("boolean");
       expect((topologyDiagnostic?.details?.reusedParentNodeCount as number) >= 0).toBe(true);
       expect((topologyDiagnostic?.details?.generatedParentNodeCount as number) >= 0).toBe(true);
@@ -458,6 +511,12 @@ describe("proof service", () => {
       expect((topologyDiagnostic?.details?.frontierPartitionBlockedGroupCount as number) >= 0).toBe(true);
       expect((topologyDiagnostic?.details?.frontierPartitionRecoveredLeafCount as number) >= 0).toBe(true);
       expect((topologyDiagnostic?.details?.frontierPartitionRecoveryPassCount as number) >= 0).toBe(true);
+      expect((topologyDiagnostic?.details?.frontierPartitionRecoveryScheduledGroupCount as number) >= 0).toBe(true);
+      if ((topologyDiagnostic?.details?.frontierPartitionRecoveryPassCount as number) > 0) {
+        expect(topologyDiagnostic?.details?.frontierPartitionRecoveryScheduledGroupCount).toBe(
+          topologyDiagnostic?.details?.frontierPartitionRecoveryPassCount,
+        );
+      }
     } finally {
       clearProofDatasetCacheForTests();
       if (previousCacheDir === undefined) {

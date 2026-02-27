@@ -1,18 +1,18 @@
 {
   "schemaVersion": "1.0.0",
-  "generatedAt": "2026-02-27T11:29:07.554Z",
+  "generatedAt": "2026-02-27T11:34:58.687Z",
   "proofId": "lean-verity-fixture",
   "configHash": "1b1e2b9ff73897b141a9f88c8d23a3b884495340813865fd955fa8fc3eaa4da2",
   "requestHash": "e6f53e14545f9579927084e1924992e7294f331551f9b89f4e93dc25669d6696",
-  "outcomeHash": "f09af0bb07c88dca1fe69b38cea80536f01f7dc25d3c88938e4ae88638c757e0",
+  "outcomeHash": "ad0be28a1fe26c2db73504bfc890e6ba0455a08d14c27454b11c143e39511190",
   "parameters": {
     "coldIterations": 3,
     "warmIterations": 3,
     "mutationTargetPath": "Verity/Core.lean"
   },
   "paths": {
-    "fixtureProjectRootHash": "eaabeb7ca664a8f132786107f42c05bc65ad1c55baaf51bdc6f7e9d3d4bbd101",
-    "cacheDirHash": "f508da949b5f333c4597f6850a7c2c6ea453b6e0f6ebd2b279513a285fa43315"
+    "fixtureProjectRootHash": "2783d61bda288d08566e3daff41e5d615f943b7c5fd867e9389cc905de57b3cd",
+    "cacheDirHash": "fab37e0ac15b7292778d4928b9234b507790b344a13825849e04c2f9a7fd5843"
   },
   "scenarios": {
     "coldNoPersistentCache": {
@@ -22,10 +22,10 @@
         "miss",
         "miss"
       ],
-      "meanMs": 17.677,
-      "medianMs": 7.349,
-      "minMs": 6.17,
-      "maxMs": 39.513
+      "meanMs": 15.763,
+      "medianMs": 5.916,
+      "minMs": 5.842,
+      "maxMs": 35.53
     },
     "warmPersistentCache": {
       "iterations": 3,
@@ -34,10 +34,10 @@
         "hit",
         "hit"
       ],
-      "meanMs": 2.308,
-      "medianMs": 2.321,
-      "minMs": 2.202,
-      "maxMs": 2.401
+      "meanMs": 1.788,
+      "medianMs": 1.776,
+      "minMs": 1.589,
+      "maxMs": 1.999
     },
     "semanticNoop": {
       "beforeChangeStatus": "hit",
@@ -78,6 +78,8 @@
       "frontierPartitionBlockedGroupCount": 0,
       "frontierPartitionRecoveredLeafCount": 0,
       "frontierPartitionRecoveryPassCount": 0,
+      "frontierPartitionRecoveryScheduledGroupCount": 0,
+      "frontierPartitionRecoveryStrategy": "minimal_blocked_group",
       "frontierPartitionFallbackUsed": false,
       "recoveryStatus": "hit",
       "recoverySnapshotHash": "40996c1ce2f9bdae613d9c4e1b905a1a654a9732ec5e0e8afa6dadaf9050f454"

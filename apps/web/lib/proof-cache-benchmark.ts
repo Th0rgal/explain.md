@@ -78,6 +78,8 @@ export interface ProofCacheBenchmarkReport {
       frontierPartitionBlockedGroupCount: number;
       frontierPartitionRecoveredLeafCount: number;
       frontierPartitionRecoveryPassCount: number;
+      frontierPartitionRecoveryScheduledGroupCount: number;
+      frontierPartitionRecoveryStrategy: "minimal_blocked_group" | "unknown";
       frontierPartitionFallbackUsed: boolean;
       recoveryStatus: "hit" | "miss";
       recoverySnapshotHash: string;
@@ -231,6 +233,11 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
         afterTopologyChange.cache.diagnostics,
         "frontierPartitionRecoveryPassCount",
       ),
+      frontierPartitionRecoveryScheduledGroupCount: readNumericTopologyDetail(
+        afterTopologyChange.cache.diagnostics,
+        "frontierPartitionRecoveryScheduledGroupCount",
+      ),
+      frontierPartitionRecoveryStrategy: readTopologyRecoveryStrategy(afterTopologyChange.cache.diagnostics),
       frontierPartitionFallbackUsed: readBooleanTopologyDetail(
         afterTopologyChange.cache.diagnostics,
         "frontierPartitionFallbackUsed",
@@ -275,6 +282,8 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
         frontierPartitionBlockedGroupCount: topologyChange.frontierPartitionBlockedGroupCount,
         frontierPartitionRecoveredLeafCount: topologyChange.frontierPartitionRecoveredLeafCount,
         frontierPartitionRecoveryPassCount: topologyChange.frontierPartitionRecoveryPassCount,
+        frontierPartitionRecoveryScheduledGroupCount: topologyChange.frontierPartitionRecoveryScheduledGroupCount,
+        frontierPartitionRecoveryStrategy: topologyChange.frontierPartitionRecoveryStrategy,
         frontierPartitionFallbackUsed: topologyChange.frontierPartitionFallbackUsed,
         recoveryStatus: topologyChange.recoveryStatus,
         snapshotChangedOnMutation: topologyChange.afterChangeSnapshotHash !== beforeTopologyChange.cache.snapshotHash,
@@ -342,7 +351,8 @@ function readNumericTopologyDetail(
     | "frontierPartitionLeafCount"
     | "frontierPartitionBlockedGroupCount"
     | "frontierPartitionRecoveredLeafCount"
-    | "frontierPartitionRecoveryPassCount",
+    | "frontierPartitionRecoveryPassCount"
+    | "frontierPartitionRecoveryScheduledGroupCount",
 ): number {
   const topologyDiagnostic = diagnostics.find((diagnostic) => diagnostic.code === "cache_incremental_topology_rebuild");
   const value = topologyDiagnostic?.details?.[key];
@@ -355,6 +365,15 @@ function readBooleanTopologyDetail(
 ): boolean {
   const topologyDiagnostic = diagnostics.find((diagnostic) => diagnostic.code === "cache_incremental_topology_rebuild");
   return topologyDiagnostic?.details?.[key] === true;
+}
+
+function readTopologyRecoveryStrategy(
+  diagnostics: Array<{ code: string; details?: Record<string, unknown> }>,
+): "minimal_blocked_group" | "unknown" {
+  const topologyDiagnostic = diagnostics.find((diagnostic) => diagnostic.code === "cache_incremental_topology_rebuild");
+  return topologyDiagnostic?.details?.frontierPartitionRecoveryStrategy === "minimal_blocked_group"
+    ? "minimal_blocked_group"
+    : "unknown";
 }
 
 async function captureCacheReportDuration(proofId: string, config: ExplanationConfigInput): Promise<ScenarioSample> {
