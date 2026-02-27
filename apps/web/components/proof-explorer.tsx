@@ -26,6 +26,7 @@ import {
   type VerificationJobResponse,
   type VerificationJobsResponse,
 } from "../lib/api-client";
+import { buildExplanationDiffPanelView } from "../lib/explanation-diff-view";
 import { buildLeafSourceProvenanceView } from "../lib/leaf-provenance";
 import { resolveTreeKeyboardIntent } from "../lib/tree-keyboard-navigation";
 import { computeTreeRenderWindow } from "../lib/tree-render-window";
@@ -45,6 +46,7 @@ const DEFAULT_CONFIG: ProofConfigInput = {
 const DEFAULT_PROFILE_USER_ID = "local-user";
 const TREE_RENDER_MAX_VISIBLE_ROWS = Number.parseInt(process.env.NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_MAX_ROWS ?? "120", 10);
 const TREE_RENDER_OVERSCAN_ROWS = Number.parseInt(process.env.NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_OVERSCAN_ROWS ?? "24", 10);
+const DIFF_RENDER_MAX_CHANGES = Number.parseInt(process.env.NEXT_PUBLIC_EXPLAIN_MD_DIFF_RENDER_MAX_CHANGES ?? "24", 10);
 
 interface ProofExplorerProps {
   proofId: string;
@@ -81,6 +83,10 @@ export function ProofExplorer(props: ProofExplorerProps) {
   const leafSourceProvenance = useMemo(
     () => (leafDetail?.view ? buildLeafSourceProvenanceView(leafDetail.view.shareReference) : undefined),
     [leafDetail],
+  );
+  const diffPanelView = useMemo(
+    () => (diff ? buildExplanationDiffPanelView(diff.report, { maxChanges: DIFF_RENDER_MAX_CHANGES }) : null),
+    [diff],
   );
 
   useEffect(() => {
@@ -883,13 +889,65 @@ export function ProofExplorer(props: ProofExplorerProps) {
         <h2>Diff</h2>
         <p className="meta">Diff hash: {diff?.diffHash ?? "unavailable"}</p>
         <p className="meta">Changed statements: {diff?.report.summary.changed ?? 0}</p>
-        <ul>
-          {(diff?.report.changes ?? []).slice(0, 8).map((change) => (
-            <li key={change.key}>
-              <strong>{change.type}</strong> {change.kind} ({change.supportLeafIds.join(", ")})
-            </li>
-          ))}
-        </ul>
+        <p
+          className="meta"
+          data-diff-total-changes={diffPanelView?.totalChanges ?? 0}
+          data-diff-rendered-changes={diffPanelView?.renderedChanges ?? 0}
+          data-diff-truncated-count={diffPanelView?.truncatedChangeCount ?? 0}
+        >
+          Rendered changes: {diffPanelView?.renderedChanges ?? 0}/{diffPanelView?.totalChanges ?? 0} | truncated:{" "}
+          {diffPanelView?.truncatedChangeCount ?? 0}
+        </p>
+        {diffPanelView ? (
+          <div className="diff-grid">
+            <div>
+              <h3>Changed ({diffPanelView.changed.length})</h3>
+              <ul>
+                {diffPanelView.changed.map((change) => (
+                  <li key={change.key} className="diff-change diff-change-changed">
+                    <p className="meta">
+                      {change.kind} | support leaves ({change.supportLeafCount}): {change.supportLeafIds.join(", ") || "none"}
+                    </p>
+                    <p>
+                      <strong>Before:</strong> {change.statementDelta?.prefix}
+                      <mark className="diff-mark-removed">{change.statementDelta?.beforeChanged || "(none)"}</mark>
+                      {change.statementDelta?.suffix}
+                    </p>
+                    <p>
+                      <strong>After:</strong> {change.statementDelta?.prefix}
+                      <mark className="diff-mark-added">{change.statementDelta?.afterChanged || "(none)"}</mark>
+                      {change.statementDelta?.suffix}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h3>Added ({diffPanelView.added.length})</h3>
+              <ul>
+                {diffPanelView.added.map((change) => (
+                  <li key={change.key} className="diff-change diff-change-added">
+                    <p className="meta">
+                      {change.kind} | support leaves ({change.supportLeafCount}): {change.supportLeafIds.join(", ") || "none"}
+                    </p>
+                    <p>{change.statementAfter ?? "(missing candidate statement)"}</p>
+                  </li>
+                ))}
+              </ul>
+              <h3>Removed ({diffPanelView.removed.length})</h3>
+              <ul>
+                {diffPanelView.removed.map((change) => (
+                  <li key={change.key} className="diff-change diff-change-removed">
+                    <p className="meta">
+                      {change.kind} | support leaves ({change.supportLeafCount}): {change.supportLeafIds.join(", ") || "none"}
+                    </p>
+                    <p>{change.statementBefore ?? "(missing baseline statement)"}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section className="panel diff" aria-label="Policy calibration report">

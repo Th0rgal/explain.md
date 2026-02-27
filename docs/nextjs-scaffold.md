@@ -66,9 +66,14 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - above threshold: render anchored window + overscan (`mode=windowed`) centered on focused or selected row
   - explicit section diagnostics for auditability (`data-tree-render-mode`, `data-tree-rendered-row-count`, `data-tree-hidden-above`, `data-tree-hidden-below`)
   - deterministic paging controls to move the render window without changing proof data
+- Diff panel applies deterministic change grouping/highlighting:
+  - grouped rendering by `changed`, `added`, `removed`
+  - changed statements split into `prefix`, `changed`, `suffix` spans using deterministic common-prefix/common-suffix extraction
+  - explicit section diagnostics (`data-diff-total-changes`, `data-diff-rendered-changes`, `data-diff-truncated-count`)
 - Windowing thresholds can be set with public env vars:
   - `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_MAX_ROWS` (default `120`)
   - `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_OVERSCAN_ROWS` (default `24`)
+  - `NEXT_PUBLIC_EXPLAIN_MD_DIFF_RENDER_MAX_CHANGES` (default `24`)
 - Deterministic benchmark artifact generation is available via `npm run web:bench:cache` (writes `docs/benchmarks/proof-cache-benchmark.json`).
 - The Lean fixture uses a deterministic summary provider (`temperature=0` behavior with fixed evidence-only synthesis), so parent statements remain child-entailed and reproducible.
 - Reproducibility contract for each queued job is derived from the selected theorem leaf:

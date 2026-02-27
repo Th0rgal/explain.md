@@ -76,9 +76,14 @@ The tree panel uses incremental root/children/path queries:
   - focus/selection anchored window center with stable overscan
   - explicit browser-auditable diagnostics (`data-tree-render-mode`, rendered/hidden row counts)
   - window paging controls (`Show previous rows` / `Show next rows`) for mouse-only traversal
+- Diff panel now uses deterministic change highlighting:
+  - grouped sections for `changed`, `added`, and `removed` entries
+  - statement-level before/after emphasis from deterministic common-prefix/common-suffix split
+  - explicit audit attributes (`data-diff-total-changes`, `data-diff-rendered-changes`, `data-diff-truncated-count`)
 - Render-window thresholds are configurable via:
   - `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_MAX_ROWS` (default `120`)
   - `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_OVERSCAN_ROWS` (default `24`)
+  - `NEXT_PUBLIC_EXPLAIN_MD_DIFF_RENDER_MAX_CHANGES` (default `24`)
 - Config profiles are persisted to `.explain-md/web-config-profiles.json` (override with `EXPLAIN_MD_WEB_CONFIG_PROFILE_LEDGER`).
 - Job IDs are deterministic and monotonic (`job-000001`, `job-000002`, ...).
 - Reproducibility contract values can be configured with:
