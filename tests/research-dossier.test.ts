@@ -3,9 +3,11 @@ import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  computeResearchEvidenceCheckCommandOutcomeHash,
   computeResearchDossierEvidenceHash,
   getRequiredResearchIssueCoverage,
   renderResearchDossierEvidenceCanonical,
+  validateResearchDossierEvidenceCommandOutcomes,
   validateResearchDossierEvidenceChecks,
   validateResearchDossierImplementationRefs,
   validateResearchDossierEvidence,
@@ -73,10 +75,30 @@ describe("research-dossier evidence contract", () => {
     expect(issues).toHaveLength(0);
   });
 
+  it("validates pinned evidence-check command outcome hashes", () => {
+    const evidence = loadEvidence();
+    const issues = validateResearchDossierEvidenceCommandOutcomes(evidence, (check) =>
+      computeResearchEvidenceCheckCommandOutcomeHash({
+        command: check.command,
+        artifactPath: check.artifactPath,
+        artifactSha256: check.expectedSha256,
+        exitCode: 0,
+      }),
+    );
+    expect(issues).toHaveLength(0);
+  });
+
   it("fails when an evidence check hash does not match", () => {
     const evidence = loadEvidence();
     const issues = validateResearchDossierEvidenceChecks(evidence, () => "0".repeat(64));
     expect(issues.length).toBeGreaterThan(0);
     expect(issues[0]?.message).toContain("Expected sha256");
+  });
+
+  it("fails when an evidence-check command outcome hash does not match", () => {
+    const evidence = loadEvidence();
+    const issues = validateResearchDossierEvidenceCommandOutcomes(evidence, () => "0".repeat(64));
+    expect(issues.length).toBeGreaterThan(0);
+    expect(issues[0]?.message).toContain("Expected command outcome sha256");
   });
 });

@@ -2,13 +2,23 @@
   "schemaVersion": "1.0.0",
   "scope": {
     "objective": "Build explain.md into a provenance-first system that converts Lean 4 proofs (especially Verity EDSL) into an inductive explanation tree with bounded, user-configurable complexity and browser-verifiable leaves.",
-    "requiredIssueCoverage": [7, 8, 9, 18, 23, 25]
+    "requiredIssueCoverage": [
+      7,
+      8,
+      9,
+      18,
+      23,
+      25
+    ]
   },
   "citations": [
     {
       "id": "lean4_cade_2021",
       "title": "The Lean 4 Theorem Prover and Programming Language",
-      "authors": ["Leonardo de Moura", "Sebastian Ullrich"],
+      "authors": [
+        "Leonardo de Moura",
+        "Sebastian Ullrich"
+      ],
       "year": 2021,
       "venue": "CADE-28",
       "url": "https://doi.org/10.1007/978-3-030-79876-5_37",
@@ -17,7 +27,12 @@
     {
       "id": "leandojo_neurips_2023",
       "title": "LeanDojo: Theorem Proving with Retrieval-Augmented Language Models",
-      "authors": ["Kaiyu Yang", "Aakanksha Chowdhery", "Anima Anandkumar", "Percy Liang"],
+      "authors": [
+        "Kaiyu Yang",
+        "Aakanksha Chowdhery",
+        "Anima Anandkumar",
+        "Percy Liang"
+      ],
       "year": 2023,
       "venue": "NeurIPS Datasets and Benchmarks",
       "url": "https://openreview.net/forum?id=g7OX2sOJtn",
@@ -26,7 +41,9 @@
     {
       "id": "sweller_cognitive_load_1988",
       "title": "Cognitive Load During Problem Solving: Effects on Learning",
-      "authors": ["John Sweller"],
+      "authors": [
+        "John Sweller"
+      ],
       "year": 1988,
       "venue": "Cognitive Science",
       "url": "https://doi.org/10.1207/s15516709cog1202_4",
@@ -35,7 +52,11 @@
     {
       "id": "wood_scaffolding_1976",
       "title": "The role of tutoring in problem solving",
-      "authors": ["David Wood", "Jerome S. Bruner", "Gail Ross"],
+      "authors": [
+        "David Wood",
+        "Jerome S. Bruner",
+        "Gail Ross"
+      ],
       "year": 1976,
       "venue": "Journal of Child Psychology and Psychiatry",
       "url": "https://doi.org/10.1111/j.1469-7610.1976.tb00381.x",
@@ -44,7 +65,12 @@
     {
       "id": "atkinson_worked_examples_2000",
       "title": "Learning from Examples: Instructional Principles from the Worked Examples Research",
-      "authors": ["Robert K. Atkinson", "Sharon J. Derry", "Alexander Renkl", "Donald Wortham"],
+      "authors": [
+        "Robert K. Atkinson",
+        "Sharon J. Derry",
+        "Alexander Renkl",
+        "Donald Wortham"
+      ],
       "year": 2000,
       "venue": "Review of Educational Research",
       "url": "https://doi.org/10.3102/00346543070002181",
@@ -53,7 +79,12 @@
     {
       "id": "kalyuga_expertise_reversal_2003",
       "title": "The Expertise Reversal Effect",
-      "authors": ["Slava Kalyuga", "Paul Ayres", "Paul Chandler", "John Sweller"],
+      "authors": [
+        "Slava Kalyuga",
+        "Paul Ayres",
+        "Paul Chandler",
+        "John Sweller"
+      ],
       "year": 2003,
       "venue": "Educational Psychologist",
       "url": "https://doi.org/10.1207/S15326985EP3801_4",
@@ -62,7 +93,10 @@
     {
       "id": "novak_concept_maps_2008",
       "title": "The Theory Underlying Concept Maps and How to Construct and Use Them",
-      "authors": ["Joseph D. Novak", "Alberto J. Canas"],
+      "authors": [
+        "Joseph D. Novak",
+        "Alberto J. Canas"
+      ],
       "year": 2008,
       "venue": "Institute for Human and Machine Cognition Technical Report",
       "url": "https://cmap.ihmc.us/docs/theory-of-concept-maps",
@@ -71,7 +105,9 @@
     {
       "id": "vanlehn_its_2011",
       "title": "The Relative Effectiveness of Human Tutoring, Intelligent Tutoring Systems, and Other Tutoring Systems",
-      "authors": ["Kurt VanLehn"],
+      "authors": [
+        "Kurt VanLehn"
+      ],
       "year": 2011,
       "venue": "Educational Psychologist",
       "url": "https://doi.org/10.1111/j.1467-9280.2010.02677.x",
@@ -80,7 +116,10 @@
     {
       "id": "polu_generative_atp_2020",
       "title": "Generative Language Modeling for Automated Theorem Proving",
-      "authors": ["Stanislas Polu", "Ilya Sutskever"],
+      "authors": [
+        "Stanislas Polu",
+        "Ilya Sutskever"
+      ],
       "year": 2020,
       "venue": "arXiv",
       "url": "https://arxiv.org/abs/2009.03393",
@@ -98,13 +137,18 @@
         "src/tree-builder.ts",
         "docs/child-grouping.md"
       ],
-      "citationIds": ["novak_concept_maps_2008", "sweller_cognitive_load_1988", "wood_scaffolding_1976"],
+      "citationIds": [
+        "novak_concept_maps_2008",
+        "sweller_cognitive_load_1988",
+        "wood_scaffolding_1976"
+      ],
       "evidenceChecks": [
         {
           "id": "issue-7-child-grouping-test-contract",
           "command": "npm run -s test -- tests/child-grouping.test.ts",
           "artifactPath": "tests/child-grouping.test.ts",
-          "expectedSha256": "10859a75551151110dd2481ae01584ab2bcab49ccba59e9933dbea684a818748"
+          "expectedSha256": "10859a75551151110dd2481ae01584ab2bcab49ccba59e9933dbea684a818748",
+          "expectedCommandOutcomeSha256": "7818acde712aeaf6b92ee906a904e9896ac70beae3303c8da2bf91aecf451162"
         }
       ]
     },
@@ -118,13 +162,17 @@
         "src/pedagogical-policy.ts",
         "docs/summary-pipeline.md"
       ],
-      "citationIds": ["atkinson_worked_examples_2000", "polu_generative_atp_2020"],
+      "citationIds": [
+        "atkinson_worked_examples_2000",
+        "polu_generative_atp_2020"
+      ],
       "evidenceChecks": [
         {
           "id": "issue-8-summary-pipeline-test-contract",
           "command": "npm run -s test -- tests/summary-pipeline.test.ts",
           "artifactPath": "tests/summary-pipeline.test.ts",
-          "expectedSha256": "5b5ce8928fd8cbd6b5d3a67120d97f57a15720e779de521abf213d1d86604a13"
+          "expectedSha256": "5b5ce8928fd8cbd6b5d3a67120d97f57a15720e779de521abf213d1d86604a13",
+          "expectedCommandOutcomeSha256": "32a3b57e141cbf67fd14db7c7a19b3acd7eb56d4b7881acaef8c946fa1780e05"
         }
       ]
     },
@@ -138,13 +186,17 @@
         "src/tree-storage.ts",
         "docs/tree-builder.md"
       ],
-      "citationIds": ["lean4_cade_2021", "novak_concept_maps_2008"],
+      "citationIds": [
+        "lean4_cade_2021",
+        "novak_concept_maps_2008"
+      ],
       "evidenceChecks": [
         {
           "id": "issue-9-tree-builder-test-contract",
           "command": "npm run -s test -- tests/tree-builder.test.ts",
           "artifactPath": "tests/tree-builder.test.ts",
-          "expectedSha256": "1296e816064e06232460d4c35b9d82fad047cb552375d2c20899d465c31a572b"
+          "expectedSha256": "1296e816064e06232460d4c35b9d82fad047cb552375d2c20899d465c31a572b",
+          "expectedCommandOutcomeSha256": "f112d64f53fb54d8f2d8e8cadf239126dd3ea9c3d21971a0f08ed2b0aa223a72"
         }
       ]
     },
@@ -158,13 +210,18 @@
         "src/quality-benchmark-presets.ts",
         "docs/evaluation-harness.md"
       ],
-      "citationIds": ["leandojo_neurips_2023", "polu_generative_atp_2020", "vanlehn_its_2011"],
+      "citationIds": [
+        "leandojo_neurips_2023",
+        "polu_generative_atp_2020",
+        "vanlehn_its_2011"
+      ],
       "evidenceChecks": [
         {
           "id": "issue-18-quality-baseline-benchmark",
           "command": "npm run -s eval:quality:ci",
           "artifactPath": "docs/benchmarks/quality-gate-baseline.json",
-          "expectedSha256": "9aa34c7f8ce961158b37b60f67a55f32f8d84aeb253af4c99ca5d83c5e4ae686"
+          "expectedSha256": "9aa34c7f8ce961158b37b60f67a55f32f8d84aeb253af4c99ca5d83c5e4ae686",
+          "expectedCommandOutcomeSha256": "bbdf89824ed38b2d834ef563d9235221bf9cb8db61b718dccc5d55c89e1c293f"
         }
       ]
     },
@@ -178,13 +235,17 @@
         "apps/web/lib/config-input.ts",
         "docs/config-contract.md"
       ],
-      "citationIds": ["kalyuga_expertise_reversal_2003", "sweller_cognitive_load_1988"],
+      "citationIds": [
+        "kalyuga_expertise_reversal_2003",
+        "sweller_cognitive_load_1988"
+      ],
       "evidenceChecks": [
         {
           "id": "issue-23-config-contract-test-contract",
           "command": "npm run -s test -- tests/config-contract.test.ts",
           "artifactPath": "tests/config-contract.test.ts",
-          "expectedSha256": "f6dac11b8c454557f27abe46130ed750e00b0076c95f984a2f84b0110be158a3"
+          "expectedSha256": "f6dac11b8c454557f27abe46130ed750e00b0076c95f984a2f84b0110be158a3",
+          "expectedCommandOutcomeSha256": "25dc4310d22cd2aa7938e11bd9a66cc0c2a954c89a8c2d1777825cf1a1b61b17"
         }
       ]
     },
@@ -198,13 +259,18 @@
         "src/tree-builder.ts",
         "docs/pedagogical-policy.md"
       ],
-      "citationIds": ["atkinson_worked_examples_2000", "sweller_cognitive_load_1988", "wood_scaffolding_1976"],
+      "citationIds": [
+        "atkinson_worked_examples_2000",
+        "sweller_cognitive_load_1988",
+        "wood_scaffolding_1976"
+      ],
       "evidenceChecks": [
         {
           "id": "issue-25-pedagogical-policy-test-contract",
           "command": "npm run -s test -- tests/pedagogical-policy.test.ts",
           "artifactPath": "tests/pedagogical-policy.test.ts",
-          "expectedSha256": "e33747504da38c88cd404a307e4a5d06f464268afd9c9cc24b5671edb924299e"
+          "expectedSha256": "e33747504da38c88cd404a307e4a5d06f464268afd9c9cc24b5671edb924299e",
+          "expectedCommandOutcomeSha256": "af8b40e37a5b43ef9834f4d086f0665306aa555217b471112403558b7dc8fb17"
         }
       ]
     }

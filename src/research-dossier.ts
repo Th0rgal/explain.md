@@ -45,12 +45,21 @@ export interface ResearchDossierValidationIssue {
 
 export type ResearchDossierRefExists = (path: string) => boolean;
 export type ResearchDossierArtifactHashResolver = (path: string) => string | undefined;
+export type ResearchDossierEvidenceCheckOutcomeHashResolver = (check: ResearchEvidenceCheck) => string | undefined;
 
 export interface ResearchEvidenceCheck {
   id: string;
   command: string;
   artifactPath: string;
   expectedSha256: string;
+  expectedCommandOutcomeSha256: string;
+}
+
+export interface ResearchEvidenceCheckCommandOutcome {
+  command: string;
+  artifactPath: string;
+  artifactSha256: string;
+  exitCode: number;
 }
 
 const REQUIRED_ISSUE_COVERAGE = [7, 8, 9, 18, 23, 25] as const;
@@ -143,6 +152,47 @@ export function validateResearchDossierEvidenceChecks(
         issues.push({
           path: `designDecisions.${decision.id}.evidenceChecks.${check.id}.expectedSha256`,
           message: `Expected sha256 '${check.expectedSha256}' but resolved '${actualHash}' for '${check.artifactPath}'.`,
+        });
+      }
+    }
+  }
+  return issues;
+}
+
+export function renderResearchEvidenceCheckCommandOutcomeCanonical(
+  outcome: ResearchEvidenceCheckCommandOutcome,
+): string {
+  return JSON.stringify({
+    command: outcome.command,
+    artifactPath: outcome.artifactPath,
+    artifactSha256: outcome.artifactSha256,
+    exitCode: outcome.exitCode,
+  });
+}
+
+export function computeResearchEvidenceCheckCommandOutcomeHash(outcome: ResearchEvidenceCheckCommandOutcome): string {
+  return createHash("sha256").update(renderResearchEvidenceCheckCommandOutcomeCanonical(outcome)).digest("hex");
+}
+
+export function validateResearchDossierEvidenceCommandOutcomes(
+  evidence: ResearchDossierEvidence,
+  resolveOutcomeHash: ResearchDossierEvidenceCheckOutcomeHashResolver,
+): ResearchDossierValidationIssue[] {
+  const issues: ResearchDossierValidationIssue[] = [];
+  for (const decision of evidence.designDecisions) {
+    for (const check of decision.evidenceChecks) {
+      const actualHash = resolveOutcomeHash(check);
+      if (!actualHash) {
+        issues.push({
+          path: `designDecisions.${decision.id}.evidenceChecks.${check.id}.expectedCommandOutcomeSha256`,
+          message: `Command outcome hash resolution failed for '${check.command}'.`,
+        });
+        continue;
+      }
+      if (actualHash !== check.expectedCommandOutcomeSha256) {
+        issues.push({
+          path: `designDecisions.${decision.id}.evidenceChecks.${check.id}.expectedCommandOutcomeSha256`,
+          message: `Expected command outcome sha256 '${check.expectedCommandOutcomeSha256}' but resolved '${actualHash}' for '${check.command}'.`,
         });
       }
     }
@@ -371,12 +421,23 @@ function parseEvidenceChecks(
       const command = asString(entry.command, `${path}.${index}.command`, issues);
       const artifactPath = asString(entry.artifactPath, `${path}.${index}.artifactPath`, issues);
       const expectedSha256 = asString(entry.expectedSha256, `${path}.${index}.expectedSha256`, issues);
+      const expectedCommandOutcomeSha256 = asString(
+        entry.expectedCommandOutcomeSha256,
+        `${path}.${index}.expectedCommandOutcomeSha256`,
+        issues,
+      );
 
-      if (!id || !command || !artifactPath || !expectedSha256) {
+      if (!id || !command || !artifactPath || !expectedSha256 || !expectedCommandOutcomeSha256) {
         return undefined;
       }
       if (!/^[a-f0-9]{64}$/i.test(expectedSha256)) {
         issues.push({ path: `${path}.${index}.expectedSha256`, message: "Must be a 64-character hex sha256 string." });
+      }
+      if (!/^[a-f0-9]{64}$/i.test(expectedCommandOutcomeSha256)) {
+        issues.push({
+          path: `${path}.${index}.expectedCommandOutcomeSha256`,
+          message: "Must be a 64-character hex sha256 string.",
+        });
       }
 
       return {
@@ -384,6 +445,7 @@ function parseEvidenceChecks(
         command,
         artifactPath,
         expectedSha256: expectedSha256.toLowerCase(),
+        expectedCommandOutcomeSha256: expectedCommandOutcomeSha256.toLowerCase(),
       };
     })
     .filter((entry): entry is ResearchEvidenceCheck => entry !== undefined);

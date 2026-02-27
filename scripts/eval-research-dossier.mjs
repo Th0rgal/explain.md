@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
@@ -37,7 +38,34 @@ if (!validation.evidence) {
     }
     return createHash("sha256").update(readFileSync(absolutePath)).digest("hex");
   });
-  const allIssues = [...implementationRefIssues, ...evidenceCheckIssues];
+  const evidenceCommandIssues = mod.validateResearchDossierEvidenceCommandOutcomes(validation.evidence, (check) => {
+    const commandResult = spawnSync("bash", ["-lc", check.command], {
+      cwd: resolve("."),
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        CI: process.env.CI ?? "1",
+      },
+    });
+
+    const exitCode = typeof commandResult.status === "number" ? commandResult.status : 1;
+    if (exitCode !== 0) {
+      return undefined;
+    }
+
+    const artifactAbsolutePath = resolve(check.artifactPath);
+    if (!existsSync(artifactAbsolutePath)) {
+      return undefined;
+    }
+    const artifactSha256 = createHash("sha256").update(readFileSync(artifactAbsolutePath)).digest("hex");
+    return mod.computeResearchEvidenceCheckCommandOutcomeHash({
+      command: check.command,
+      artifactPath: check.artifactPath,
+      artifactSha256,
+      exitCode,
+    });
+  });
+  const allIssues = [...implementationRefIssues, ...evidenceCheckIssues, ...evidenceCommandIssues];
   if (allIssues.length > 0) {
     const report = {
       ok: false,
@@ -58,6 +86,10 @@ if (!validation.evidence) {
       citationCount: validation.evidence.citations.length,
       decisionCount: validation.evidence.designDecisions.length,
       evidenceCheckCount: validation.evidence.designDecisions.reduce(
+        (accumulator, decision) => accumulator + decision.evidenceChecks.length,
+        0,
+      ),
+      evidenceCommandReplayCount: validation.evidence.designDecisions.reduce(
         (accumulator, decision) => accumulator + decision.evidenceChecks.length,
         0,
       ),

@@ -11,12 +11,13 @@ Objective: convert Lean 4 proof artifacts into an inductive explanation tree whe
 
 This dossier complements implementation specs with external research evidence and a machine-checkable mapping artifact:
 - `docs/research-dossier-evidence.json`
-- `npm run eval:research-dossier` fails closed if the evidence schema is invalid, required issue coverage is missing, citations are unresolved, any `implementationRefs` path does not exist in the repository, or any pinned `evidenceChecks[].expectedSha256` does not match the referenced artifact.
+- `npm run eval:research-dossier` fails closed if the evidence schema is invalid, required issue coverage is missing, citations are unresolved, any `implementationRefs` path does not exist in the repository, any pinned `evidenceChecks[].expectedSha256` does not match the referenced artifact, or any replayed `evidenceChecks[].command` does not match `expectedCommandOutcomeSha256`.
 
 Each design decision now includes at least one claim-level `evidenceChecks` record:
 - deterministic command to regenerate/validate the evidence,
 - pinned artifact path,
-- pinned SHA-256 of that artifact.
+- pinned SHA-256 of that artifact,
+- pinned SHA-256 of canonical command outcome (`{ command, artifactPath, artifactSha256, exitCode }`).
 
 ## Survey: theorem proving and Lean-relevant methods
 
