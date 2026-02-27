@@ -12,6 +12,11 @@ import {
   computeProgressiveDisclosureHash,
 } from "../../../dist/progressive-disclosure";
 import { buildLeafDetailView, computeLeafDetailHash } from "../../../dist/leaf-detail";
+import {
+  computeTreeStorageSnapshotHash,
+  createTreeQueryApi,
+  exportTreeStorageSnapshot,
+} from "../../../dist/tree-storage";
 import type { VerificationJob } from "../../../dist/verification-flow";
 import { buildConfiguredSeedTree, getSeedLeaves, seedConfig } from "./seed-proof";
 
@@ -41,6 +46,20 @@ export interface DiffRequest {
 export interface LeafDetailRequest {
   proofId: string;
   leafId: string;
+  config?: ExplanationConfigInput;
+}
+
+export interface NodeChildrenRequest {
+  proofId: string;
+  nodeId: string;
+  config?: ExplanationConfigInput;
+  offset?: number;
+  limit?: number;
+}
+
+export interface NodePathRequest {
+  proofId: string;
+  nodeId: string;
   config?: ExplanationConfigInput;
 }
 
@@ -165,6 +184,70 @@ export function buildSeedLeafDetail(request: LeafDetailRequest) {
   };
 }
 
+export function buildSeedRootView(proofId: string, configInput: ExplanationConfigInput = {}) {
+  const dataset = loadSeedDataset(proofId, configInput);
+  const api = createSeedTreeQueryApi(dataset);
+  const root = api.getRoot();
+  const requestHash = computeCanonicalRequestHash({
+    proofId,
+    configHash: dataset.configHash,
+    query: "root",
+  });
+
+  return {
+    proofId,
+    configHash: dataset.configHash,
+    requestHash,
+    snapshotHash: computeTreeStorageSnapshotHash(api.snapshot),
+    root,
+  };
+}
+
+export function buildSeedNodeChildrenView(request: NodeChildrenRequest) {
+  const dataset = loadSeedDataset(request.proofId, request.config);
+  const api = createSeedTreeQueryApi(dataset);
+  const children = api.getChildren(request.nodeId, {
+    offset: request.offset,
+    limit: request.limit,
+  });
+  const requestHash = computeCanonicalRequestHash({
+    proofId: request.proofId,
+    nodeId: request.nodeId,
+    configHash: dataset.configHash,
+    offset: request.offset,
+    limit: request.limit,
+    query: "children",
+  });
+
+  return {
+    proofId: request.proofId,
+    configHash: dataset.configHash,
+    requestHash,
+    snapshotHash: computeTreeStorageSnapshotHash(api.snapshot),
+    children,
+  };
+}
+
+export function buildSeedNodePathView(request: NodePathRequest) {
+  const dataset = loadSeedDataset(request.proofId, request.config);
+  const api = createSeedTreeQueryApi(dataset);
+  const path = api.getAncestryPath(request.nodeId);
+  const requestHash = computeCanonicalRequestHash({
+    proofId: request.proofId,
+    nodeId: request.nodeId,
+    configHash: dataset.configHash,
+    query: "path",
+  });
+
+  return {
+    proofId: request.proofId,
+    configHash: dataset.configHash,
+    requestHash,
+    snapshotHash: computeTreeStorageSnapshotHash(api.snapshot),
+    path,
+  };
+}
+
 function assertSupportedProof(proofId: string): void {
   if (proofId !== SEED_PROOF_ID) {
     throw new Error(`Unsupported proofId '${proofId}'. Supported proofs: ${SEED_PROOF_ID}.`);
@@ -262,4 +345,13 @@ function sampleVerificationJobs(proofId: string, leafId: string): VerificationJo
       },
     },
   ];
+}
+
+function createSeedTreeQueryApi(dataset: SeedDataset) {
+  const snapshot = exportTreeStorageSnapshot(dataset.tree as never, {
+    proofId: dataset.proofId,
+    leaves: dataset.leaves,
+    config: dataset.config,
+  });
+  return createTreeQueryApi(snapshot);
 }

@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { buildSeedDiff, buildSeedLeafDetail, buildSeedProjection, listSeedProofs, SEED_PROOF_ID } from "../lib/proof-service";
+import {
+  buildSeedDiff,
+  buildSeedLeafDetail,
+  buildSeedNodeChildrenView,
+  buildSeedNodePathView,
+  buildSeedProjection,
+  buildSeedRootView,
+  listSeedProofs,
+  SEED_PROOF_ID,
+} from "../lib/proof-service";
 
 describe("proof service", () => {
   it("returns deterministic projection hash for identical requests", () => {
@@ -65,5 +74,31 @@ describe("proof service", () => {
   it("fails clearly for unsupported proof id", () => {
     expect(() => listSeedProofs({ language: "en" })).not.toThrow();
     expect(() => buildSeedProjection({ proofId: "unknown-proof" })).toThrow(/Unsupported proofId/);
+  });
+
+  it("returns deterministic root/children/path query views", () => {
+    const root = buildSeedRootView(SEED_PROOF_ID, {
+      abstractionLevel: 3,
+      complexityLevel: 3,
+    });
+    expect(root.root.node?.id).toBe("p2_root");
+    expect(root.snapshotHash).toHaveLength(64);
+
+    const children = buildSeedNodeChildrenView({
+      proofId: SEED_PROOF_ID,
+      nodeId: "p2_root",
+      limit: 1,
+      offset: 0,
+    });
+    expect(children.children.children.length).toBe(1);
+    expect(children.children.totalChildren).toBeGreaterThan(1);
+
+    const path = buildSeedNodePathView({
+      proofId: SEED_PROOF_ID,
+      nodeId: "Verity.ContractSpec.init_sound",
+    });
+    expect(path.path.ok).toBe(true);
+    expect(path.path.path[0]?.id).toBe("p2_root");
+    expect(path.path.path[path.path.path.length - 1]?.id).toBe("Verity.ContractSpec.init_sound");
   });
 });

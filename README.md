@@ -21,6 +21,7 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #18: deterministic faithfulness/simplicity evaluation harness with per-parent/per-depth quality metrics, threshold gating, and canonical report hashing.
 - Issue #15 (backend contract): deterministic progressive-disclosure projection and config-aware explanation diff contract for root-first UI rendering.
 - Issue #14: Next.js App Router scaffold with deterministic seeded-proof API adapters, frontend client layer, and accessible loading/error shell.
+- Issue #13: deterministic tree storage/query contract with versioned snapshot schema, root/children/ancestry/leaf-provenance reads, and canonical import/export hashing.
 
 ## Local checks
 ```bash
@@ -62,4 +63,5 @@ EXPLAIN_MD_LIVE_RPC_API_KEY=... npm run test:live:summary
 - [Verification HTTP API service](docs/verification-api.md)
 - [Leaf detail contract](docs/leaf-detail.md)
 - [Progressive disclosure + explanation diff](docs/progressive-disclosure.md)
+- [Tree storage + query APIs](docs/tree-storage.md)
 - [Next.js web scaffold](docs/nextjs-scaffold.md)

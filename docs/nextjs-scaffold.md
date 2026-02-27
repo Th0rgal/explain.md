@@ -7,6 +7,9 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 - Next.js `App Router` project under `apps/web`.
 - Seeded proof API surface that wraps existing provenance contracts:
   - `GET /api/proofs/seed`
+  - `GET /api/proofs/root`
+  - `GET /api/proofs/nodes/:nodeId/children`
+  - `GET /api/proofs/nodes/:nodeId/path`
   - `POST /api/proofs/view`
   - `POST /api/proofs/diff`
   - `GET /api/proofs/leaves/:leafId`
@@ -21,6 +24,7 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - `requestHash`
   - `viewHash` / `diffHash` / `detailHash`
 - Leaf detail panel is backed by provenance path + deterministic sample verification history.
+- Node/root/path query routes use canonical tree-storage snapshots, enabling stable root/children/ancestry reads for progressive expansion UIs.
 
 ## State management
 - Baseline strategy: local React state (`useState`) with deterministic API payloads.
