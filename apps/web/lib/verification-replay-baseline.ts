@@ -30,6 +30,13 @@ export function assertVerificationReplayEvaluationBaseline(
     assertSummaryField("jobHash", baseline, report);
     assertSummaryField("reproducibilityHash", baseline, report);
     assertSummaryField("replayCommand", baseline, report);
+    assertSummaryField("treeConfigHash", baseline, report);
+    assertSummaryField("treeSnapshotHash", baseline, report);
+    assertSummaryField("leafDetailRequestHash", baseline, report);
+    assertSummaryField("leafDetailConfigHash", baseline, report);
+    assertSummaryField("leafDetailHash", baseline, report);
+    assertSummaryField("nodePathRequestHash", baseline, report);
+    assertSummaryField("nodePathSnapshotHash", baseline, report);
     assertSummaryField("envKeyCount", baseline, report);
     assertSummaryField("logLineCount", baseline, report);
     assertSummaryField("jsonLineCount", baseline, report);

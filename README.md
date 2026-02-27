@@ -44,6 +44,7 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #15 follow-up: deterministic large-tree rendering benchmark is now fail-closed in CI via baseline hash checks (`web:eval:tree-scale:ci`).
 - Issue #20 follow-up: Proof Explorer telemetry now avoids keyboard double-emission drift by recording keyboard actions as `tree_keyboard` and emitting direct tree action events only for non-keyboard sources.
 - Issue #15 follow-up: leaf verification panel now exports deterministic replay artifacts (canonical JSON + hash-tagged filename) for browser-to-operator provenance handoff.
+- Issue #15 follow-up: replay artifact export now also embeds tree/leaf query hash context (`treeSnapshotHash`, `leafDetailHash`, `nodePathRequestHash`, etc.) so browser context remains auditable after handoff.
 - Issue #15 follow-up: verification replay artifact benchmarks are now fail-closed in CI and in the root release gate via baseline hash checks (`web:eval:verification-replay:ci`).
 
 ## Local checks

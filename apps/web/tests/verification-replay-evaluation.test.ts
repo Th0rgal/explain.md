@@ -9,7 +9,15 @@ describe("verification replay evaluation", () => {
 
     expect(first.requestHash).toBe(second.requestHash);
     expect(first.outcomeHash).toBe(second.outcomeHash);
+    expect(first.parameters.contextFieldCount).toBe(7);
     expect(first.summary.exportFilename).toBe("verification-replay-seed-verity-leaf-tx-prover-job-1-ffffffffffff.json");
+    expect(first.summary.treeConfigHash).toBe("c".repeat(64));
+    expect(first.summary.treeSnapshotHash).toBe("d".repeat(64));
+    expect(first.summary.leafDetailRequestHash).toBe("e".repeat(64));
+    expect(first.summary.leafDetailConfigHash).toBe("1".repeat(64));
+    expect(first.summary.leafDetailHash).toBe("2".repeat(64));
+    expect(first.summary.nodePathRequestHash).toBe("3".repeat(64));
+    expect(first.summary.nodePathSnapshotHash).toBe("4".repeat(64));
     expect(first.summary.envKeyCount).toBe(2);
     expect(first.summary.logLineCount).toBe(2);
     expect(first.summary.jsonLineCount).toBeGreaterThan(1);

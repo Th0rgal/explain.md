@@ -1,10 +1,19 @@
 import type { VerificationJobResponse } from "./api-client";
 
 export interface VerificationReplayArtifact {
-  schemaVersion: "1.0.0";
+  schemaVersion: "1.1.0";
   proofId: string;
   leafId: string;
   requestHash: string;
+  context: {
+    treeConfigHash?: string;
+    treeSnapshotHash?: string;
+    leafDetailRequestHash?: string;
+    leafDetailConfigHash?: string;
+    leafDetailHash?: string;
+    nodePathRequestHash?: string;
+    nodePathSnapshotHash?: string;
+  };
   job: {
     jobId: string;
     queueSequence: number;
@@ -48,12 +57,22 @@ export function buildVerificationReplayArtifact(
   proofId: string,
   leafId: string,
   response: VerificationJobResponse,
+  context: {
+    treeConfigHash?: string;
+    treeSnapshotHash?: string;
+    leafDetailRequestHash?: string;
+    leafDetailConfigHash?: string;
+    leafDetailHash?: string;
+    nodePathRequestHash?: string;
+    nodePathSnapshotHash?: string;
+  } = {},
 ): VerificationReplayArtifact {
   return {
-    schemaVersion: "1.0.0",
+    schemaVersion: "1.1.0",
     proofId,
     leafId,
     requestHash: response.requestHash,
+    context: compactContext(context),
     job: {
       ...response.job,
       logs: [...response.job.logs].sort((left, right) => left.index - right.index),
@@ -111,4 +130,18 @@ function normalizeArtifactToken(value: string): string {
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
   return normalized.length > 0 ? normalized : "unknown";
+}
+
+function compactContext(context: {
+  treeConfigHash?: string;
+  treeSnapshotHash?: string;
+  leafDetailRequestHash?: string;
+  leafDetailConfigHash?: string;
+  leafDetailHash?: string;
+  nodePathRequestHash?: string;
+  nodePathSnapshotHash?: string;
+}): VerificationReplayArtifact["context"] {
+  const entries = Object.entries(context).filter(([, value]) => typeof value === "string" && value.length > 0);
+  entries.sort(([left], [right]) => left.localeCompare(right));
+  return Object.fromEntries(entries) as VerificationReplayArtifact["context"];
 }

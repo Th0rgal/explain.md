@@ -55,9 +55,26 @@ function createResponseFixture(): VerificationJobResponse {
 
 describe("verification replay artifact", () => {
   it("builds deterministic canonical replay payload", () => {
-    const artifact = buildVerificationReplayArtifact("Seed Verity", "leaf/tx prover", createResponseFixture());
+    const artifact = buildVerificationReplayArtifact("Seed Verity", "leaf/tx prover", createResponseFixture(), {
+      treeSnapshotHash: "1".repeat(64),
+      treeConfigHash: "2".repeat(64),
+      leafDetailRequestHash: "3".repeat(64),
+      leafDetailConfigHash: "4".repeat(64),
+      leafDetailHash: "5".repeat(64),
+      nodePathRequestHash: "6".repeat(64),
+      nodePathSnapshotHash: "7".repeat(64),
+    });
 
-    expect(artifact.schemaVersion).toBe("1.0.0");
+    expect(artifact.schemaVersion).toBe("1.1.0");
+    expect(artifact.context).toEqual({
+      leafDetailConfigHash: "4".repeat(64),
+      leafDetailHash: "5".repeat(64),
+      leafDetailRequestHash: "3".repeat(64),
+      nodePathRequestHash: "6".repeat(64),
+      nodePathSnapshotHash: "7".repeat(64),
+      treeConfigHash: "2".repeat(64),
+      treeSnapshotHash: "1".repeat(64),
+    });
     expect(Object.keys(artifact.job.reproducibility.env)).toEqual(["ALPHA", "ZED"]);
     expect(artifact.job.logs.map((entry) => entry.index)).toEqual([3, 8]);
     expect(artifact.replay).toEqual({
@@ -73,6 +90,20 @@ describe("verification replay artifact", () => {
 
     expect(rendered.endsWith("\n")).toBe(true);
     expect(JSON.parse(rendered)).toEqual(artifact);
+  });
+
+  it("drops undefined context values deterministically", () => {
+    const artifact = buildVerificationReplayArtifact("seed-verity", "leaf-a", createResponseFixture(), {
+      treeConfigHash: "2".repeat(64),
+      treeSnapshotHash: "",
+      leafDetailRequestHash: undefined,
+      leafDetailHash: "5".repeat(64),
+    });
+
+    expect(artifact.context).toEqual({
+      leafDetailHash: "5".repeat(64),
+      treeConfigHash: "2".repeat(64),
+    });
   });
 
   it("normalizes export filenames deterministically", () => {

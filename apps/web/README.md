@@ -153,6 +153,10 @@ The tree panel uses incremental root/children/path queries:
 - Proof Explorer leaf panel now exports deterministic replay artifacts as JSON:
   - filename contract: `verification-replay-<proof>-<leaf>-<job>-<hash12>.json`
   - payload includes `requestHash`, canonicalized job fields, sorted reproducibility `env`, sorted logs, `jobHash`, `reproducibilityHash`, and `replayCommand`
+  - payload also includes tree/leaf query provenance hashes when available:
+    - `treeConfigHash`, `treeSnapshotHash`
+    - `leafDetailRequestHash`, `leafDetailConfigHash`, `leafDetailHash`
+    - `nodePathRequestHash`, `nodePathSnapshotHash`
 - Verification routes support trace correlation through `parentTraceId`:
   - `POST /api/proofs/leaves/:leafId/verify` request body
   - `GET /api/proofs/leaves/:leafId/verification-jobs?parentTraceId=<trace>`

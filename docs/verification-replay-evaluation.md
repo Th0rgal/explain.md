@@ -24,7 +24,7 @@ The CI check fails closed if any of these drift:
 - `schemaVersion`
 - `requestHash`
 - `outcomeHash`
-- summary fields (`exportFilename`, `requestHash`, `jobHash`, `reproducibilityHash`, `replayCommand`, `envKeyCount`, `logLineCount`, `jsonLineCount`)
+- summary fields (`exportFilename`, `requestHash`, `jobHash`, `reproducibilityHash`, `replayCommand`, tree/leaf/path context hashes, `envKeyCount`, `logLineCount`, `jsonLineCount`)
 
 ## Current pinned evidence
 - `requestHash`: `c38fc29da899af673dbc7bdad5064543dd316bc138d9df0aad839e6fe345d3d2`

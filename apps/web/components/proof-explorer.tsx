@@ -720,7 +720,15 @@ export function ProofExplorer(props: ProofExplorerProps) {
       return;
     }
     try {
-      const artifact = buildVerificationReplayArtifact(props.proofId, selectedLeafId, selectedVerificationJob);
+      const artifact = buildVerificationReplayArtifact(props.proofId, selectedLeafId, selectedVerificationJob, {
+        treeConfigHash,
+        treeSnapshotHash,
+        leafDetailRequestHash: leafDetail?.requestHash,
+        leafDetailConfigHash: leafDetail?.configHash,
+        leafDetailHash: leafDetail?.detailHash,
+        nodePathRequestHash: pathResult?.requestHash,
+        nodePathSnapshotHash: pathResult?.snapshotHash,
+      });
       const filename = buildVerificationReplayArtifactFilename(
         props.proofId,
         selectedLeafId,

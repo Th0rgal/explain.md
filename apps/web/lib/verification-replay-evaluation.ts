@@ -16,6 +16,7 @@ export interface VerificationReplayEvaluationReport {
     proofId: string;
     leafId: string;
     jobId: string;
+    contextFieldCount: number;
   };
   summary: {
     exportFilename: string;
@@ -23,6 +24,13 @@ export interface VerificationReplayEvaluationReport {
     jobHash: string;
     reproducibilityHash: string;
     replayCommand: string;
+    treeConfigHash?: string;
+    treeSnapshotHash?: string;
+    leafDetailRequestHash?: string;
+    leafDetailConfigHash?: string;
+    leafDetailHash?: string;
+    nodePathRequestHash?: string;
+    nodePathSnapshotHash?: string;
     envKeyCount: number;
     logLineCount: number;
     jsonLineCount: number;
@@ -31,7 +39,7 @@ export interface VerificationReplayEvaluationReport {
 
 export function runVerificationReplayEvaluation(): VerificationReplayEvaluationReport {
   const fixture = buildFixture();
-  const artifact = buildVerificationReplayArtifact(fixture.proofId, fixture.leafId, fixture.response);
+  const artifact = buildVerificationReplayArtifact(fixture.proofId, fixture.leafId, fixture.response, fixture.context);
   const exportFilename = buildVerificationReplayArtifactFilename(
     fixture.proofId,
     fixture.leafId,
@@ -53,6 +61,13 @@ export function runVerificationReplayEvaluation(): VerificationReplayEvaluationR
     jobHash: artifact.replay.jobHash,
     reproducibilityHash: artifact.replay.reproducibilityHash,
     replayCommand: artifact.replay.replayCommand,
+    treeConfigHash: artifact.context.treeConfigHash,
+    treeSnapshotHash: artifact.context.treeSnapshotHash,
+    leafDetailRequestHash: artifact.context.leafDetailRequestHash,
+    leafDetailConfigHash: artifact.context.leafDetailConfigHash,
+    leafDetailHash: artifact.context.leafDetailHash,
+    nodePathRequestHash: artifact.context.nodePathRequestHash,
+    nodePathSnapshotHash: artifact.context.nodePathSnapshotHash,
     envKeyCount: Object.keys(artifact.job.reproducibility.env).length,
     logLineCount: artifact.job.logs.length,
     jsonLineCount: renderedArtifact.split("\n").filter((line) => line.length > 0).length,
@@ -72,6 +87,7 @@ export function runVerificationReplayEvaluation(): VerificationReplayEvaluationR
       proofId: fixture.proofId,
       leafId: fixture.leafId,
       jobId: fixture.response.job.jobId,
+      contextFieldCount: Object.keys(artifact.context).length,
     },
     summary,
   };
@@ -81,10 +97,28 @@ function buildFixture(): {
   proofId: string;
   leafId: string;
   response: VerificationJobResponse;
+  context: {
+    treeConfigHash: string;
+    treeSnapshotHash: string;
+    leafDetailRequestHash: string;
+    leafDetailConfigHash: string;
+    leafDetailHash: string;
+    nodePathRequestHash: string;
+    nodePathSnapshotHash: string;
+  };
 } {
   return {
     proofId: "seed-verity",
     leafId: "leaf/tx prover",
+    context: {
+      treeConfigHash: "c".repeat(64),
+      treeSnapshotHash: "d".repeat(64),
+      leafDetailRequestHash: "e".repeat(64),
+      leafDetailConfigHash: "1".repeat(64),
+      leafDetailHash: "2".repeat(64),
+      nodePathRequestHash: "3".repeat(64),
+      nodePathSnapshotHash: "4".repeat(64),
+    },
     response: {
       requestHash: "a".repeat(64),
       jobHash: "b".repeat(64),
