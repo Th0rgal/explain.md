@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   fetchCacheReport,
   fetchConfigProfiles,
+  fetchVerificationObservabilityMetrics,
   fetchDiff,
   fetchDependencyGraph,
   removeConfigProfile,
@@ -163,14 +164,16 @@ describe("api client", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    await verifyLeaf("seed-verity", "leaf/with spaces", true);
+    await verifyLeaf("seed-verity", "leaf/with spaces", true, {
+      parentTraceId: "trace-parent-a",
+    });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const requestUrl = String(fetchMock.mock.calls[0]?.[0]);
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
     expect(requestUrl).toContain("/api/proofs/leaves/leaf%2Fwith%20spaces/verify");
     expect(init.method).toBe("POST");
-    expect(init.body).toBe(JSON.stringify({ proofId: "seed-verity", autoRun: true }));
+    expect(init.body).toBe(JSON.stringify({ proofId: "seed-verity", autoRun: true, parentTraceId: "trace-parent-a" }));
   });
 
   it("posts diff payloads with the full config knob contract", async () => {
@@ -265,6 +268,7 @@ describe("api client", () => {
           data: {
             proofId: "seed-verity",
             leafId: "leaf id",
+            requestHash: "req-jobs",
             jobs: [],
             jobHashes: [],
           },
@@ -273,6 +277,7 @@ describe("api client", () => {
       return buildMockResponse({
         ok: true,
         data: {
+          requestHash: "req-job",
           job: {
             jobId: "job id",
             queueSequence: 0,
@@ -287,14 +292,44 @@ describe("api client", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await fetchLeafVerificationJobs("seed-verity", "leaf id");
-    await fetchVerificationJob("job id");
+    await fetchLeafVerificationJobs("seed-verity", "leaf id", {
+      parentTraceId: "trace-parent-a",
+    });
+    await fetchVerificationJob("job id", {
+      parentTraceId: "trace-parent-a",
+    });
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
-      "/api/proofs/leaves/leaf%20id/verification-jobs?proofId=seed-verity",
+      "/api/proofs/leaves/leaf%20id/verification-jobs?proofId=seed-verity&parentTraceId=trace-parent-a",
     );
-    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("/api/verification/jobs/job%20id");
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("/api/verification/jobs/job%20id?parentTraceId=trace-parent-a");
+  });
+
+  it("fetches observability metrics export endpoint", async () => {
+    const fetchMock = vi.fn(async () =>
+      buildMockResponse({
+        ok: true,
+        data: {
+          schemaVersion: "1.0.0",
+          requestCount: 3,
+          failureCount: 0,
+          correlation: {
+            parentTraceProvidedCount: 2,
+            parentTraceProvidedRate: 2 / 3,
+          },
+          queries: [],
+          generatedAt: "2026-02-27T00:00:00.000Z",
+          snapshotHash: "d".repeat(64),
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchVerificationObservabilityMetrics();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith("/api/observability/verification-metrics", undefined);
   });
 
   it("encodes dependency graph query contract deterministically", async () => {

@@ -418,6 +418,7 @@ export interface LeafDetailResponse {
 export interface VerificationJobsResponse {
   proofId: string;
   leafId: string;
+  requestHash: string;
   jobs: Array<{
     jobId: string;
     queueSequence: number;
@@ -440,6 +441,7 @@ export interface VerificationJobsResponse {
     }>;
   }>;
   jobHashes: Array<{ jobId: string; hash: string }>;
+  observability?: VerificationQueryObservability;
 }
 
 export interface VerifyLeafResponse {
@@ -448,11 +450,59 @@ export interface VerifyLeafResponse {
   queuedJobHash: string;
   finalJob: VerificationJobsResponse["jobs"][number];
   finalJobHash: string;
+  observability?: VerificationQueryObservability;
 }
 
 export interface VerificationJobResponse {
+  requestHash: string;
   job: VerificationJobsResponse["jobs"][number];
   jobHash: string;
+  observability?: VerificationQueryObservability;
+}
+
+export interface VerificationQueryObservability {
+  requestId: string;
+  traceId: string;
+  query: "verify_leaf" | "list_leaf_jobs" | "get_job";
+  parentTraceId?: string;
+  spans: Array<{
+    spanId: string;
+    name: "request_parse" | "workflow_execute" | "response_materialization";
+    attributes: Record<string, boolean | number | string>;
+  }>;
+  metrics: {
+    latencyMs: number;
+    totalJobs: number;
+    queueDepth: number;
+    queuedJobs: number;
+    runningJobs: number;
+    successJobs: number;
+    failureJobs: number;
+    timeoutJobs: number;
+    returnedJobCount: number;
+    autoRun: boolean;
+  };
+}
+
+export interface VerificationObservabilityMetricsResponse {
+  schemaVersion: "1.0.0";
+  requestCount: number;
+  failureCount: number;
+  correlation: {
+    parentTraceProvidedCount: number;
+    parentTraceProvidedRate: number;
+  };
+  queries: Array<{
+    query: "verify_leaf" | "list_leaf_jobs" | "get_job";
+    requestCount: number;
+    failureCount: number;
+    minLatencyMs: number;
+    maxLatencyMs: number;
+    meanLatencyMs: number;
+    p95LatencyMs: number;
+  }>;
+  generatedAt: string;
+  snapshotHash: string;
 }
 
 export interface ConfigProfilesResponse {
@@ -593,26 +643,53 @@ export async function fetchCacheReport(proofId: string, config: ProofConfigInput
   return requestJson<CacheReportResponse>(`/api/proofs/cache-report?${params.toString()}`);
 }
 
-export async function verifyLeaf(proofId: string, leafId: string, autoRun = true): Promise<VerifyLeafResponse> {
+export async function verifyLeaf(
+  proofId: string,
+  leafId: string,
+  autoRun = true,
+  options: { parentTraceId?: string } = {},
+): Promise<VerifyLeafResponse> {
   return requestJson<VerifyLeafResponse>(`/api/proofs/leaves/${encodeURIComponent(leafId)}/verify`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       proofId,
       autoRun,
+      parentTraceId: options.parentTraceId,
     }),
   });
 }
 
-export async function fetchLeafVerificationJobs(proofId: string, leafId: string): Promise<VerificationJobsResponse> {
+export async function fetchLeafVerificationJobs(
+  proofId: string,
+  leafId: string,
+  options: { parentTraceId?: string } = {},
+): Promise<VerificationJobsResponse> {
   const params = new URLSearchParams({ proofId });
+  if (options.parentTraceId) {
+    params.set("parentTraceId", options.parentTraceId);
+  }
   return requestJson<VerificationJobsResponse>(
     `/api/proofs/leaves/${encodeURIComponent(leafId)}/verification-jobs?${params.toString()}`,
   );
 }
 
-export async function fetchVerificationJob(jobId: string): Promise<VerificationJobResponse> {
-  return requestJson<VerificationJobResponse>(`/api/verification/jobs/${encodeURIComponent(jobId)}`);
+export async function fetchVerificationJob(
+  jobId: string,
+  options: { parentTraceId?: string } = {},
+): Promise<VerificationJobResponse> {
+  const params = new URLSearchParams();
+  if (options.parentTraceId) {
+    params.set("parentTraceId", options.parentTraceId);
+  }
+  const query = params.toString();
+  return requestJson<VerificationJobResponse>(
+    `/api/verification/jobs/${encodeURIComponent(jobId)}${query.length > 0 ? `?${query}` : ""}`,
+  );
+}
+
+export async function fetchVerificationObservabilityMetrics(): Promise<VerificationObservabilityMetricsResponse> {
+  return requestJson<VerificationObservabilityMetricsResponse>("/api/observability/verification-metrics");
 }
 
 export async function fetchConfigProfiles(projectId: string, userId: string): Promise<ConfigProfilesResponse> {

@@ -21,6 +21,7 @@ This Next.js app provides a deterministic frontend scaffold for explain.md.
   - `POST /api/proofs/leaves/:leafId/verify`
   - `GET /api/proofs/leaves/:leafId/verification-jobs`
   - `GET /api/verification/jobs/:jobId`
+  - `GET /api/observability/verification-metrics`
 - Client API layer in `lib/api-client.ts`.
 - Loading and error boundaries (`app/loading.tsx`, `app/error.tsx`).
 - Proof datasets:
@@ -85,6 +86,17 @@ The tree panel uses incremental root/children/path queries:
 ## Verification integration
 - Leaf panel can trigger server-side verification and render status/log diagnostics.
 - Verification history is persisted to `.explain-md/web-verification-ledger.json`.
+- Verification routes now emit deterministic observability blocks:
+  - `requestId`, `traceId`, `query`, optional `parentTraceId`
+  - fixed spans: `request_parse`, `workflow_execute`, `response_materialization`
+  - explicit latency and queue/status metrics (`latencyMs`, `queueDepth`, status counters)
+- Verification routes support trace correlation through `parentTraceId`:
+  - `POST /api/proofs/leaves/:leafId/verify` request body
+  - `GET /api/proofs/leaves/:leafId/verification-jobs?parentTraceId=<trace>`
+  - `GET /api/verification/jobs/:jobId?parentTraceId=<trace>`
+- Dashboard export endpoint:
+  - `GET /api/observability/verification-metrics`
+  - deterministic rolling-window aggregates (`requestCount`, `failureCount`, p95 latency by query) + `snapshotHash`
 - Lean fixture proof datasets are persisted to `.explain-md/web-proof-cache` (override with `EXPLAIN_MD_WEB_PROOF_CACHE_DIR`).
 - Lean fixture project root can be overridden with `EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT` (used by benchmark/invalidation harness).
 - Config profiles are persisted to `.explain-md/web-config-profiles.json` (override with `EXPLAIN_MD_WEB_CONFIG_PROFILE_LEDGER`).

@@ -29,9 +29,19 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - `POST /api/proofs/leaves/:leafId/verify`
   - `GET /api/proofs/leaves/:leafId/verification-jobs`
   - `GET /api/verification/jobs/:jobId`
+  - `GET /api/observability/verification-metrics`
 - Verification state is persisted in a canonical ledger at `.explain-md/web-verification-ledger.json`.
 - Leaf detail uses persisted verification jobs from the ledger, so panel metadata is queryable and stable across reloads.
 - Verification requests emit deterministic hashes (`requestHash`, `queuedJobHash`, `finalJobHash`) and deterministic sequential job IDs (`job-000001`, ...).
+- Verification responses now include deterministic observability metadata with optional parent-trace correlation:
+  - request identity: `requestId` (`requestHash`) + `traceId`
+  - query identity: `verify_leaf | list_leaf_jobs | get_job`
+  - optional `parentTraceId` propagated from UI requests
+  - fixed span set: `request_parse`, `workflow_execute`, `response_materialization`
+  - metrics: `latencyMs`, queue depth, status counters, returned job count
+- Dashboard export contract:
+  - `GET /api/observability/verification-metrics`
+  - rolling-window aggregates with `requestCount`, `failureCount`, per-query `meanLatencyMs`/`p95LatencyMs`, and canonical `snapshotHash`
 
 ## Determinism and provenance
 - Two deterministic datasets are exposed through one contract:
