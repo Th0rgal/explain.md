@@ -41,6 +41,11 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - `configHash`
   - `requestHash`
   - `viewHash` / `diffHash` / `detailHash`
+- Core proof query responses also include deterministic observability blocks for tracing and dashboards:
+  - `requestId` (`requestHash`)
+  - `traceId`
+  - fixed span set: `dataset_load`, `query_compute`, `response_materialization`
+  - metrics: `cacheLayer`, `cacheStatus`, `leafCount`, `parentCount`, `nodeCount`, `maxDepth`
 - Leaf detail panel is backed by provenance path plus persisted verification history.
 - Node/root/path query routes use canonical tree-storage snapshots, enabling stable root/children/ancestry reads for progressive expansion UIs.
 - Dependency graph route exposes deterministic SCC/reachability data and per-declaration support closures for browser-side provenance checks.

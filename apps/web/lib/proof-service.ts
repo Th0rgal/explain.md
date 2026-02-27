@@ -243,6 +243,7 @@ export interface DependencyGraphView {
     inCycle: boolean;
   };
   diagnostics: DependencyGraphQueryDiagnostic[];
+  observability: ProofQueryObservability;
 }
 
 export interface PolicyReportView {
@@ -251,6 +252,7 @@ export interface PolicyReportView {
   requestHash: string;
   reportHash: string;
   report: ReturnType<typeof evaluateExplanationTreeQuality>;
+  observability: ProofQueryObservability;
 }
 
 export interface ProofCacheReportView {
@@ -258,6 +260,25 @@ export interface ProofCacheReportView {
   configHash: string;
   requestHash: string;
   cache: ProofDatasetCacheMetadata;
+  observability: ProofQueryObservability;
+}
+
+export interface ProofQueryObservability {
+  requestId: string;
+  traceId: string;
+  spans: Array<{
+    spanId: string;
+    name: "dataset_load" | "query_compute" | "response_materialization";
+    attributes: Record<string, boolean | number | string>;
+  }>;
+  metrics: {
+    cacheLayer: ProofDatasetCacheLayer;
+    cacheStatus: ProofDatasetCacheStatus;
+    leafCount: number;
+    parentCount: number;
+    nodeCount: number;
+    maxDepth: number;
+  };
 }
 
 export function getSupportedProofIds(): string[] {
@@ -319,6 +340,12 @@ export function loadSeedDataset(proofId: string, configInput: ExplanationConfigI
 
 export function buildSeedProjection(request: ProjectionRequest) {
   const dataset = loadSeedDataset(request.proofId, request.config);
+  const snapshot = exportTreeStorageSnapshot(dataset.tree as never, {
+    proofId: dataset.proofId,
+    leaves: dataset.leaves,
+    config: dataset.config,
+  });
+  const cache = buildSeedCacheMetadata(dataset, computeTreeStorageSnapshotHash(snapshot));
   const expandedNodeIds = normalizeExpandedNodeIds(request.expandedNodeIds);
   const view = buildProgressiveDisclosureView(dataset.tree as never, {
     expandedNodeIds,
@@ -331,6 +358,14 @@ export function buildSeedProjection(request: ProjectionRequest) {
     expandedNodeIds,
     maxChildrenPerExpandedNode: request.maxChildrenPerExpandedNode,
   });
+  const observability = buildProofQueryObservability({
+    proofId: dataset.proofId,
+    configHash: dataset.configHash,
+    requestHash,
+    query: "view",
+    tree: dataset.tree as ExplanationTree,
+    cache,
+  });
 
   return {
     proofId: dataset.proofId,
@@ -339,11 +374,12 @@ export function buildSeedProjection(request: ProjectionRequest) {
     requestHash,
     view,
     viewHash,
+    observability,
   };
 }
 
 export async function buildProofProjection(request: ProjectionRequest) {
-  const { dataset } = await loadProofDataset(request.proofId, request.config);
+  const { dataset, cache } = await loadProofDataset(request.proofId, request.config);
   const expandedNodeIds = normalizeExpandedNodeIds(request.expandedNodeIds);
   const view = buildProgressiveDisclosureView(dataset.tree as never, {
     expandedNodeIds,
@@ -356,6 +392,14 @@ export async function buildProofProjection(request: ProjectionRequest) {
     expandedNodeIds,
     maxChildrenPerExpandedNode: request.maxChildrenPerExpandedNode,
   });
+  const observability = buildProofQueryObservability({
+    proofId: dataset.proofId,
+    configHash: dataset.configHash,
+    requestHash,
+    query: "view",
+    tree: dataset.tree,
+    cache,
+  });
 
   return {
     proofId: dataset.proofId,
@@ -364,18 +408,38 @@ export async function buildProofProjection(request: ProjectionRequest) {
     requestHash,
     view,
     viewHash,
+    observability,
   };
 }
 
 export function buildSeedDiff(request: DiffRequest) {
   const baseline = loadSeedDataset(request.proofId, request.baselineConfig);
   const candidate = loadSeedDataset(request.proofId, request.candidateConfig);
+  const snapshot = exportTreeStorageSnapshot(candidate.tree as never, {
+    proofId: candidate.proofId,
+    leaves: candidate.leaves,
+    config: candidate.config,
+  });
+  const cache = buildSeedCacheMetadata(candidate, computeTreeStorageSnapshotHash(snapshot));
   const report = buildExplanationDiffReport(baseline.tree as never, candidate.tree as never, baseline.config, candidate.config);
   const diffHash = computeExplanationDiffHash(report);
   const requestHash = computeCanonicalRequestHash({
     proofId: request.proofId,
     baselineConfigHash: baseline.configHash,
     candidateConfigHash: candidate.configHash,
+  });
+  const observability = buildProofQueryObservability({
+    proofId: request.proofId,
+    configHash: candidate.configHash,
+    requestHash,
+    query: "diff",
+    tree: candidate.tree as ExplanationTree,
+    cache,
+    extraMetrics: {
+      baselineLeafCount: baseline.tree.leafIds.length,
+      baselineNodeCount: Object.keys(baseline.tree.nodes).length,
+      changeCount: report.summary.total,
+    },
   });
 
   return {
@@ -385,6 +449,7 @@ export function buildSeedDiff(request: DiffRequest) {
     candidateConfig: candidate.config,
     report,
     diffHash,
+    observability,
   };
 }
 
@@ -405,6 +470,21 @@ export async function buildProofDiff(request: DiffRequest) {
     baselineConfigHash: baseline.dataset.configHash,
     candidateConfigHash: candidate.dataset.configHash,
   });
+  const observability = buildProofQueryObservability({
+    proofId: request.proofId,
+    configHash: candidate.dataset.configHash,
+    requestHash,
+    query: "diff",
+    tree: candidate.dataset.tree,
+    cache: candidate.cache,
+    extraMetrics: {
+      baselineCacheStatus: baseline.cache.status,
+      baselineCacheLayer: baseline.cache.layer,
+      baselineLeafCount: baseline.dataset.tree.leafIds.length,
+      baselineNodeCount: Object.keys(baseline.dataset.tree.nodes).length,
+      changeCount: report.summary.total,
+    },
+  });
 
   return {
     proofId: request.proofId,
@@ -413,99 +493,164 @@ export async function buildProofDiff(request: DiffRequest) {
     candidateConfig: candidate.dataset.config,
     report,
     diffHash,
+    observability,
   };
 }
 
 export async function buildProofLeafDetail(request: LeafDetailRequest) {
-  const { dataset } = await loadProofDataset(request.proofId, request.config);
+  const { dataset, cache } = await loadProofDataset(request.proofId, request.config);
   const jobs = request.verificationJobs ?? sampleVerificationJobs(request.proofId, request.leafId);
   const result = buildLeafDetailView(dataset.tree as never, dataset.leaves, request.leafId, {
     verificationJobs: jobs,
   });
 
   if (!result.view) {
+    const requestHash = computeCanonicalRequestHash({
+      proofId: request.proofId,
+      leafId: request.leafId,
+      configHash: dataset.configHash,
+    });
     return {
       ok: false as const,
       proofId: request.proofId,
       diagnostics: result.diagnostics,
-      requestHash: computeCanonicalRequestHash({
+      requestHash,
+      observability: buildProofQueryObservability({
         proofId: request.proofId,
-        leafId: request.leafId,
         configHash: dataset.configHash,
+        requestHash,
+        query: "leaf-detail",
+        tree: dataset.tree,
+        cache,
+        extraMetrics: {
+          leafFound: false,
+        },
       }),
     };
   }
 
   const detailHash = computeLeafDetailHash(result.view);
+  const requestHash = computeCanonicalRequestHash({
+    proofId: request.proofId,
+    leafId: request.leafId,
+    configHash: dataset.configHash,
+  });
   return {
     ok: result.ok,
     proofId: request.proofId,
     configHash: dataset.configHash,
-    requestHash: computeCanonicalRequestHash({
-      proofId: request.proofId,
-      leafId: request.leafId,
-      configHash: dataset.configHash,
-    }),
+    requestHash,
     view: result.view,
     detailHash,
+    observability: buildProofQueryObservability({
+      proofId: request.proofId,
+      configHash: dataset.configHash,
+      requestHash,
+      query: "leaf-detail",
+      tree: dataset.tree,
+      cache,
+      extraMetrics: {
+        leafFound: true,
+        verificationJobCount: jobs.length,
+      },
+    }),
   };
 }
 
 export function buildSeedLeafDetail(request: LeafDetailRequest) {
   const dataset = loadSeedDataset(request.proofId, request.config);
+  const snapshot = exportTreeStorageSnapshot(dataset.tree as never, {
+    proofId: dataset.proofId,
+    leaves: dataset.leaves,
+    config: dataset.config,
+  });
+  const cache = buildSeedCacheMetadata(dataset, computeTreeStorageSnapshotHash(snapshot));
   const jobs = request.verificationJobs ?? sampleVerificationJobs(request.proofId, request.leafId);
   const result = buildLeafDetailView(dataset.tree as never, dataset.leaves, request.leafId, {
     verificationJobs: jobs,
   });
 
   if (!result.view) {
+    const requestHash = computeCanonicalRequestHash({
+      proofId: request.proofId,
+      leafId: request.leafId,
+      configHash: dataset.configHash,
+    });
     return {
       ok: false as const,
       proofId: request.proofId,
       diagnostics: result.diagnostics,
-      requestHash: computeCanonicalRequestHash({
+      requestHash,
+      observability: buildProofQueryObservability({
         proofId: request.proofId,
-        leafId: request.leafId,
         configHash: dataset.configHash,
+        requestHash,
+        query: "leaf-detail",
+        tree: dataset.tree as ExplanationTree,
+        cache,
+        extraMetrics: { leafFound: false },
       }),
     };
   }
 
   const detailHash = computeLeafDetailHash(result.view);
+  const requestHash = computeCanonicalRequestHash({
+    proofId: request.proofId,
+    leafId: request.leafId,
+    configHash: dataset.configHash,
+  });
   return {
     ok: result.ok,
     proofId: request.proofId,
     configHash: dataset.configHash,
-    requestHash: computeCanonicalRequestHash({
-      proofId: request.proofId,
-      leafId: request.leafId,
-      configHash: dataset.configHash,
-    }),
+    requestHash,
     view: result.view,
     detailHash,
+    observability: buildProofQueryObservability({
+      proofId: request.proofId,
+      configHash: dataset.configHash,
+      requestHash,
+      query: "leaf-detail",
+      tree: dataset.tree as ExplanationTree,
+      cache,
+      extraMetrics: {
+        leafFound: true,
+        verificationJobCount: jobs.length,
+      },
+    }),
   };
 }
 
 export async function buildProofRootView(proofId: string, configInput: ExplanationConfigInput = {}) {
-  const { dataset, queryApi } = await loadProofDataset(proofId, configInput);
+  const { dataset, queryApi, cache } = await loadProofDataset(proofId, configInput);
   const root = queryApi.getRoot();
+  const requestHash = computeCanonicalRequestHash({
+    proofId,
+    configHash: dataset.configHash,
+    query: "root",
+  });
 
   return {
     proofId,
     configHash: dataset.configHash,
-    requestHash: computeCanonicalRequestHash({
-      proofId,
-      configHash: dataset.configHash,
-      query: "root",
-    }),
+    requestHash,
     snapshotHash: computeTreeStorageSnapshotHash(queryApi.snapshot),
     root,
+    observability: buildProofQueryObservability({
+      proofId,
+      configHash: dataset.configHash,
+      requestHash,
+      query: "root",
+      tree: dataset.tree,
+      cache,
+    }),
   };
 }
 
 export function buildSeedRootView(proofId: string, configInput: ExplanationConfigInput = {}) {
   const dataset = loadSeedDataset(proofId, configInput);
   const api = createSeedTreeQueryApi(dataset);
+  const cache = buildSeedCacheMetadata(dataset, computeTreeStorageSnapshotHash(api.snapshot));
   const root = api.getRoot();
   const requestHash = computeCanonicalRequestHash({
     proofId,
@@ -519,35 +664,60 @@ export function buildSeedRootView(proofId: string, configInput: ExplanationConfi
     requestHash,
     snapshotHash: computeTreeStorageSnapshotHash(api.snapshot),
     root,
+    observability: buildProofQueryObservability({
+      proofId,
+      configHash: dataset.configHash,
+      requestHash,
+      query: "root",
+      tree: dataset.tree as ExplanationTree,
+      cache,
+    }),
   };
 }
 
 export async function buildProofNodeChildrenView(request: NodeChildrenRequest) {
-  const { dataset, queryApi } = await loadProofDataset(request.proofId, request.config);
+  const { dataset, queryApi, cache } = await loadProofDataset(request.proofId, request.config);
   const children = queryApi.getChildren(request.nodeId, {
     offset: request.offset,
     limit: request.limit,
+  });
+  const requestHash = computeCanonicalRequestHash({
+    proofId: request.proofId,
+    nodeId: request.nodeId,
+    configHash: dataset.configHash,
+    offset: request.offset,
+    limit: request.limit,
+    query: "children",
   });
 
   return {
     proofId: request.proofId,
     configHash: dataset.configHash,
-    requestHash: computeCanonicalRequestHash({
-      proofId: request.proofId,
-      nodeId: request.nodeId,
-      configHash: dataset.configHash,
-      offset: request.offset,
-      limit: request.limit,
-      query: "children",
-    }),
+    requestHash,
     snapshotHash: computeTreeStorageSnapshotHash(queryApi.snapshot),
     children,
+    observability: buildProofQueryObservability({
+      proofId: request.proofId,
+      configHash: dataset.configHash,
+      requestHash,
+      query: "children",
+      tree: dataset.tree,
+      cache,
+      extraMetrics: {
+        requestedNodeId: request.nodeId,
+        pageOffset: children.offset,
+        pageLimit: children.limit,
+        returnedChildren: children.children.length,
+        totalChildren: children.totalChildren,
+      },
+    }),
   };
 }
 
 export function buildSeedNodeChildrenView(request: NodeChildrenRequest) {
   const dataset = loadSeedDataset(request.proofId, request.config);
   const api = createSeedTreeQueryApi(dataset);
+  const cache = buildSeedCacheMetadata(dataset, computeTreeStorageSnapshotHash(api.snapshot));
   const children = api.getChildren(request.nodeId, {
     offset: request.offset,
     limit: request.limit,
@@ -567,29 +737,58 @@ export function buildSeedNodeChildrenView(request: NodeChildrenRequest) {
     requestHash,
     snapshotHash: computeTreeStorageSnapshotHash(api.snapshot),
     children,
+    observability: buildProofQueryObservability({
+      proofId: request.proofId,
+      configHash: dataset.configHash,
+      requestHash,
+      query: "children",
+      tree: dataset.tree as ExplanationTree,
+      cache,
+      extraMetrics: {
+        requestedNodeId: request.nodeId,
+        pageOffset: children.offset,
+        pageLimit: children.limit,
+        returnedChildren: children.children.length,
+        totalChildren: children.totalChildren,
+      },
+    }),
   };
 }
 
 export async function buildProofNodePathView(request: NodePathRequest) {
-  const { dataset, queryApi } = await loadProofDataset(request.proofId, request.config);
+  const { dataset, queryApi, cache } = await loadProofDataset(request.proofId, request.config);
   const pathResult = queryApi.getAncestryPath(request.nodeId);
+  const requestHash = computeCanonicalRequestHash({
+    proofId: request.proofId,
+    nodeId: request.nodeId,
+    configHash: dataset.configHash,
+    query: "path",
+  });
 
   return {
     proofId: request.proofId,
     configHash: dataset.configHash,
-    requestHash: computeCanonicalRequestHash({
-      proofId: request.proofId,
-      nodeId: request.nodeId,
-      configHash: dataset.configHash,
-      query: "path",
-    }),
+    requestHash,
     snapshotHash: computeTreeStorageSnapshotHash(queryApi.snapshot),
     path: pathResult,
+    observability: buildProofQueryObservability({
+      proofId: request.proofId,
+      configHash: dataset.configHash,
+      requestHash,
+      query: "path",
+      tree: dataset.tree,
+      cache,
+      extraMetrics: {
+        requestedNodeId: request.nodeId,
+        pathLength: pathResult.path.length,
+        pathOk: pathResult.ok,
+      },
+    }),
   };
 }
 
 export async function buildProofDependencyGraphView(request: DependencyGraphRequest): Promise<DependencyGraphView> {
-  const { dataset } = await loadProofDataset(request.proofId, request.config);
+  const { dataset, cache } = await loadProofDataset(request.proofId, request.config);
   const declarationId = normalizeOptionalDeclarationId(request.declarationId);
   const includeExternalSupport = request.includeExternalSupport ?? true;
   const diagnostics: DependencyGraphQueryDiagnostic[] = [];
@@ -620,16 +819,17 @@ export async function buildProofDependencyGraphView(request: DependencyGraphRequ
     }
   }
 
+  const requestHash = computeCanonicalRequestHash({
+    proofId: request.proofId,
+    declarationId,
+    configHash: dataset.configHash,
+    includeExternalSupport,
+    query: "dependency-graph",
+  });
   return {
     proofId: request.proofId,
     configHash: dataset.configHash,
-    requestHash: computeCanonicalRequestHash({
-      proofId: request.proofId,
-      declarationId,
-      configHash: dataset.configHash,
-      includeExternalSupport,
-      query: "dependency-graph",
-    }),
+    requestHash,
     dependencyGraphHash: dataset.dependencyGraphHash,
     graph: {
       schemaVersion: dataset.dependencyGraph.schemaVersion,
@@ -644,46 +844,89 @@ export async function buildProofDependencyGraphView(request: DependencyGraphRequ
     },
     declaration,
     diagnostics,
+    observability: buildProofQueryObservability({
+      proofId: request.proofId,
+      configHash: dataset.configHash,
+      requestHash,
+      query: "dependency-graph",
+      tree: dataset.tree,
+      cache,
+      extraMetrics: {
+        declarationRequested: declarationId ?? "none",
+        includeExternalSupport,
+        graphNodeCount: dataset.dependencyGraph.nodeIds.length,
+        graphEdgeCount: dataset.dependencyGraph.edgeCount,
+        graphCyclicSccCount: dataset.dependencyGraph.cyclicSccs.length,
+      },
+    }),
   };
 }
 
 export async function buildProofPolicyReportView(request: PolicyReportRequest): Promise<PolicyReportView> {
-  const { dataset } = await loadProofDataset(request.proofId, request.config);
+  const { dataset, cache } = await loadProofDataset(request.proofId, request.config);
   const report = evaluateExplanationTreeQuality(dataset.tree, dataset.config, {
     thresholds: request.thresholds,
   });
 
+  const requestHash = computeCanonicalRequestHash({
+    proofId: request.proofId,
+    configHash: dataset.configHash,
+    thresholds: request.thresholds ?? {},
+    query: "policy-report",
+  });
   return {
     proofId: request.proofId,
     configHash: dataset.configHash,
-    requestHash: computeCanonicalRequestHash({
-      proofId: request.proofId,
-      configHash: dataset.configHash,
-      thresholds: request.thresholds ?? {},
-      query: "policy-report",
-    }),
+    requestHash,
     reportHash: computeTreeQualityReportHash(report),
     report,
+    observability: buildProofQueryObservability({
+      proofId: request.proofId,
+      configHash: dataset.configHash,
+      requestHash,
+      query: "policy-report",
+      tree: dataset.tree,
+      cache,
+      extraMetrics: {
+        thresholdPass: report.thresholdPass,
+        thresholdFailureCount: report.thresholdFailures.length,
+        repartitionEventCount: report.repartitionMetrics.eventCount,
+      },
+    }),
   };
 }
 
 export async function buildProofCacheReportView(request: ProofCacheReportRequest): Promise<ProofCacheReportView> {
   const resolved = await loadProofDataset(request.proofId, request.config);
+  const requestHash = computeCanonicalRequestHash({
+    proofId: request.proofId,
+    configHash: resolved.dataset.configHash,
+    query: "cache-report",
+  });
   return {
     proofId: request.proofId,
     configHash: resolved.dataset.configHash,
-    requestHash: computeCanonicalRequestHash({
+    requestHash,
+    cache: resolved.cache,
+    observability: buildProofQueryObservability({
       proofId: request.proofId,
       configHash: resolved.dataset.configHash,
+      requestHash,
       query: "cache-report",
+      tree: resolved.dataset.tree,
+      cache: resolved.cache,
+      extraMetrics: {
+        cacheDiagnosticCount: resolved.cache.diagnostics.length,
+        hasBlockedSubtreePlan: Boolean(resolved.cache.blockedSubtreePlan),
+      },
     }),
-    cache: resolved.cache,
   };
 }
 
 export function buildSeedNodePathView(request: NodePathRequest) {
   const dataset = loadSeedDataset(request.proofId, request.config);
   const api = createSeedTreeQueryApi(dataset);
+  const cache = buildSeedCacheMetadata(dataset, computeTreeStorageSnapshotHash(api.snapshot));
   const pathResult = api.getAncestryPath(request.nodeId);
   const requestHash = computeCanonicalRequestHash({
     proofId: request.proofId,
@@ -698,6 +941,19 @@ export function buildSeedNodePathView(request: NodePathRequest) {
     requestHash,
     snapshotHash: computeTreeStorageSnapshotHash(api.snapshot),
     path: pathResult,
+    observability: buildProofQueryObservability({
+      proofId: request.proofId,
+      configHash: dataset.configHash,
+      requestHash,
+      query: "path",
+      tree: dataset.tree as ExplanationTree,
+      cache,
+      extraMetrics: {
+        requestedNodeId: request.nodeId,
+        pathLength: pathResult.path.length,
+        pathOk: pathResult.ok,
+      },
+    }),
   };
 }
 
@@ -3946,6 +4202,80 @@ function normalizeExpandedNodeIds(nodeIds: string[] | undefined): string[] {
   }
 
   return unique;
+}
+
+function buildSeedCacheMetadata(dataset: SeedDataset, snapshotHash: string): ProofDatasetCacheMetadata {
+  return {
+    layer: "ephemeral",
+    status: "miss",
+    cacheKey: `${dataset.proofId}:${dataset.configHash}`,
+    sourceFingerprint: "seed",
+    snapshotHash,
+    cacheEntryHash: computeCanonicalRequestHash({
+      proofId: dataset.proofId,
+      configHash: dataset.configHash,
+      snapshotHash,
+    }),
+    diagnostics: [
+      {
+        code: "cache_miss",
+        message: "Seed dataset is rebuilt deterministically per request (ephemeral cache only).",
+      },
+    ],
+  };
+}
+
+function buildProofQueryObservability(input: {
+  proofId: string;
+  configHash: string;
+  requestHash: string;
+  query: string;
+  tree: ExplanationTree;
+  cache: ProofDatasetCacheMetadata;
+  extraMetrics?: Record<string, boolean | number | string>;
+}): ProofQueryObservability {
+  const base = {
+    proofId: input.proofId,
+    configHash: input.configHash,
+    requestId: input.requestHash,
+    query: input.query,
+    cacheLayer: input.cache.layer,
+    cacheStatus: input.cache.status,
+  };
+  const traceId = computeCanonicalRequestHash(base);
+  const metrics: ProofQueryObservability["metrics"] = {
+    cacheLayer: input.cache.layer,
+    cacheStatus: input.cache.status,
+    leafCount: input.tree.leafIds.length,
+    parentCount: Object.values(input.tree.nodes).filter((node) => node.kind === "parent").length,
+    nodeCount: Object.keys(input.tree.nodes).length,
+    maxDepth: input.tree.maxDepth,
+  };
+  const attributes = {
+    ...metrics,
+    ...(input.extraMetrics ?? {}),
+  };
+  const spanNames: Array<ProofQueryObservability["spans"][number]["name"]> = [
+    "dataset_load",
+    "query_compute",
+    "response_materialization",
+  ];
+  const spans: ProofQueryObservability["spans"] = spanNames.map((name) => ({
+    spanId: computeCanonicalRequestHash({ traceId, name }),
+    name,
+    attributes: {
+      ...attributes,
+      query: input.query,
+      proofId: input.proofId,
+      configHash: input.configHash,
+    },
+  }));
+  return {
+    requestId: input.requestHash,
+    traceId,
+    spans,
+    metrics,
+  };
 }
 
 function computeCanonicalRequestHash(input: Record<string, unknown>): string {

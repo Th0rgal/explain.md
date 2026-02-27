@@ -88,6 +88,24 @@ interface TreeStorageDiagnostic {
   details?: Record<string, unknown>;
 }
 
+export interface ProofQueryObservability {
+  requestId: string;
+  traceId: string;
+  spans: Array<{
+    spanId: string;
+    name: "dataset_load" | "query_compute" | "response_materialization";
+    attributes: Record<string, boolean | number | string>;
+  }>;
+  metrics: {
+    cacheLayer: "persistent" | "ephemeral";
+    cacheStatus: "hit" | "miss";
+    leafCount: number;
+    parentCount: number;
+    nodeCount: number;
+    maxDepth: number;
+  };
+}
+
 export interface ProjectionResponse {
   proofId: string;
   config: Record<string, unknown>;
@@ -112,6 +130,7 @@ export interface ProjectionResponse {
     }>;
     diagnostics: Array<{ code: string; severity: string; message: string }>;
   };
+  observability?: ProofQueryObservability;
 }
 
 export interface DiffResponse {
@@ -134,6 +153,7 @@ export interface DiffResponse {
       candidateStatement?: string;
     }>;
   };
+  observability?: ProofQueryObservability;
 }
 
 export interface RootResponse {
@@ -145,6 +165,7 @@ export interface RootResponse {
     node?: TreeNodeRecord;
     diagnostics: TreeStorageDiagnostic[];
   };
+  observability?: ProofQueryObservability;
 }
 
 export interface NodeChildrenResponse {
@@ -161,6 +182,7 @@ export interface NodeChildrenResponse {
     children: TreeNodeRecord[];
     diagnostics: TreeStorageDiagnostic[];
   };
+  observability?: ProofQueryObservability;
 }
 
 export interface NodePathResponse {
@@ -174,6 +196,7 @@ export interface NodePathResponse {
     path: TreeNodeRecord[];
     diagnostics: TreeStorageDiagnostic[];
   };
+  observability?: ProofQueryObservability;
 }
 
 export interface DependencyGraphResponse {
@@ -206,6 +229,7 @@ export interface DependencyGraphResponse {
     message: string;
     details: Record<string, unknown>;
   }>;
+  observability?: ProofQueryObservability;
 }
 
 export interface PolicyReportResponse {
@@ -285,6 +309,7 @@ export interface PolicyReportResponse {
       }>;
     };
   };
+  observability?: ProofQueryObservability;
 }
 
 export interface PolicyThresholdFailure {
@@ -345,6 +370,7 @@ export interface CacheReportResponse {
       planHash: string;
     };
   };
+  observability?: ProofQueryObservability;
 }
 
 export interface LeafDetailResponse {
@@ -386,6 +412,7 @@ export interface LeafDetailResponse {
     };
   };
   diagnostics?: Array<{ code: string; severity: string; message: string }>;
+  observability?: ProofQueryObservability;
 }
 
 export interface VerificationJobsResponse {

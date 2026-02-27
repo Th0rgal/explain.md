@@ -42,6 +42,10 @@ The tree panel uses incremental root/children/path queries:
     - machine-checkable truncation counters via `data-diff-*` attributes
 - Query dependency reachability/SCC evidence deterministically with `/api/proofs/dependency-graph`.
 - Surface per-parent policy diagnostics (pre/post compliance + metrics) directly in tree rows.
+- Core proof query responses now include deterministic `observability` metadata:
+  - `requestId` (equal to canonical `requestHash`)
+  - `traceId` and fixed span set (`dataset_load`, `query_compute`, `response_materialization`)
+  - dashboard-ready metrics (`cacheLayer`, `cacheStatus`, `leafCount`, `parentCount`, `nodeCount`, `maxDepth`)
 - Query deterministic pedagogy calibration metrics + threshold gates with `/api/proofs/policy-report`.
   - Optional threshold overrides: `maxUnsupportedParentRate`, `maxPrerequisiteViolationRate`, `maxPolicyViolationRate`, `maxTermJumpRate`, `maxComplexitySpreadMean`, `minEvidenceCoverageMean`, `minVocabularyContinuityMean`, `minRepartitionEventRate`, `maxRepartitionEventRate`, `maxRepartitionMaxRound`.
 - Query deterministic cache reuse diagnostics with `/api/proofs/cache-report` (`status`, `cacheKey`, `sourceFingerprint`, `snapshotHash`, `cacheEntryHash`) plus optional `blockedSubtreePlan` for topology-recovery auditing (`cache_topology_recovery_hit`, `cache_blocked_subtree_rebuild_hit`, `cache_topology_removal_subtree_rebuild_hit`, `cache_topology_addition_subtree_insertion_rebuild_hit`, `cache_topology_addition_subtree_regeneration_rebuild_hit`, `cache_topology_mixed_subtree_regeneration_rebuild_hit`, `cache_topology_regeneration_rebuild_hit`, `cache_blocked_subtree_full_rebuild`). Topology-removal hits include machine-checkable subtree recovery counters and `recoveryHash`; addition-only shape hits include `recoveryMode`, `addedLeafCount`, `insertedParentCount`, and `additionRecoveryHash`; mixed-shape hits include removal + regeneration telemetry and `mixedRecoveryHash`; topology-regeneration hits include reuse-mode counters and `regenerationHash`.

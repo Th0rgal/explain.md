@@ -97,6 +97,15 @@ describe("proof service", () => {
     expect(root.root.node?.id).toBe("p2_root");
     expect(root.root.node?.policyDiagnostics?.postSummary.ok).toBe(true);
     expect(root.snapshotHash).toHaveLength(64);
+    expect(root.observability.requestId).toBe(root.requestHash);
+    expect(root.observability.traceId).toHaveLength(64);
+    expect(root.observability.spans.map((span) => span.name)).toEqual([
+      "dataset_load",
+      "query_compute",
+      "response_materialization",
+    ]);
+    expect(root.observability.metrics.cacheStatus).toBe("miss");
+    expect(root.observability.metrics.cacheLayer).toBe("ephemeral");
 
     const children = buildSeedNodeChildrenView({
       proofId: SEED_PROOF_ID,
@@ -114,6 +123,7 @@ describe("proof service", () => {
     expect(path.path.ok).toBe(true);
     expect(path.path.path[0]?.id).toBe("p2_root");
     expect(path.path.path[path.path.path.length - 1]?.id).toBe("Verity.ContractSpec.init_sound");
+    expect(path.observability.traceId).toHaveLength(64);
   });
 
   it("lists both seed and Lean fixture proofs in catalog", async () => {
@@ -175,6 +185,8 @@ describe("proof service", () => {
 
     expect(first.requestHash).toBe(second.requestHash);
     expect(first.diffHash).toBe(second.diffHash);
+    expect(first.observability.traceId).toBe(second.observability.traceId);
+    expect(first.observability.requestId).toBe(first.requestHash);
     expect(first.report.summary.total).toBeGreaterThanOrEqual(0);
   });
 
@@ -197,6 +209,8 @@ describe("proof service", () => {
     expect(first.declaration?.declarationId).toBe("lean:Verity/Loop:loop_preserves:3:1");
     expect(first.declaration?.supportingDeclarations).toContain("lean:Verity/Core:core_safe:8:1");
     expect(first.diagnostics).toEqual([]);
+    expect(first.observability.requestId).toBe(first.requestHash);
+    expect(first.observability.metrics.leafCount).toBeGreaterThan(0);
   });
 
   it("reports machine-checkable diagnostics for unknown dependency declaration ids", async () => {
@@ -226,6 +240,8 @@ describe("proof service", () => {
 
     expect(first.requestHash).toBe(second.requestHash);
     expect(first.reportHash).toBe(second.reportHash);
+    expect(first.observability.traceId).toBe(second.observability.traceId);
+    expect(first.observability.metrics.parentCount).toBe(first.report.metrics.parentCount);
     expect(first.report.metrics.parentCount).toBeGreaterThan(0);
     expect(first.report.thresholdPass).toBe(true);
     expect(first.report.repartitionMetrics.eventCount).toBeGreaterThanOrEqual(0);
@@ -264,6 +280,7 @@ describe("proof service", () => {
       expect(first.cache.layer).toBe("persistent");
       expect(first.cache.status).toBe("miss");
       expect(first.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_miss")).toBe(true);
+      expect(first.observability.metrics.cacheStatus).toBe("miss");
       expect(first.cache.snapshotHash).toHaveLength(64);
 
       clearProofDatasetCacheForTests();
@@ -273,6 +290,7 @@ describe("proof service", () => {
       expect(second.cache.layer).toBe("persistent");
       expect(second.cache.status).toBe("hit");
       expect(second.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_hit")).toBe(true);
+      expect(second.observability.metrics.cacheStatus).toBe("hit");
       expect(second.cache.sourceFingerprint).toBe(first.cache.sourceFingerprint);
       expect(second.cache.snapshotHash).toBe(first.cache.snapshotHash);
       expect(second.cache.cacheEntryHash).toBe(first.cache.cacheEntryHash);
