@@ -95,6 +95,7 @@ export interface ProofDatasetCacheDiagnostic {
     | "cache_topology_recovery_hit"
     | "cache_blocked_subtree_rebuild_hit"
     | "cache_topology_removal_subtree_rebuild_hit"
+    | "cache_topology_mixed_subtree_regeneration_rebuild_hit"
     | "cache_topology_regeneration_rebuild_hit"
     | "cache_blocked_subtree_full_rebuild"
     | "cache_miss"
@@ -1116,6 +1117,84 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
       };
     }
 
+    const topologyMixedRecovery = await attemptTopologyMixedRecovery({
+      proofId,
+      config,
+      configHash,
+      sourceFingerprint,
+      ingestionHash,
+      dependencyGraphHash,
+      blockedSubtreePlan,
+      cachedTree: cachedTreeForTopologyRecovery,
+      cachedLeaves: cachedLeavesForTopologyRecovery,
+      currentLeaves: theoremLeaves,
+      provider: createDeterministicSummaryProvider(),
+    });
+
+    if (topologyMixedRecovery) {
+      const cacheWriteError = await writeProofDatasetCacheEntry(cachePath, topologyMixedRecovery.cacheEntry);
+      if (cacheWriteError) {
+        cacheDiagnostics.push({
+          code: "cache_write_failed",
+          message: "Failed writing topology-mixed recovery cache entry; continuing with recovered dataset.",
+          details: { cachePath, error: cacheWriteError },
+        });
+      }
+
+      cacheDiagnostics.push({
+        code: "cache_topology_mixed_subtree_regeneration_rebuild_hit",
+        message:
+          "Recovered cached dataset by deterministic mixed-shape recovery (removal-subtree prune + topology regeneration).",
+        details: {
+          cachePath,
+          planHash: blockedSubtreePlan.planHash,
+          removedLeafCount: topologyMixedRecovery.removedLeafIds.length,
+          touchedParentCount: topologyMixedRecovery.touchedParentCount,
+          recomputedParentCount: topologyMixedRecovery.recomputedParentIds.length,
+          collapsedParentCount: topologyMixedRecovery.collapsedParentIds.length,
+          droppedParentCount: topologyMixedRecovery.droppedParentIds.length,
+          reusableParentSummaryCount: topologyMixedRecovery.reusableParentSummaryCount,
+          reusedParentSummaryCount: topologyMixedRecovery.reusedParentSummaryCount,
+          reusedParentSummaryByGroundingCount: topologyMixedRecovery.reusedParentSummaryByGroundingCount,
+          reusedParentSummaryByStatementSignatureCount:
+            topologyMixedRecovery.reusedParentSummaryByStatementSignatureCount,
+          generatedParentSummaryCount: topologyMixedRecovery.generatedParentSummaryCount,
+          skippedAmbiguousStatementSignatureReuseCount:
+            topologyMixedRecovery.skippedAmbiguousStatementSignatureReuseCount,
+          skippedUnrebasableStatementSignatureReuseCount:
+            topologyMixedRecovery.skippedUnrebasableStatementSignatureReuseCount,
+          removalRecoveryHash: topologyMixedRecovery.removalRecoveryHash,
+          regenerationHash: topologyMixedRecovery.regenerationHash,
+          mixedRecoveryHash: topologyMixedRecovery.mixedRecoveryHash,
+        },
+      });
+
+      return {
+        dataset: {
+          proofId,
+          title: `Lean Verity fixture (${theoremLeaves.length} declarations, ingestion=${ingestionHash.slice(0, 8)}, depgraph=${dependencyGraphHash.slice(0, 8)})`,
+          config,
+          configHash,
+          tree: topologyMixedRecovery.tree,
+          leaves: theoremLeaves,
+          dependencyGraph,
+          dependencyGraphHash,
+        },
+        queryApi: createTreeQueryApi(topologyMixedRecovery.cacheEntry.snapshot),
+        cache: {
+          layer: "persistent",
+          status: "hit",
+          cacheKey,
+          sourceFingerprint,
+          cachePath,
+          snapshotHash: topologyMixedRecovery.cacheEntry.snapshotHash,
+          cacheEntryHash: computeProofDatasetCacheEntryHash(topologyMixedRecovery.cacheEntry),
+          diagnostics: cacheDiagnostics,
+          blockedSubtreePlan,
+        },
+      };
+    }
+
     const topologyRegenerationRecovery = await attemptTopologyRegenerationRecovery({
       proofId,
       config,
@@ -1562,6 +1641,40 @@ interface TopologyRemovalRecoveryResult {
   collapsedParentIds: string[];
   droppedParentIds: string[];
   recoveryHash: string;
+}
+
+interface TopologyMixedRecoveryRequest {
+  proofId: string;
+  config: ExplanationConfig;
+  configHash: string;
+  sourceFingerprint: string;
+  ingestionHash: string;
+  dependencyGraphHash: string;
+  blockedSubtreePlan: ProofDatasetBlockedSubtreePlan;
+  cachedTree: ExplanationTree;
+  cachedLeaves: TheoremLeafRecord[];
+  currentLeaves: TheoremLeafRecord[];
+  provider: ProviderClient;
+}
+
+interface TopologyMixedRecoveryResult {
+  tree: ExplanationTree;
+  cacheEntry: ProofDatasetCacheEntry;
+  removedLeafIds: string[];
+  touchedParentCount: number;
+  recomputedParentIds: string[];
+  collapsedParentIds: string[];
+  droppedParentIds: string[];
+  reusableParentSummaryCount: number;
+  reusedParentSummaryCount: number;
+  reusedParentSummaryByGroundingCount: number;
+  reusedParentSummaryByStatementSignatureCount: number;
+  generatedParentSummaryCount: number;
+  skippedAmbiguousStatementSignatureReuseCount: number;
+  skippedUnrebasableStatementSignatureReuseCount: number;
+  removalRecoveryHash: string;
+  regenerationHash: string;
+  mixedRecoveryHash: string;
 }
 
 interface TopologyRegenerationRecoveryRequest {
@@ -2162,6 +2275,109 @@ async function attemptTopologyRemovalRecovery(
       collapsedParentIds: [...collapsedParentIds].sort((left, right) => left.localeCompare(right)),
       droppedParentIds: [...droppedParentIds].sort((left, right) => left.localeCompare(right)),
       dependencyGraphHash: request.dependencyGraphHash,
+    }),
+  };
+}
+
+async function attemptTopologyMixedRecovery(
+  request: TopologyMixedRecoveryRequest,
+): Promise<TopologyMixedRecoveryResult | undefined> {
+  if (!request.blockedSubtreePlan.topologyShapeChanged) {
+    return undefined;
+  }
+  if (request.blockedSubtreePlan.addedDeclarationIds.length === 0 || request.blockedSubtreePlan.removedDeclarationIds.length === 0) {
+    return undefined;
+  }
+
+  const addedDeclarationSet = new Set(request.blockedSubtreePlan.addedDeclarationIds);
+  const currentLeavesWithoutAdded = request.currentLeaves.filter((leaf) => !addedDeclarationSet.has(leaf.declarationId));
+  if (currentLeavesWithoutAdded.length === request.currentLeaves.length) {
+    return undefined;
+  }
+  const currentLeafByDeclarationId = new Map(currentLeavesWithoutAdded.map((leaf) => [leaf.declarationId, leaf]));
+
+  const removalSubplanWithoutHash: Omit<ProofDatasetBlockedSubtreePlan, "planHash"> = {
+    schemaVersion: "1.0.0",
+    reason: "source_fingerprint_mismatch",
+    changedDeclarationIds: request.blockedSubtreePlan.removedDeclarationIds.slice(),
+    addedDeclarationIds: [],
+    removedDeclarationIds: request.blockedSubtreePlan.removedDeclarationIds.slice(),
+    topologyShapeChanged: request.blockedSubtreePlan.removedDeclarationIds.length > 0,
+    blockedDeclarationIds: request.blockedSubtreePlan.blockedDeclarationIds.filter(
+      (declarationId) => !addedDeclarationSet.has(declarationId),
+    ),
+    blockedLeafIds: request.blockedSubtreePlan.blockedDeclarationIds
+      .filter((declarationId) => !addedDeclarationSet.has(declarationId))
+      .map((declarationId) => currentLeafByDeclarationId.get(declarationId)?.id)
+      .filter((leafId): leafId is string => typeof leafId === "string")
+      .sort((left, right) => left.localeCompare(right)),
+    unaffectedLeafIds: currentLeavesWithoutAdded
+      .filter((leaf) => !request.blockedSubtreePlan.removedDeclarationIds.includes(leaf.declarationId))
+      .map((leaf) => leaf.id)
+      .sort((left, right) => left.localeCompare(right)),
+    executionBatches: [],
+    cyclicBatchCount: 0,
+    fullRebuildRequired: true,
+  };
+  const removalSubplan: ProofDatasetBlockedSubtreePlan = {
+    ...removalSubplanWithoutHash,
+    planHash: computeCanonicalRequestHash(removalSubplanWithoutHash),
+  };
+
+  const removalRecovery = await attemptTopologyRemovalRecovery({
+    proofId: request.proofId,
+    config: request.config,
+    configHash: request.configHash,
+    sourceFingerprint: request.sourceFingerprint,
+    ingestionHash: request.ingestionHash,
+    dependencyGraphHash: request.dependencyGraphHash,
+    blockedSubtreePlan: removalSubplan,
+    cachedTree: request.cachedTree,
+    cachedLeaves: request.cachedLeaves,
+    currentLeaves: currentLeavesWithoutAdded,
+    provider: request.provider,
+  });
+  if (!removalRecovery) {
+    return undefined;
+  }
+
+  const regenerationRecovery = await attemptTopologyRegenerationRecovery({
+    proofId: request.proofId,
+    config: request.config,
+    configHash: request.configHash,
+    sourceFingerprint: request.sourceFingerprint,
+    ingestionHash: request.ingestionHash,
+    dependencyGraphHash: request.dependencyGraphHash,
+    cachedTree: removalRecovery.tree,
+    currentLeaves: request.currentLeaves,
+  });
+  if (!regenerationRecovery) {
+    return undefined;
+  }
+
+  return {
+    tree: regenerationRecovery.tree,
+    cacheEntry: regenerationRecovery.cacheEntry,
+    removedLeafIds: removalRecovery.removedLeafIds,
+    touchedParentCount: removalRecovery.touchedParentCount,
+    recomputedParentIds: removalRecovery.recomputedParentIds,
+    collapsedParentIds: removalRecovery.collapsedParentIds,
+    droppedParentIds: removalRecovery.droppedParentIds,
+    reusableParentSummaryCount: regenerationRecovery.reusableParentSummaryCount,
+    reusedParentSummaryCount: regenerationRecovery.reusedParentSummaryCount,
+    reusedParentSummaryByGroundingCount: regenerationRecovery.reusedParentSummaryByGroundingCount,
+    reusedParentSummaryByStatementSignatureCount: regenerationRecovery.reusedParentSummaryByStatementSignatureCount,
+    generatedParentSummaryCount: regenerationRecovery.generatedParentSummaryCount,
+    skippedAmbiguousStatementSignatureReuseCount: regenerationRecovery.skippedAmbiguousStatementSignatureReuseCount,
+    skippedUnrebasableStatementSignatureReuseCount: regenerationRecovery.skippedUnrebasableStatementSignatureReuseCount,
+    removalRecoveryHash: removalRecovery.recoveryHash,
+    regenerationHash: regenerationRecovery.regenerationHash,
+    mixedRecoveryHash: computeCanonicalRequestHash({
+      removalPlanHash: removalSubplan.planHash,
+      removalRecoveryHash: removalRecovery.recoveryHash,
+      regenerationHash: regenerationRecovery.regenerationHash,
+      dependencyGraphHash: request.dependencyGraphHash,
+      configHash: request.configHash,
     }),
   };
 }

@@ -35,13 +35,20 @@ By default this writes:
     - `skippedUnrebasableStatementSignatureReuseCount`
     - `regenerationHash`
   - expected status flow is `beforeChangeStatus=hit`, `afterChangeStatus=hit`, `recoveryStatus=hit`.
+- Mixed topology-shape invalidation path (`mixedTopologyShapeInvalidation`): removes one declaration and appends one declaration in `Verity/Loop.lean`.
+  - expected diagnostics include `cache_topology_mixed_subtree_regeneration_rebuild_hit`.
+  - `afterChangeMixedRecovery` records two-stage deterministic telemetry:
+    - removal stage: `removedLeafCount`, `touchedParentCount`, `recomputedParentCount`, `collapsedParentCount`, `droppedParentCount`, `removalRecoveryHash`
+    - regeneration stage: `reusableParentSummaryCount`, `reusedParentSummaryCount`, `reusedParentSummaryByGroundingCount`, `reusedParentSummaryByStatementSignatureCount`, `generatedParentSummaryCount`, `skippedAmbiguousStatementSignatureReuseCount`, `skippedUnrebasableStatementSignatureReuseCount`, `regenerationHash`
+    - combined audit hash: `mixedRecoveryHash`
+  - expected status flow is `beforeChangeStatus=hit`, `afterChangeStatus=hit`, `recoveryStatus=hit`.
 
 ## Determinism and Auditability
 - Report includes:
   - `requestHash`: canonical hash of benchmark inputs (`proofId`, `configHash`, iteration counts).
   - `outcomeHash`: canonical hash of machine-checkable outcomes:
     - cold/warm hit-miss status vectors
-    - invalidation + topology-shape invalidation status transitions, diagnostic codes, topology-plan summaries, removal-recovery telemetry (when present), and topology-regeneration recovery telemetry
+    - invalidation + topology-shape + mixed-topology-shape status transitions, diagnostic codes, topology-plan summaries, and recovery telemetry payloads
 - Timing fields are informative but not included in `outcomeHash`, so run-to-run performance jitter does not break reproducibility checks.
 
 ## Environment
