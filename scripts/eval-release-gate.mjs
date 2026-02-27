@@ -20,6 +20,7 @@ function parseArgs(argv) {
   let multilingualPath = path.resolve(cwd, "docs/benchmarks/multilingual-evaluation.json");
   let proofCachePath = path.resolve(cwd, "docs/benchmarks/proof-cache-benchmark.json");
   let domainAdapterPath = path.resolve(cwd, "docs/benchmarks/domain-adapter-evaluation.json");
+  let summarySecurityPath = path.resolve(cwd, "docs/benchmarks/summary-security-evaluation.json");
   let observabilityBaselinePath = path.resolve(cwd, "docs/benchmarks/observability-slo-benchmark.json");
   let observabilityActualPath = path.resolve(cwd, ".explain-md/observability-slo-benchmark-report.json");
   let outputPath = path.resolve(cwd, ".explain-md/release-gate-report.json");
@@ -67,6 +68,10 @@ function parseArgs(argv) {
       domainAdapterPath = path.resolve(cwd, arg.slice("--domain-adapter=".length));
       continue;
     }
+    if (arg.startsWith("--summary-security=")) {
+      summarySecurityPath = path.resolve(cwd, arg.slice("--summary-security=".length));
+      continue;
+    }
     if (arg.startsWith("--observability-baseline=")) {
       observabilityBaselinePath = path.resolve(cwd, arg.slice("--observability-baseline=".length));
       continue;
@@ -95,6 +100,7 @@ function parseArgs(argv) {
     multilingualPath,
     proofCachePath,
     domainAdapterPath,
+    summarySecurityPath,
     observabilityBaselinePath,
     observabilityActualPath,
     outputPath,
@@ -120,6 +126,7 @@ async function main() {
   const multilingualBenchmark = await readJson(args.multilingualPath);
   const proofCacheBenchmark = await readJson(args.proofCachePath);
   const domainAdapterBenchmark = await readJson(args.domainAdapterPath);
+  const summarySecurityBenchmark = await readJson(args.summarySecurityPath);
   const observabilitySloBaseline = await readJson(args.observabilityBaselinePath);
   const observabilitySloActual = await readJson(args.observabilityActualPath);
 
@@ -133,6 +140,7 @@ async function main() {
     multilingualBenchmark,
     proofCacheBenchmark,
     domainAdapterBenchmark,
+    summarySecurityBenchmark,
     observabilitySloBaseline,
     observabilitySloActual,
   });

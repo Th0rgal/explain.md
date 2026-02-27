@@ -63,6 +63,9 @@ jobs:
       - name: Run deterministic domain adapter benchmark baseline check
         run: npm run eval:domain-adapters:ci
 
+      - name: Run deterministic summary prompt security benchmark baseline check
+        run: npm run eval:summary-security:ci
+
       - name: Validate research dossier evidence map
         run: npm run eval:research-dossier
 
@@ -83,6 +86,7 @@ jobs:
             .explain-md/verification-replay-evaluation-report.json
             .explain-md/multilingual-evaluation-report.json
             .explain-md/domain-adapter-evaluation-report.json
+            .explain-md/summary-security-evaluation-report.json
             .explain-md/observability-slo-benchmark-report.json
             .explain-md/research-dossier-report.json
             .explain-md/release-gate-report.json

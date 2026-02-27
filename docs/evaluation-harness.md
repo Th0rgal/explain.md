@@ -161,6 +161,7 @@ GitHub Actions runs `.github/workflows/quality-gate.yml` on PRs and `main` pushe
 - `npm run web:eval:tree-scale:ci`
 - `npm run web:eval:explanation-diff:ci`
 - `npm run web:eval:verification-replay:ci`
+- `npm run eval:summary-security:ci`
 - `npm run eval:domain-adapters:ci`
 - `npm run eval:release-gate:ci`
 
@@ -174,6 +175,7 @@ Each report includes:
 - a deterministic tree-scale check artifact at `.explain-md/tree-scale-evaluation-report.json`
 - a deterministic explanation-diff check artifact at `.explain-md/explanation-diff-evaluation-report.json`
 - a deterministic verification replay check artifact at `.explain-md/verification-replay-evaluation-report.json`
+- a deterministic summary prompt-security check artifact at `.explain-md/summary-security-evaluation-report.json`
 - a deterministic domain adapter check artifact at `.explain-md/domain-adapter-evaluation-report.json`
 - a deterministic release-gate artifact at `.explain-md/release-gate-report.json`
 

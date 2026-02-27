@@ -37,3 +37,9 @@ Issue #19 hardening for summary generation focuses on deterministic prompt-bound
 - Secret-like leakage from model output is rejected deterministically.
 - Configured-secret-value leakage from model output is rejected deterministically.
 - Prompt-injection-like leakage from model output is rejected deterministically.
+
+## Deterministic Benchmark Contract
+- Benchmark artifact: `docs/benchmarks/summary-security-evaluation.json`
+- Run benchmark: `npm run eval:summary-security`
+- CI baseline gate: `npm run eval:summary-security:ci`
+- Release gate check: `summary_prompt_security_contract`

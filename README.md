@@ -39,6 +39,7 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #12 follow-up: deterministic cache benchmark harness now records cold/warm latency profiles plus source-fingerprint invalidation recovery with machine-checkable `requestHash`/`outcomeHash`.
 - Issue #13: deterministic tree storage/query contract with versioned snapshot schema, root/children/ancestry/leaf-provenance reads, and canonical import/export hashing.
 - Issue #19 follow-up: deterministic prompt-boundary hardening for parent-summary generation with child-ID safety validation, untrusted-text sanitization, secret/injection redaction, configured-secret-value leak checks, auditable boundary markers, and fail-closed output rejection (`secret_leak` / `prompt_injection`).
+- Issue #19 follow-up: deterministic summary prompt-security benchmark is now fail-closed in CI and in the root release gate via baseline hash checks (`eval:summary-security:ci`).
 - Issue #24: research dossier with machine-checkable issue-to-evidence mapping for inductive tree design decisions, pedagogy controls, and evaluation strategy.
 - Issue #24 follow-up: research dossier decisions now include pinned artifact-hash evidence checks plus pinned command-replay outcome hashes, fail-closed in CI via `eval:research-dossier`.
 - Issue #15 follow-up: deterministic tree accessibility benchmark is now fail-closed in CI via baseline hash checks (`web:eval:tree-a11y:ci`).
@@ -59,6 +60,8 @@ npm run bench:dependency-graph
 npm run ingest:lean -- /path/to/lean-project
 npm run eval:domain-adapters
 npm run eval:domain-adapters:ci
+npm run eval:summary-security
+npm run eval:summary-security:ci
 npm run eval:tree-pipeline -- /path/to/lean-project --include=Verity --include=Compiler/ContractSpec.lean
 npm run eval:leaf-detail -- /path/to/lean-project --include=Verity --leaf=<leaf-id>
 npm run eval:quality -- /path/to/lean-project --include=Verity --include=Compiler/ContractSpec.lean
@@ -97,6 +100,7 @@ EXPLAIN_MD_LIVE_RPC_API_KEY=... npm run test:live:summary
 - [Inductive child grouping](docs/child-grouping.md)
 - [Parent summary pipeline](docs/summary-pipeline.md)
 - [Prompt security model](docs/security-prompt-safety.md)
+- [Summary prompt-security benchmark](docs/summary-security-evaluation.md)
 - [Recursive tree builder](docs/tree-builder.md)
 - [Evaluation harness](docs/evaluation-harness.md)
 - [Research dossier](docs/research-dossier.md)

@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0.0",
-  "requestHash": "796be708a10a622709ef87af4cc316ff073d093a56e56d186d7ecc6c2e2ca45d",
-  "outcomeHash": "45cd7c51debb1c64564b55011ee09727ac4b711c49ae5274d1e8c11fa4dbe81a",
+  "requestHash": "9c391c35f1168465b8c86b1a8771c54ad44221f22278e71640bb0cbee9fee4e1",
+  "outcomeHash": "69056af55ec10fecbb78bb1d7dcee971974632643d74b82cf5297bd3808b3381",
   "thresholdPass": true,
   "checkStatus": [
     {
@@ -42,6 +42,10 @@
     },
     {
       "code": "strict_entailment_presets_present",
+      "pass": true
+    },
+    {
+      "code": "summary_prompt_security_contract",
       "pass": true
     },
     {

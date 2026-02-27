@@ -35,6 +35,7 @@ It composes benchmark evidence from:
 - `docs/benchmarks/multilingual-evaluation.json`
 - `docs/benchmarks/proof-cache-benchmark.json`
 - `docs/benchmarks/domain-adapter-evaluation.json`
+- `docs/benchmarks/summary-security-evaluation.json`
 - `docs/benchmarks/observability-slo-benchmark.json`
 - `.explain-md/quality-gate-baseline-check.json`
 - `.explain-md/explanation-diff-evaluation-report.json`
@@ -54,6 +55,7 @@ Gate checks:
 - `cache_warm_speedup`
 - `cache_recovery_hits`
 - `domain_adapter_quality_floor`
+- `summary_prompt_security_contract`
 - `observability_baseline_consistent`
 - `observability_slo_gate`
 

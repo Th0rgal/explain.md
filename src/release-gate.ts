@@ -143,6 +143,22 @@ export interface DomainAdapterBenchmarkArtifact {
   };
 }
 
+export interface SummarySecurityBenchmarkArtifact {
+  schemaVersion: string;
+  requestHash: string;
+  outcomeHash: string;
+  summary: {
+    profileCount: number;
+    passCount: number;
+    sanitizationProfileCount: number;
+    sanitizationPassCount: number;
+    rejectionProfileCount: number;
+    promptInjectionRejectionCount: number;
+    secretLeakRejectionCount: number;
+    configuredSecretRejectionCount: number;
+  };
+}
+
 export interface BaselineCheckArtifact {
   schemaVersion: string;
   pass: boolean;
@@ -160,6 +176,7 @@ export interface ReleaseGateInput {
   multilingualBenchmark: MultilingualBenchmarkArtifact;
   proofCacheBenchmark: ProofCacheBenchmarkArtifact;
   domainAdapterBenchmark: DomainAdapterBenchmarkArtifact;
+  summarySecurityBenchmark: SummarySecurityBenchmarkArtifact;
   observabilitySloBaseline: ObservabilitySloBenchmarkArtifact;
   observabilitySloActual: ObservabilitySloBenchmarkArtifact;
   generatedAt?: string;
@@ -178,6 +195,7 @@ export interface ReleaseGateCheck {
     | "cache_warm_speedup"
     | "cache_recovery_hits"
     | "domain_adapter_quality_floor"
+    | "summary_prompt_security_contract"
     | "observability_baseline_consistent"
     | "observability_slo_gate";
   pass: boolean;
@@ -203,6 +221,7 @@ export interface ReleaseGateReport {
     verificationReplayOutcomeHash: string;
     proofCacheOutcomeHash: string;
     domainAdapterOutcomeHash: string;
+    summarySecurityOutcomeHash: string;
     observabilityOutcomeHash: string;
   };
   checks: ReleaseGateCheck[];
@@ -240,6 +259,7 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
   const multilingualBenchmark = assertMultilingualBenchmarkArtifact(input.multilingualBenchmark);
   const proofCacheBenchmark = assertProofCacheBenchmarkArtifact(input.proofCacheBenchmark);
   const domainAdapterBenchmark = assertDomainAdapterBenchmarkArtifact(input.domainAdapterBenchmark);
+  const summarySecurityBenchmark = assertSummarySecurityBenchmarkArtifact(input.summarySecurityBenchmark);
   const observabilitySloBaseline = assertObservabilitySloBenchmarkArtifact(input.observabilitySloBaseline);
   const observabilitySloActual = assertObservabilitySloBenchmarkArtifact(input.observabilitySloActual);
 
@@ -369,6 +389,22 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
         `macro=${domainAdapterBenchmark.summary.macroPrecision.toFixed(4)}/${domainAdapterBenchmark.summary.macroRecall.toFixed(4)}/${domainAdapterBenchmark.summary.macroF1.toFixed(4)}`,
     },
     {
+      code: "summary_prompt_security_contract",
+      pass:
+        summarySecurityBenchmark.summary.profileCount >= 6 &&
+        summarySecurityBenchmark.summary.passCount === summarySecurityBenchmark.summary.profileCount &&
+        summarySecurityBenchmark.summary.sanitizationProfileCount > 0 &&
+        summarySecurityBenchmark.summary.sanitizationPassCount === summarySecurityBenchmark.summary.sanitizationProfileCount &&
+        summarySecurityBenchmark.summary.promptInjectionRejectionCount >= 2 &&
+        summarySecurityBenchmark.summary.secretLeakRejectionCount >= 2 &&
+        summarySecurityBenchmark.summary.configuredSecretRejectionCount >= 1,
+      details:
+        `profiles=${summarySecurityBenchmark.summary.profileCount} pass=${summarySecurityBenchmark.summary.passCount} ` +
+        `sanitization=${summarySecurityBenchmark.summary.sanitizationPassCount}/${summarySecurityBenchmark.summary.sanitizationProfileCount} ` +
+        `prompt_injection=${summarySecurityBenchmark.summary.promptInjectionRejectionCount} ` +
+        `secret_leak=${summarySecurityBenchmark.summary.secretLeakRejectionCount} configured_secret=${summarySecurityBenchmark.summary.configuredSecretRejectionCount}`,
+    },
+    {
       code: "observability_baseline_consistent",
       pass:
         observabilitySloActual.requestHash === observabilitySloBaseline.requestHash &&
@@ -398,6 +434,7 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
     multilingualRequestHash: multilingualBenchmark.requestHash,
     proofCacheRequestHash: proofCacheBenchmark.requestHash,
     domainAdapterRequestHash: domainAdapterBenchmark.requestHash,
+    summarySecurityRequestHash: summarySecurityBenchmark.requestHash,
     observabilityRequestHash: observabilitySloActual.requestHash,
   });
 
@@ -420,6 +457,7 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
       verificationReplayOutcomeHash: verificationReplayBenchmark.outcomeHash,
       proofCacheOutcomeHash: proofCacheBenchmark.outcomeHash,
       domainAdapterOutcomeHash: domainAdapterBenchmark.outcomeHash,
+      summarySecurityOutcomeHash: summarySecurityBenchmark.outcomeHash,
       observabilityOutcomeHash: observabilitySloActual.outcomeHash,
     },
   });
@@ -443,6 +481,7 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
       verificationReplayOutcomeHash: verificationReplayBenchmark.outcomeHash,
       proofCacheOutcomeHash: proofCacheBenchmark.outcomeHash,
       domainAdapterOutcomeHash: domainAdapterBenchmark.outcomeHash,
+      summarySecurityOutcomeHash: summarySecurityBenchmark.outcomeHash,
       observabilityOutcomeHash: observabilitySloActual.outcomeHash,
     },
     checks,
@@ -792,6 +831,45 @@ export function assertDomainAdapterBenchmarkArtifact(input: unknown): DomainAdap
   };
 }
 
+export function assertSummarySecurityBenchmarkArtifact(input: unknown): SummarySecurityBenchmarkArtifact {
+  if (!isObject(input)) {
+    throw new Error("summary security benchmark artifact must be an object");
+  }
+  if (expectString(input.schemaVersion, "summarySecurity.schemaVersion") !== "1.0.0") {
+    throw new Error("summary security benchmark schemaVersion must be 1.0.0");
+  }
+  if (!isObject(input.summary)) {
+    throw new Error("summarySecurity.summary must be an object");
+  }
+  return {
+    schemaVersion: "1.0.0",
+    requestHash: expectString(input.requestHash, "summarySecurity.requestHash"),
+    outcomeHash: expectString(input.outcomeHash, "summarySecurity.outcomeHash"),
+    summary: {
+      profileCount: expectFiniteNumber(input.summary.profileCount, "summarySecurity.summary.profileCount"),
+      passCount: expectFiniteNumber(input.summary.passCount, "summarySecurity.summary.passCount"),
+      sanitizationProfileCount: expectFiniteNumber(
+        input.summary.sanitizationProfileCount,
+        "summarySecurity.summary.sanitizationProfileCount",
+      ),
+      sanitizationPassCount: expectFiniteNumber(input.summary.sanitizationPassCount, "summarySecurity.summary.sanitizationPassCount"),
+      rejectionProfileCount: expectFiniteNumber(input.summary.rejectionProfileCount, "summarySecurity.summary.rejectionProfileCount"),
+      promptInjectionRejectionCount: expectFiniteNumber(
+        input.summary.promptInjectionRejectionCount,
+        "summarySecurity.summary.promptInjectionRejectionCount",
+      ),
+      secretLeakRejectionCount: expectFiniteNumber(
+        input.summary.secretLeakRejectionCount,
+        "summarySecurity.summary.secretLeakRejectionCount",
+      ),
+      configuredSecretRejectionCount: expectFiniteNumber(
+        input.summary.configuredSecretRejectionCount,
+        "summarySecurity.summary.configuredSecretRejectionCount",
+      ),
+    },
+  };
+}
+
 export function assertObservabilitySloBenchmarkArtifact(input: unknown): ObservabilitySloBenchmarkArtifact {
   if (!isObject(input)) {
     throw new Error("observability slo benchmark artifact must be an object");
@@ -880,6 +958,7 @@ function isKnownCheckCode(value: string): value is ReleaseGateCheck["code"] {
     value === "cache_warm_speedup" ||
     value === "cache_recovery_hits" ||
     value === "domain_adapter_quality_floor" ||
+    value === "summary_prompt_security_contract" ||
     value === "observability_baseline_consistent" ||
     value === "observability_slo_gate"
   );

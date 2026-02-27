@@ -104,7 +104,7 @@ The tree panel uses incremental root/children/path queries:
     - `lean-verity-fixture`
   - Artifact includes aggregate hashes plus per-profile evidence in `parameters.profiles`, `profileReports`, and `evaluation.byProfile`.
 - CI enforces observability SLO benchmark determinism with `npm run web:eval:observability-slo:ci` (compares against `docs/benchmarks/observability-slo-benchmark.json` and writes `.explain-md/observability-slo-benchmark-report.json`).
-- Root CI release gate composes quality + web benchmark evidence with `npm run eval:release-gate:ci` (writes `.explain-md/release-gate-report.json`).
+- Root CI release gate composes quality + web + summary-security benchmark evidence with `npm run eval:release-gate:ci` (writes `.explain-md/release-gate-report.json`).
 - Use shared config parser (`lib/config-input.ts`) across query routes to keep config semantics consistent.
 - Use shared config parser (`lib/config-input.ts`) across both query and POST routes (`/api/proofs/view`, `/api/proofs/diff`) so regeneration and tree-shape semantics do not drift.
 - Query/config contracts now expose the full pedagogy controls used by tree generation:
