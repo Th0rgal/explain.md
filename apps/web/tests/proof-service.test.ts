@@ -435,10 +435,12 @@ describe("proof service", () => {
       expect(typeof topologyDiagnostic?.details?.generatedParentNodeCount).toBe("number");
       expect(typeof topologyDiagnostic?.details?.reusedParentByStableIdCount).toBe("number");
       expect(typeof topologyDiagnostic?.details?.reusedParentByChildHashCount).toBe("number");
+      expect(typeof topologyDiagnostic?.details?.skippedAmbiguousChildHashReuseCount).toBe("number");
       expect((topologyDiagnostic?.details?.reusedParentNodeCount as number) >= 0).toBe(true);
       expect((topologyDiagnostic?.details?.generatedParentNodeCount as number) >= 0).toBe(true);
       expect((topologyDiagnostic?.details?.reusedParentByStableIdCount as number) >= 0).toBe(true);
       expect((topologyDiagnostic?.details?.reusedParentByChildHashCount as number) >= 0).toBe(true);
+      expect((topologyDiagnostic?.details?.skippedAmbiguousChildHashReuseCount as number) >= 0).toBe(true);
     } finally {
       clearProofDatasetCacheForTests();
       if (previousCacheDir === undefined) {

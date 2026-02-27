@@ -1,18 +1,18 @@
 {
   "schemaVersion": "1.0.0",
-  "generatedAt": "2026-02-27T10:57:15.240Z",
+  "generatedAt": "2026-02-27T11:02:37.100Z",
   "proofId": "lean-verity-fixture",
   "configHash": "1b1e2b9ff73897b141a9f88c8d23a3b884495340813865fd955fa8fc3eaa4da2",
   "requestHash": "e6f53e14545f9579927084e1924992e7294f331551f9b89f4e93dc25669d6696",
-  "outcomeHash": "99fb6ac5e37a506d51955a42e5c92bacdb052e1e2e990c67892373161484b259",
+  "outcomeHash": "2fe08a1ce9aac14b2be3bc264fa2e09b5396b0a6d99ff13733d06dd681ef978b",
   "parameters": {
     "coldIterations": 3,
     "warmIterations": 3,
     "mutationTargetPath": "Verity/Core.lean"
   },
   "paths": {
-    "fixtureProjectRootHash": "ebc8745367682f9143bbd65fd2f9237d5002ece3f023aace15bb2225f09ae29d",
-    "cacheDirHash": "80b8bd6171bcede775152fb69c3ef58f99e6df83eaae55c9956cb43cfa2c32d4"
+    "fixtureProjectRootHash": "4364d6d97da321478eb252b568535747bfaa606da56e3f3ee7535f40c831a5f1",
+    "cacheDirHash": "bb76d78ebab77dbdd71fc4ddbb7aab5fa4f5409c84ba969a3300bbf61db65123"
   },
   "scenarios": {
     "coldNoPersistentCache": {
@@ -22,10 +22,10 @@
         "miss",
         "miss"
       ],
-      "meanMs": 15.145,
-      "medianMs": 6.289,
-      "minMs": 5.672,
-      "maxMs": 33.474
+      "meanMs": 10.704,
+      "medianMs": 4.715,
+      "minMs": 3.76,
+      "maxMs": 23.638
     },
     "warmPersistentCache": {
       "iterations": 3,
@@ -34,10 +34,10 @@
         "hit",
         "hit"
       ],
-      "meanMs": 1.694,
-      "medianMs": 1.665,
-      "minMs": 1.48,
-      "maxMs": 1.938
+      "meanMs": 1.305,
+      "medianMs": 1.188,
+      "minMs": 1.174,
+      "maxMs": 1.552
     },
     "semanticNoop": {
       "beforeChangeStatus": "hit",
@@ -69,6 +69,7 @@
       "afterChangeSnapshotHash": "40996c1ce2f9bdae613d9c4e1b905a1a654a9732ec5e0e8afa6dadaf9050f454",
       "reusedParentByStableIdCount": 0,
       "reusedParentByChildHashCount": 0,
+      "skippedAmbiguousChildHashReuseCount": 0,
       "recoveryStatus": "hit",
       "recoverySnapshotHash": "40996c1ce2f9bdae613d9c4e1b905a1a654a9732ec5e0e8afa6dadaf9050f454"
     }

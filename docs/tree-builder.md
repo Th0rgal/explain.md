@@ -21,7 +21,8 @@ Issue: #9
 - Grouping diagnostics include `summaryReuse` with generated vs reused group indexes when reusable parent summaries are provided.
 - `summaryReuse` also reports deterministic reuse origin:
   - `reusedByParentIdGroupIndexes` when stable parent IDs match.
-  - `reusedByChildHashGroupIndexes` when parent IDs changed but child-grounding hashes still match.
+  - `reusedByChildHashGroupIndexes` when parent IDs changed but same-depth child-grounding hashes still match.
+  - `skippedAmbiguousChildHashGroupIndexes` when child-hash fallback has multiple deterministic candidates at a depth and reuse is intentionally skipped.
 - Policy diagnostics are attached per parent (`preSummary`, `postSummary`, `retriesUsed`).
 
 ## Tree validity checks
@@ -66,7 +67,8 @@ Request shape:
 - `reusableParentSummaries?`: optional map keyed by deterministic parent id (`p_<depth>_<groupIndex>_<digest>`) for stable-id parent reuse
   - each entry includes `childStatementHash` and previously validated summary payload
   - reuse is accepted only when the current child statement hash matches and post-summary policy still passes
-  - when stable IDs do not match (for example after deterministic topology reindexing), reuse falls back to deterministic child-statement-hash matching
+  - when stable IDs do not match (for example after deterministic topology reindexing), reuse falls back to deterministic same-depth child-statement-hash matching
+  - child-hash fallback reuse is skipped for ambiguous (multi-candidate) matches to preserve provenance determinism
 
 Output includes:
 - `rootId`, `leafIds`, `nodes`, `configHash`, `groupPlan`, `groupingDiagnostics`, `maxDepth`

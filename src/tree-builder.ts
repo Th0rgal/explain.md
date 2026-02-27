@@ -62,6 +62,7 @@ export interface SummaryReuseDiagnostics {
   generatedGroupIndexes: number[];
   reusedByParentIdGroupIndexes?: number[];
   reusedByChildHashGroupIndexes?: number[];
+  skippedAmbiguousChildHashGroupIndexes?: number[];
 }
 
 export interface ExplanationTree {
@@ -139,6 +140,11 @@ interface ReusableSummaryCandidate {
   summary: ReusableParentSummary;
 }
 
+interface ReusableSummarySelection {
+  candidate?: ReusableSummaryCandidate;
+  ambiguous: boolean;
+}
+
 export async function buildRecursiveExplanationTree(
   provider: ProviderClient,
   request: TreeBuildRequest,
@@ -190,7 +196,7 @@ export async function buildRecursiveExplanationTree(
   const hardDepthLimit = request.maxDepth ?? computeDepthLimit(leaves.length, request.config.maxChildrenPerParent);
   const summaryBatchSize = normalizeSummaryBatchSize(request.summaryBatchSize);
   const reusableParentSummaries = request.reusableParentSummaries ?? {};
-  const reusableSummaryPoolByChildHash = buildReusableSummaryPoolByChildHash(reusableParentSummaries);
+  const reusableSummaryPoolByDepthAndChildHash = buildReusableSummaryPoolByDepthAndChildHash(reusableParentSummaries);
   const consumedReusableSummaryKeys = new Set<string>();
 
   let depth = 0;
@@ -223,6 +229,7 @@ export async function buildRecursiveExplanationTree(
     const generatedGroupIndexes: number[] = [];
     const reusedByParentIdGroupIndexes: number[] = [];
     const reusedByChildHashGroupIndexes: number[] = [];
+    const skippedAmbiguousChildHashGroupIndexes: number[] = [];
 
     for (let index = 0; index < groups.length; index += 1) {
       const groupNodeIds = groups[index];
@@ -272,17 +279,21 @@ export async function buildRecursiveExplanationTree(
       let reusableParentKey = parentId;
       let reusedByParentId = true;
       if (
-        (!reusableParent || reusableParent.childStatementHash !== childStatementHash) &&
-        reusableSummaryPoolByChildHash.has(childStatementHash)
+        !reusableParent || reusableParent.childStatementHash !== childStatementHash
       ) {
-        const candidate = selectReusableSummaryCandidate(
-          reusableSummaryPoolByChildHash.get(childStatementHash) as ReusableSummaryCandidate[],
-          consumedReusableSummaryKeys,
-        );
-        if (candidate) {
-          reusableParent = candidate.summary;
-          reusableParentKey = candidate.key;
-          reusedByParentId = false;
+        const poolKey = buildReusableSummaryPoolKey(depth, childStatementHash);
+        if (reusableSummaryPoolByDepthAndChildHash.has(poolKey)) {
+          const selection = selectReusableSummaryCandidate(
+            reusableSummaryPoolByDepthAndChildHash.get(poolKey) as ReusableSummaryCandidate[],
+            consumedReusableSummaryKeys,
+          );
+          if (selection.candidate) {
+            reusableParent = selection.candidate.summary;
+            reusableParentKey = selection.candidate.key;
+            reusedByParentId = false;
+          } else if (selection.ambiguous) {
+            skippedAmbiguousChildHashGroupIndexes.push(index);
+          }
         }
       }
 
@@ -414,6 +425,7 @@ export async function buildRecursiveExplanationTree(
               generatedGroupIndexes,
               reusedByParentIdGroupIndexes,
               reusedByChildHashGroupIndexes,
+              skippedAmbiguousChildHashGroupIndexes,
             }
           : undefined,
     });
@@ -446,19 +458,24 @@ export async function buildRecursiveExplanationTree(
   return tree;
 }
 
-function buildReusableSummaryPoolByChildHash(
+function buildReusableSummaryPoolByDepthAndChildHash(
   reusableParentSummaries: Record<string, ReusableParentSummary>,
 ): Map<string, ReusableSummaryCandidate[]> {
   const pool = new Map<string, ReusableSummaryCandidate[]>();
   const orderedParentIds = Object.keys(reusableParentSummaries).sort((left, right) => left.localeCompare(right));
   for (const parentId of orderedParentIds) {
     const summary = reusableParentSummaries[parentId];
-    const existing = pool.get(summary.childStatementHash);
+    const depth = resolveReusableSummaryDepth(parentId, summary);
+    if (depth === undefined) {
+      continue;
+    }
+    const poolKey = buildReusableSummaryPoolKey(depth, summary.childStatementHash);
+    const existing = pool.get(poolKey);
     const candidate: ReusableSummaryCandidate = { key: parentId, summary };
     if (existing) {
       existing.push(candidate);
     } else {
-      pool.set(summary.childStatementHash, [candidate]);
+      pool.set(poolKey, [candidate]);
     }
   }
   return pool;
@@ -467,13 +484,37 @@ function buildReusableSummaryPoolByChildHash(
 function selectReusableSummaryCandidate(
   candidates: ReusableSummaryCandidate[],
   consumedKeys: Set<string>,
-): ReusableSummaryCandidate | undefined {
+): ReusableSummarySelection {
+  const available: ReusableSummaryCandidate[] = [];
   for (const candidate of candidates) {
     if (!consumedKeys.has(candidate.key)) {
-      return candidate;
+      available.push(candidate);
     }
   }
-  return undefined;
+  if (available.length === 1) {
+    return { candidate: available[0], ambiguous: false };
+  }
+  return { ambiguous: available.length > 1 };
+}
+
+function resolveReusableSummaryDepth(parentId: string, summary: ReusableParentSummary): number | undefined {
+  const diagnosticDepth = summary.policyDiagnostics?.depth;
+  if (typeof diagnosticDepth === "number" && Number.isInteger(diagnosticDepth) && diagnosticDepth >= 0) {
+    return diagnosticDepth;
+  }
+  const match = parentId.match(/^p_(\d+)_\d+_/);
+  if (!match) {
+    return undefined;
+  }
+  const parsed = Number(match[1]);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    return undefined;
+  }
+  return parsed;
+}
+
+function buildReusableSummaryPoolKey(depth: number, childStatementHash: string): string {
+  return `${depth}:${childStatementHash}`;
 }
 
 export function validateExplanationTree(tree: ExplanationTree, maxChildrenPerParent: number): TreeValidationResult {

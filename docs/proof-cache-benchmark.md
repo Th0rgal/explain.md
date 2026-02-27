@@ -15,7 +15,7 @@ By default this writes:
 - Warm path (`warmPersistentCache`): persistent cache prewarmed, in-memory cache cleared between iterations.
 - Semantic noop path (`semanticNoop`): applies a source-only comment mutation and verifies theorem-delta-aware cache reuse (`cache_semantic_hit`).
 - Invalidation path (`invalidation`): applies a theorem-level mutation and verifies deterministic subtree recompute reuse (`cache_incremental_subtree_rebuild`) with hit recovery semantics.
-- Topology change path (`topologyChange`): applies a theorem-addition mutation and verifies deterministic topology-aware rebuild diagnostics (`cache_incremental_topology_rebuild`) with explicit stable-id vs child-hash reuse counters.
+- Topology change path (`topologyChange`): applies a theorem-addition mutation and verifies deterministic topology-aware rebuild diagnostics (`cache_incremental_topology_rebuild`) with explicit stable-id reuse, child-hash reuse, and ambiguity-skip counters.
 
 ## Determinism and Auditability
 - Report includes:
@@ -24,7 +24,7 @@ By default this writes:
     - cold/warm hit-miss status vectors
     - semantic noop status transition + diagnostics
     - invalidation status transitions and diagnostic codes
-    - topology-change status transitions, diagnostic codes, and reuse counters (`reusedParentByStableIdCount`, `reusedParentByChildHashCount`)
+    - topology-change status transitions, diagnostic codes, and reuse counters (`reusedParentByStableIdCount`, `reusedParentByChildHashCount`, `skippedAmbiguousChildHashReuseCount`)
 - Timing fields are informative but not included in `outcomeHash`, so run-to-run performance jitter does not break reproducibility checks.
 
 ## Environment

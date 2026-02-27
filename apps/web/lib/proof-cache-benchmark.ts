@@ -69,6 +69,7 @@ export interface ProofCacheBenchmarkReport {
       afterChangeSnapshotHash: string;
       reusedParentByStableIdCount: number;
       reusedParentByChildHashCount: number;
+      skippedAmbiguousChildHashReuseCount: number;
       recoveryStatus: "hit" | "miss";
       recoverySnapshotHash: string;
     };
@@ -188,6 +189,10 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
       afterChangeSnapshotHash: afterTopologyChange.cache.snapshotHash,
       reusedParentByStableIdCount: readNumericTopologyDetail(afterTopologyChange.cache.diagnostics, "reusedParentByStableIdCount"),
       reusedParentByChildHashCount: readNumericTopologyDetail(afterTopologyChange.cache.diagnostics, "reusedParentByChildHashCount"),
+      skippedAmbiguousChildHashReuseCount: readNumericTopologyDetail(
+        afterTopologyChange.cache.diagnostics,
+        "skippedAmbiguousChildHashReuseCount",
+      ),
       recoveryStatus: topologyRecovery.cache.status,
       recoverySnapshotHash: topologyRecovery.cache.snapshotHash,
     };
@@ -219,6 +224,7 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
         afterChangeDiagnostics: topologyChange.afterChangeDiagnostics,
         reusedParentByStableIdCount: topologyChange.reusedParentByStableIdCount,
         reusedParentByChildHashCount: topologyChange.reusedParentByChildHashCount,
+        skippedAmbiguousChildHashReuseCount: topologyChange.skippedAmbiguousChildHashReuseCount,
         recoveryStatus: topologyChange.recoveryStatus,
         snapshotChangedOnMutation: topologyChange.afterChangeSnapshotHash !== beforeTopologyChange.cache.snapshotHash,
       },
@@ -274,7 +280,7 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
 
 function readNumericTopologyDetail(
   diagnostics: Array<{ code: string; details?: Record<string, unknown> }>,
-  key: "reusedParentByStableIdCount" | "reusedParentByChildHashCount",
+  key: "reusedParentByStableIdCount" | "reusedParentByChildHashCount" | "skippedAmbiguousChildHashReuseCount",
 ): number {
   const topologyDiagnostic = diagnostics.find((diagnostic) => diagnostic.code === "cache_incremental_topology_rebuild");
   const value = topologyDiagnostic?.details?.[key];

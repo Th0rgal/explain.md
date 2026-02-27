@@ -333,6 +333,47 @@ describe("tree builder", () => {
     expect(reusedByChildHashGroups.length).toBeGreaterThan(0);
     expect(reusedByParentIdGroups).toHaveLength(0);
   });
+
+  test("skips child-hash reuse when reusable candidates are ambiguous", async () => {
+    const config = normalizeConfig({ maxChildrenPerParent: 2, complexityBandWidth: 2 });
+    const baselineProvider = countedDeterministicSummaryProvider();
+    const leaves = [
+      { id: "l1", statement: "Leaf one." },
+      { id: "l2", statement: "Leaf two." },
+      { id: "l3", statement: "Leaf three." },
+      { id: "l4", statement: "Leaf four." },
+      { id: "l5", statement: "Leaf five." },
+      { id: "l6", statement: "Leaf six." },
+    ];
+
+    const previousTree = await buildRecursiveExplanationTree(baselineProvider.provider, {
+      config,
+      leaves,
+    });
+    const duplicatedAmbiguousSummaries = Object.fromEntries(
+      Object.entries(buildReusableParentSummaries(previousTree)).flatMap(([parentId, summary]) => [
+        [`shifted_a_${parentId}`, summary],
+        [`shifted_b_${parentId}`, summary],
+      ]),
+    );
+
+    const withAmbiguousReuseProvider = countedDeterministicSummaryProvider();
+    const rebuilt = await buildRecursiveExplanationTree(withAmbiguousReuseProvider.provider, {
+      config,
+      leaves,
+      reusableParentSummaries: duplicatedAmbiguousSummaries,
+    });
+
+    expect(withAmbiguousReuseProvider.counter.count).toBeGreaterThan(0);
+    const skippedAmbiguousGroups = rebuilt.groupingDiagnostics.flatMap(
+      (layer) => layer.summaryReuse?.skippedAmbiguousChildHashGroupIndexes ?? [],
+    );
+    const reusedByChildHashGroups = rebuilt.groupingDiagnostics.flatMap(
+      (layer) => layer.summaryReuse?.reusedByChildHashGroupIndexes ?? [],
+    );
+    expect(skippedAmbiguousGroups.length).toBeGreaterThan(0);
+    expect(reusedByChildHashGroups).toHaveLength(0);
+  });
 });
 
 function deterministicSummaryProvider(): ProviderClient {

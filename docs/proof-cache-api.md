@@ -50,7 +50,7 @@ Deterministic cache-reuse diagnostics for proof dataset generation.
   - final fallback remains deterministic full rebuild (`cache_incremental_rebuild`) when topology-aware reuse cannot be applied.
 - Cache entry integrity is checked by snapshot/dependency hash validation before reuse.
 - On mismatch or invalid entry, the dataset is rebuilt deterministically and cache is overwritten.
-- Topology-rebuild diagnostics include machine-checkable reuse counters (`reusedParentSummaryCount`, `generatedParentSummaryCount`, `reusedParentNodeCount`, `generatedParentNodeCount`, `reusedParentByStableIdCount`, `reusedParentByChildHashCount`).
+- Topology-rebuild diagnostics include machine-checkable reuse counters (`reusedParentSummaryCount`, `generatedParentSummaryCount`, `reusedParentNodeCount`, `generatedParentNodeCount`, `reusedParentByStableIdCount`, `reusedParentByChildHashCount`, `skippedAmbiguousChildHashReuseCount`).
 
 ## Environment
 - `EXPLAIN_MD_WEB_PROOF_CACHE_DIR`
