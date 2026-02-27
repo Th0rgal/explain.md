@@ -533,6 +533,8 @@ describe("api client", () => {
             minVerificationRequestCount: 1,
             minProofCacheHitRate: 0.2,
             minProofUniqueTraceRate: 0.9,
+            maxProofP95LatencyMs: 100,
+            maxProofMeanLatencyMs: 80,
             maxVerificationFailureRate: 0.1,
             maxVerificationP95LatencyMs: 300,
             maxVerificationMeanLatencyMs: 250,
@@ -548,6 +550,8 @@ describe("api client", () => {
               requestCount: 2,
               cacheHitRate: 0.5,
               uniqueTraceRate: 1,
+              maxP95LatencyMs: 12,
+              maxMeanLatencyMs: 9,
             },
             verification: {
               requestCount: 2,
@@ -579,6 +583,8 @@ describe("api client", () => {
     await fetchObservabilitySloReport({
       minProofCacheHitRate: 0.2,
       minProofUniqueTraceRate: 0.9,
+      maxProofP95LatencyMs: 100,
+      maxProofMeanLatencyMs: 80,
       maxVerificationFailureRate: 0.1,
       maxVerificationP95LatencyMs: 300,
       maxVerificationMeanLatencyMs: 250,
@@ -594,6 +600,8 @@ describe("api client", () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/api/observability/slo-report?");
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("minProofCacheHitRate=0.2");
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("minProofUniqueTraceRate=0.9");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("maxProofP95LatencyMs=100");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("maxProofMeanLatencyMs=80");
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("maxVerificationFailureRate=0.1");
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("maxVerificationP95LatencyMs=300");
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("maxVerificationMeanLatencyMs=250");

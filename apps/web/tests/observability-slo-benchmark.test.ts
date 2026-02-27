@@ -25,6 +25,8 @@ describe("observability SLO benchmark", () => {
     expect(report.snapshots.uiInteraction.parentTraceProvidedRate).toBeCloseTo(0.6, 5);
 
     expect(report.evaluation.strictRegression.thresholdFailureCodes).toEqual([
+      "lean-verity-fixture:proof_mean_latency_above_max",
+      "lean-verity-fixture:proof_p95_latency_above_max",
       "lean-verity-fixture:proof_request_count_below_min",
       "lean-verity-fixture:ui_interaction_keyboard_action_rate_below_min",
       "lean-verity-fixture:ui_interaction_p95_duration_above_max",
@@ -35,6 +37,8 @@ describe("observability SLO benchmark", () => {
       "lean-verity-fixture:verification_parent_trace_rate_below_min",
       "lean-verity-fixture:verification_request_count_below_min",
       "seed-verity:proof_cache_hit_rate_below_min",
+      "seed-verity:proof_mean_latency_above_max",
+      "seed-verity:proof_p95_latency_above_max",
       "seed-verity:proof_request_count_below_min",
       "seed-verity:ui_interaction_keyboard_action_rate_below_min",
       "seed-verity:ui_interaction_p95_duration_above_max",

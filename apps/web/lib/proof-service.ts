@@ -58,6 +58,7 @@ const LEAN_FIXTURE_SOURCE_BASE_URL =
 const PROOF_DATASET_CACHE_SCHEMA_VERSION = "1.0.0";
 const DEFAULT_PROOF_DATASET_CACHE_DIR = path.resolve(process.cwd(), ".explain-md", "web-proof-cache");
 const PROOF_QUERY_OBSERVABILITY_SAMPLE_WINDOW = 1024;
+let proofNowMs: () => number = () => Date.now();
 
 const SUPPORTED_PROOF_IDS = [SEED_PROOF_ID, LEAN_FIXTURE_PROOF_ID] as const;
 
@@ -105,6 +106,7 @@ interface ProofQueryObservabilityEvent {
   query: ProofObservabilityQuery;
   traceId: string;
   requestId: string;
+  latencyMs: number;
   cacheLayer: ProofDatasetCacheLayer;
   cacheStatus: ProofDatasetCacheStatus;
   leafCount: number;
@@ -299,6 +301,7 @@ export interface ProofQueryObservability {
     attributes: Record<string, boolean | number | string>;
   }>;
   metrics: {
+    latencyMs: number;
     cacheLayer: ProofDatasetCacheLayer;
     cacheStatus: ProofDatasetCacheStatus;
     leafCount: number;
@@ -323,6 +326,10 @@ export interface ProofQueryObservabilityMetricsSnapshot {
     requestCount: number;
     cacheHitCount: number;
     cacheMissCount: number;
+    minLatencyMs: number;
+    maxLatencyMs: number;
+    meanLatencyMs: number;
+    p95LatencyMs: number;
     meanLeafCount: number;
     meanParentCount: number;
     meanNodeCount: number;
@@ -390,6 +397,7 @@ export function loadSeedDataset(proofId: string, configInput: ExplanationConfigI
 }
 
 export function buildSeedProjection(request: ProjectionRequest) {
+  const startedAt = proofNowMs();
   const dataset = loadSeedDataset(request.proofId, request.config);
   const snapshot = exportTreeStorageSnapshot(dataset.tree as never, {
     proofId: dataset.proofId,
@@ -416,6 +424,7 @@ export function buildSeedProjection(request: ProjectionRequest) {
     query: "view",
     tree: dataset.tree as ExplanationTree,
     cache,
+    latencyMs: elapsedMs(startedAt),
   });
 
   return {
@@ -430,6 +439,7 @@ export function buildSeedProjection(request: ProjectionRequest) {
 }
 
 export async function buildProofProjection(request: ProjectionRequest) {
+  const startedAt = proofNowMs();
   const { dataset, cache } = await loadProofDataset(request.proofId, request.config);
   const expandedNodeIds = normalizeExpandedNodeIds(request.expandedNodeIds);
   const view = buildProgressiveDisclosureView(dataset.tree as never, {
@@ -450,6 +460,7 @@ export async function buildProofProjection(request: ProjectionRequest) {
     query: "view",
     tree: dataset.tree,
     cache,
+    latencyMs: elapsedMs(startedAt),
   });
 
   return {
@@ -464,6 +475,7 @@ export async function buildProofProjection(request: ProjectionRequest) {
 }
 
 export function buildSeedDiff(request: DiffRequest) {
+  const startedAt = proofNowMs();
   const baseline = loadSeedDataset(request.proofId, request.baselineConfig);
   const candidate = loadSeedDataset(request.proofId, request.candidateConfig);
   const snapshot = exportTreeStorageSnapshot(candidate.tree as never, {
@@ -486,6 +498,7 @@ export function buildSeedDiff(request: DiffRequest) {
     query: "diff",
     tree: candidate.tree as ExplanationTree,
     cache,
+    latencyMs: elapsedMs(startedAt),
     extraMetrics: {
       baselineLeafCount: baseline.tree.leafIds.length,
       baselineNodeCount: Object.keys(baseline.tree.nodes).length,
@@ -505,6 +518,7 @@ export function buildSeedDiff(request: DiffRequest) {
 }
 
 export async function buildProofDiff(request: DiffRequest) {
+  const startedAt = proofNowMs();
   const [baseline, candidate] = await Promise.all([
     loadProofDataset(request.proofId, request.baselineConfig),
     loadProofDataset(request.proofId, request.candidateConfig),
@@ -528,6 +542,7 @@ export async function buildProofDiff(request: DiffRequest) {
     query: "diff",
     tree: candidate.dataset.tree,
     cache: candidate.cache,
+    latencyMs: elapsedMs(startedAt),
     extraMetrics: {
       baselineCacheStatus: baseline.cache.status,
       baselineCacheLayer: baseline.cache.layer,
@@ -549,6 +564,7 @@ export async function buildProofDiff(request: DiffRequest) {
 }
 
 export async function buildProofLeafDetail(request: LeafDetailRequest) {
+  const startedAt = proofNowMs();
   const { dataset, cache } = await loadProofDataset(request.proofId, request.config);
   const jobs = request.verificationJobs ?? sampleVerificationJobs(request.proofId, request.leafId);
   const result = buildLeafDetailView(dataset.tree as never, dataset.leaves, request.leafId, {
@@ -573,6 +589,7 @@ export async function buildProofLeafDetail(request: LeafDetailRequest) {
         query: "leaf-detail",
         tree: dataset.tree,
         cache,
+        latencyMs: elapsedMs(startedAt),
         extraMetrics: {
           leafFound: false,
         },
@@ -600,6 +617,7 @@ export async function buildProofLeafDetail(request: LeafDetailRequest) {
       query: "leaf-detail",
       tree: dataset.tree,
       cache,
+      latencyMs: elapsedMs(startedAt),
       extraMetrics: {
         leafFound: true,
         verificationJobCount: jobs.length,
@@ -609,6 +627,7 @@ export async function buildProofLeafDetail(request: LeafDetailRequest) {
 }
 
 export function buildSeedLeafDetail(request: LeafDetailRequest) {
+  const startedAt = proofNowMs();
   const dataset = loadSeedDataset(request.proofId, request.config);
   const snapshot = exportTreeStorageSnapshot(dataset.tree as never, {
     proofId: dataset.proofId,
@@ -639,6 +658,7 @@ export function buildSeedLeafDetail(request: LeafDetailRequest) {
         query: "leaf-detail",
         tree: dataset.tree as ExplanationTree,
         cache,
+        latencyMs: elapsedMs(startedAt),
         extraMetrics: { leafFound: false },
       }),
     };
@@ -664,6 +684,7 @@ export function buildSeedLeafDetail(request: LeafDetailRequest) {
       query: "leaf-detail",
       tree: dataset.tree as ExplanationTree,
       cache,
+      latencyMs: elapsedMs(startedAt),
       extraMetrics: {
         leafFound: true,
         verificationJobCount: jobs.length,
@@ -673,6 +694,7 @@ export function buildSeedLeafDetail(request: LeafDetailRequest) {
 }
 
 export async function buildProofRootView(proofId: string, configInput: ExplanationConfigInput = {}) {
+  const startedAt = proofNowMs();
   const { dataset, queryApi, cache } = await loadProofDataset(proofId, configInput);
   const root = queryApi.getRoot();
   const requestHash = computeCanonicalRequestHash({
@@ -694,11 +716,13 @@ export async function buildProofRootView(proofId: string, configInput: Explanati
       query: "root",
       tree: dataset.tree,
       cache,
+      latencyMs: elapsedMs(startedAt),
     }),
   };
 }
 
 export function buildSeedRootView(proofId: string, configInput: ExplanationConfigInput = {}) {
+  const startedAt = proofNowMs();
   const dataset = loadSeedDataset(proofId, configInput);
   const api = createSeedTreeQueryApi(dataset);
   const cache = buildSeedCacheMetadata(dataset, computeTreeStorageSnapshotHash(api.snapshot));
@@ -722,11 +746,13 @@ export function buildSeedRootView(proofId: string, configInput: ExplanationConfi
       query: "root",
       tree: dataset.tree as ExplanationTree,
       cache,
+      latencyMs: elapsedMs(startedAt),
     }),
   };
 }
 
 export async function buildProofNodeChildrenView(request: NodeChildrenRequest) {
+  const startedAt = proofNowMs();
   const { dataset, queryApi, cache } = await loadProofDataset(request.proofId, request.config);
   const children = queryApi.getChildren(request.nodeId, {
     offset: request.offset,
@@ -754,6 +780,7 @@ export async function buildProofNodeChildrenView(request: NodeChildrenRequest) {
       query: "children",
       tree: dataset.tree,
       cache,
+      latencyMs: elapsedMs(startedAt),
       extraMetrics: {
         requestedNodeId: request.nodeId,
         pageOffset: children.offset,
@@ -766,6 +793,7 @@ export async function buildProofNodeChildrenView(request: NodeChildrenRequest) {
 }
 
 export function buildSeedNodeChildrenView(request: NodeChildrenRequest) {
+  const startedAt = proofNowMs();
   const dataset = loadSeedDataset(request.proofId, request.config);
   const api = createSeedTreeQueryApi(dataset);
   const cache = buildSeedCacheMetadata(dataset, computeTreeStorageSnapshotHash(api.snapshot));
@@ -795,6 +823,7 @@ export function buildSeedNodeChildrenView(request: NodeChildrenRequest) {
       query: "children",
       tree: dataset.tree as ExplanationTree,
       cache,
+      latencyMs: elapsedMs(startedAt),
       extraMetrics: {
         requestedNodeId: request.nodeId,
         pageOffset: children.offset,
@@ -807,6 +836,7 @@ export function buildSeedNodeChildrenView(request: NodeChildrenRequest) {
 }
 
 export async function buildProofNodePathView(request: NodePathRequest) {
+  const startedAt = proofNowMs();
   const { dataset, queryApi, cache } = await loadProofDataset(request.proofId, request.config);
   const pathResult = queryApi.getAncestryPath(request.nodeId);
   const requestHash = computeCanonicalRequestHash({
@@ -829,6 +859,7 @@ export async function buildProofNodePathView(request: NodePathRequest) {
       query: "path",
       tree: dataset.tree,
       cache,
+      latencyMs: elapsedMs(startedAt),
       extraMetrics: {
         requestedNodeId: request.nodeId,
         pathLength: pathResult.path.length,
@@ -839,6 +870,7 @@ export async function buildProofNodePathView(request: NodePathRequest) {
 }
 
 export async function buildProofDependencyGraphView(request: DependencyGraphRequest): Promise<DependencyGraphView> {
+  const startedAt = proofNowMs();
   const { dataset, cache } = await loadProofDataset(request.proofId, request.config);
   const declarationId = normalizeOptionalDeclarationId(request.declarationId);
   const includeExternalSupport = request.includeExternalSupport ?? true;
@@ -902,6 +934,7 @@ export async function buildProofDependencyGraphView(request: DependencyGraphRequ
       query: "dependency-graph",
       tree: dataset.tree,
       cache,
+      latencyMs: elapsedMs(startedAt),
       extraMetrics: {
         declarationRequested: declarationId ?? "none",
         includeExternalSupport,
@@ -914,6 +947,7 @@ export async function buildProofDependencyGraphView(request: DependencyGraphRequ
 }
 
 export async function buildProofPolicyReportView(request: PolicyReportRequest): Promise<PolicyReportView> {
+  const startedAt = proofNowMs();
   const { dataset, cache } = await loadProofDataset(request.proofId, request.config);
   const report = evaluateExplanationTreeQuality(dataset.tree, dataset.config, {
     thresholds: request.thresholds,
@@ -938,6 +972,7 @@ export async function buildProofPolicyReportView(request: PolicyReportRequest): 
       query: "policy-report",
       tree: dataset.tree,
       cache,
+      latencyMs: elapsedMs(startedAt),
       extraMetrics: {
         thresholdPass: report.thresholdPass,
         thresholdFailureCount: report.thresholdFailures.length,
@@ -948,6 +983,7 @@ export async function buildProofPolicyReportView(request: PolicyReportRequest): 
 }
 
 export async function buildProofCacheReportView(request: ProofCacheReportRequest): Promise<ProofCacheReportView> {
+  const startedAt = proofNowMs();
   const resolved = await loadProofDataset(request.proofId, request.config);
   const requestHash = computeCanonicalRequestHash({
     proofId: request.proofId,
@@ -966,6 +1002,7 @@ export async function buildProofCacheReportView(request: ProofCacheReportRequest
       query: "cache-report",
       tree: resolved.dataset.tree,
       cache: resolved.cache,
+      latencyMs: elapsedMs(startedAt),
       extraMetrics: {
         cacheDiagnosticCount: resolved.cache.diagnostics.length,
         hasBlockedSubtreePlan: Boolean(resolved.cache.blockedSubtreePlan),
@@ -975,6 +1012,7 @@ export async function buildProofCacheReportView(request: ProofCacheReportRequest
 }
 
 export function buildSeedNodePathView(request: NodePathRequest) {
+  const startedAt = proofNowMs();
   const dataset = loadSeedDataset(request.proofId, request.config);
   const api = createSeedTreeQueryApi(dataset);
   const cache = buildSeedCacheMetadata(dataset, computeTreeStorageSnapshotHash(api.snapshot));
@@ -999,6 +1037,7 @@ export function buildSeedNodePathView(request: NodePathRequest) {
       query: "path",
       tree: dataset.tree as ExplanationTree,
       cache,
+      latencyMs: elapsedMs(startedAt),
       extraMetrics: {
         requestedNodeId: request.nodeId,
         pathLength: pathResult.path.length,
@@ -4290,6 +4329,7 @@ function buildProofQueryObservability(input: {
   query: ProofObservabilityQuery;
   tree: ExplanationTree;
   cache: ProofDatasetCacheMetadata;
+  latencyMs: number;
   extraMetrics?: Record<string, boolean | number | string>;
 }): ProofQueryObservability {
   const base = {
@@ -4302,6 +4342,7 @@ function buildProofQueryObservability(input: {
   };
   const traceId = computeCanonicalRequestHash(base);
   const metrics: ProofQueryObservability["metrics"] = {
+    latencyMs: normalizeLatencyMs(input.latencyMs),
     cacheLayer: input.cache.layer,
     cacheStatus: input.cache.status,
     leafCount: input.tree.leafIds.length,
@@ -4332,6 +4373,7 @@ function buildProofQueryObservability(input: {
     query: input.query,
     traceId,
     requestId: input.requestHash,
+    latencyMs: metrics.latencyMs,
     cacheLayer: input.cache.layer,
     cacheStatus: input.cache.status,
     leafCount: metrics.leafCount,
@@ -4369,8 +4411,13 @@ export function exportProofQueryObservabilityMetrics(options: { generatedAt?: st
   const queries = queryOrder.map((query) => {
     const events = proofQueryObservabilityEvents.filter((event) => event.query === query);
     const requestCountForQuery = events.length;
+    const latencies = events.map((event) => event.latencyMs).sort((left, right) => left - right);
     const cacheHitCount = events.filter((event) => event.cacheStatus === "hit").length;
     const cacheMissCount = requestCountForQuery - cacheHitCount;
+    const minLatencyMs = requestCountForQuery === 0 ? 0 : latencies[0] ?? 0;
+    const maxLatencyMs = requestCountForQuery === 0 ? 0 : latencies[latencies.length - 1] ?? 0;
+    const meanLatencyMs = requestCountForQuery === 0 ? 0 : sum(latencies) / requestCountForQuery;
+    const p95LatencyMs = requestCountForQuery === 0 ? 0 : percentile(latencies, 0.95);
     const meanLeafCount = requestCountForQuery === 0 ? 0 : sum(events.map((event) => event.leafCount)) / requestCountForQuery;
     const meanParentCount = requestCountForQuery === 0 ? 0 : sum(events.map((event) => event.parentCount)) / requestCountForQuery;
     const meanNodeCount = requestCountForQuery === 0 ? 0 : sum(events.map((event) => event.nodeCount)) / requestCountForQuery;
@@ -4380,6 +4427,10 @@ export function exportProofQueryObservabilityMetrics(options: { generatedAt?: st
       requestCount: requestCountForQuery,
       cacheHitCount,
       cacheMissCount,
+      minLatencyMs,
+      maxLatencyMs,
+      meanLatencyMs,
+      p95LatencyMs,
       meanLeafCount,
       meanParentCount,
       meanNodeCount,
@@ -4411,6 +4462,14 @@ export function clearProofQueryObservabilityMetricsForTests(): void {
   proofQueryObservabilityEvents.length = 0;
 }
 
+export function configureProofQueryObservabilityClockForTests(nowMs: () => number): void {
+  proofNowMs = nowMs;
+}
+
+export function resetProofQueryObservabilityClockForTests(): void {
+  proofNowMs = () => Date.now();
+}
+
 function recordProofQueryObservabilityEvent(event: ProofQueryObservabilityEvent): void {
   proofQueryObservabilityEvents.push(event);
   if (proofQueryObservabilityEvents.length > PROOF_QUERY_OBSERVABILITY_SAMPLE_WINDOW) {
@@ -4439,6 +4498,26 @@ function stableReplacer(_key: string, value: unknown): unknown {
 
 function sum(values: number[]): number {
   return values.reduce((accumulator, value) => accumulator + value, 0);
+}
+
+function percentile(sortedValues: number[], quantile: number): number {
+  if (sortedValues.length === 0) {
+    return 0;
+  }
+  const clampedQuantile = Math.min(1, Math.max(0, quantile));
+  const index = Math.min(sortedValues.length - 1, Math.max(0, Math.ceil(sortedValues.length * clampedQuantile) - 1));
+  return sortedValues[index] ?? 0;
+}
+
+function elapsedMs(startedAtMs: number): number {
+  return normalizeLatencyMs(proofNowMs() - startedAtMs);
+}
+
+function normalizeLatencyMs(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.max(0, Math.round(value));
 }
 
 function sampleVerificationJobs(proofId: string, leafId: string): VerificationJob[] {

@@ -98,6 +98,7 @@ export interface ProofQueryObservability {
     attributes: Record<string, boolean | number | string>;
   }>;
   metrics: {
+    latencyMs: number;
     cacheLayer: "persistent" | "ephemeral";
     cacheStatus: "hit" | "miss";
     leafCount: number;
@@ -122,6 +123,10 @@ export interface ProofQueryObservabilityMetricsResponse {
     requestCount: number;
     cacheHitCount: number;
     cacheMissCount: number;
+    minLatencyMs: number;
+    maxLatencyMs: number;
+    meanLatencyMs: number;
+    p95LatencyMs: number;
     meanLeafCount: number;
     meanParentCount: number;
     meanNodeCount: number;
@@ -616,6 +621,8 @@ export interface ObservabilitySloThresholdsInput {
   minVerificationRequestCount?: number;
   minProofCacheHitRate?: number;
   minProofUniqueTraceRate?: number;
+  maxProofP95LatencyMs?: number;
+  maxProofMeanLatencyMs?: number;
   maxVerificationFailureRate?: number;
   maxVerificationP95LatencyMs?: number;
   maxVerificationMeanLatencyMs?: number;
@@ -634,6 +641,8 @@ export interface ObservabilitySloReportResponse {
     minVerificationRequestCount: number;
     minProofCacheHitRate: number;
     minProofUniqueTraceRate: number;
+    maxProofP95LatencyMs: number;
+    maxProofMeanLatencyMs: number;
     maxVerificationFailureRate: number;
     maxVerificationP95LatencyMs: number;
     maxVerificationMeanLatencyMs: number;
@@ -649,6 +658,8 @@ export interface ObservabilitySloReportResponse {
       requestCount: number;
       cacheHitRate: number;
       uniqueTraceRate: number;
+      maxP95LatencyMs: number;
+      maxMeanLatencyMs: number;
     };
     verification: {
       requestCount: number;
@@ -672,6 +683,8 @@ export interface ObservabilitySloReportResponse {
       | "verification_request_count_below_min"
       | "proof_cache_hit_rate_below_min"
       | "proof_unique_trace_rate_below_min"
+      | "proof_p95_latency_above_max"
+      | "proof_mean_latency_above_max"
       | "verification_failure_rate_above_max"
       | "verification_p95_latency_above_max"
       | "verification_mean_latency_above_max"

@@ -8,6 +8,8 @@ export interface ObservabilitySloThresholds {
   minVerificationRequestCount: number;
   minProofCacheHitRate: number;
   minProofUniqueTraceRate: number;
+  maxProofP95LatencyMs: number;
+  maxProofMeanLatencyMs: number;
   maxVerificationFailureRate: number;
   maxVerificationP95LatencyMs: number;
   maxVerificationMeanLatencyMs: number;
@@ -25,6 +27,8 @@ export interface ObservabilitySloThresholdFailure {
     | "verification_request_count_below_min"
     | "proof_cache_hit_rate_below_min"
     | "proof_unique_trace_rate_below_min"
+    | "proof_p95_latency_above_max"
+    | "proof_mean_latency_above_max"
     | "verification_failure_rate_above_max"
     | "verification_p95_latency_above_max"
     | "verification_mean_latency_above_max"
@@ -51,6 +55,8 @@ export interface ObservabilitySloReport {
       requestCount: number;
       cacheHitRate: number;
       uniqueTraceRate: number;
+      maxP95LatencyMs: number;
+      maxMeanLatencyMs: number;
     };
     verification: {
       requestCount: number;
@@ -81,6 +87,8 @@ export const DEFAULT_OBSERVABILITY_SLO_THRESHOLDS: ObservabilitySloThresholds = 
   minVerificationRequestCount: 1,
   minProofCacheHitRate: 0,
   minProofUniqueTraceRate: 1,
+  maxProofP95LatencyMs: 500,
+  maxProofMeanLatencyMs: 400,
   maxVerificationFailureRate: 0,
   maxVerificationP95LatencyMs: 250,
   maxVerificationMeanLatencyMs: 200,
@@ -103,6 +111,10 @@ export function evaluateObservabilitySLOs(input: {
   const proofRequestCount = input.proof.requestCount;
   const proofCacheHitRate = input.proof.cache.hitRate;
   const proofUniqueTraceRate = proofRequestCount === 0 ? 0 : input.proof.uniqueTraceCount / proofRequestCount;
+  const proofMaxP95LatencyMs =
+    input.proof.queries.length === 0 ? 0 : Math.max(...input.proof.queries.map((query) => query.p95LatencyMs));
+  const proofMaxMeanLatencyMs =
+    input.proof.queries.length === 0 ? 0 : Math.max(...input.proof.queries.map((query) => query.meanLatencyMs));
   const verificationRequestCount = input.verification.requestCount;
   const verificationFailureRate = verificationRequestCount === 0 ? 0 : input.verification.failureCount / verificationRequestCount;
   const verificationMaxP95LatencyMs =
@@ -151,6 +163,20 @@ export function evaluateObservabilitySLOs(input: {
     code: "proof_unique_trace_rate_below_min",
     metric: "proof.uniqueTraceRate",
     message: "Proof-query unique trace ratio is below configured minimum.",
+  });
+  pushFailureIfGreaterThan(failures, {
+    actual: proofMaxP95LatencyMs,
+    expected: thresholds.maxProofP95LatencyMs,
+    code: "proof_p95_latency_above_max",
+    metric: "proof.maxP95LatencyMs",
+    message: "Proof-query p95 latency exceeds configured maximum.",
+  });
+  pushFailureIfGreaterThan(failures, {
+    actual: proofMaxMeanLatencyMs,
+    expected: thresholds.maxProofMeanLatencyMs,
+    code: "proof_mean_latency_above_max",
+    metric: "proof.maxMeanLatencyMs",
+    message: "Proof-query mean latency exceeds configured maximum.",
   });
   pushFailureIfGreaterThan(failures, {
     actual: verificationFailureRate,
@@ -225,6 +251,8 @@ export function evaluateObservabilitySLOs(input: {
         requestCount: proofRequestCount,
         cacheHitRate: proofCacheHitRate,
         uniqueTraceRate: proofUniqueTraceRate,
+        maxP95LatencyMs: proofMaxP95LatencyMs,
+        maxMeanLatencyMs: proofMaxMeanLatencyMs,
       },
       verification: {
         requestCount: verificationRequestCount,
@@ -266,6 +294,14 @@ function resolveThresholds(overrides: Partial<ObservabilitySloThresholds> | unde
     minProofUniqueTraceRate: clampUnit(
       overrides?.minProofUniqueTraceRate,
       DEFAULT_OBSERVABILITY_SLO_THRESHOLDS.minProofUniqueTraceRate,
+    ),
+    maxProofP95LatencyMs: clampNonNegative(
+      overrides?.maxProofP95LatencyMs,
+      DEFAULT_OBSERVABILITY_SLO_THRESHOLDS.maxProofP95LatencyMs,
+    ),
+    maxProofMeanLatencyMs: clampNonNegative(
+      overrides?.maxProofMeanLatencyMs,
+      DEFAULT_OBSERVABILITY_SLO_THRESHOLDS.maxProofMeanLatencyMs,
     ),
     maxVerificationFailureRate: clampUnit(
       overrides?.maxVerificationFailureRate,

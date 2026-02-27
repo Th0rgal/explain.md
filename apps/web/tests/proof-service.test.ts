@@ -125,6 +125,7 @@ describe("proof service", () => {
     ]);
     expect(root.observability.metrics.cacheStatus).toBe("miss");
     expect(root.observability.metrics.cacheLayer).toBe("ephemeral");
+    expect(root.observability.metrics.latencyMs).toBeGreaterThanOrEqual(0);
 
     const children = buildSeedNodeChildrenView({
       proofId: SEED_PROOF_ID,
@@ -182,6 +183,7 @@ describe("proof service", () => {
     expect(first.cache.missCount).toBe(3);
     expect(first.cache.hitRate).toBe(0);
     expect(first.queries.find((entry) => entry.query === "view")?.requestCount).toBe(1);
+    expect(first.queries.find((entry) => entry.query === "view")?.p95LatencyMs).toBeGreaterThanOrEqual(0);
     expect(first.queries.find((entry) => entry.query === "root")?.requestCount).toBe(1);
     expect(first.queries.find((entry) => entry.query === "children")?.requestCount).toBe(1);
     expect(first.queries.find((entry) => entry.query === "diff")?.requestCount).toBe(0);

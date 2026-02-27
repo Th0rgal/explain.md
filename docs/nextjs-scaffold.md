@@ -50,7 +50,7 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 - Observability SLO report contract:
   - `GET /api/observability/slo-report`
   - combines proof-query, verification, and UI-interaction snapshots into deterministic threshold evaluation (`thresholdPass`, `thresholdFailures`, `snapshotHash`)
-  - supports threshold override query params: `minProofRequestCount`, `minVerificationRequestCount`, `minProofCacheHitRate`, `minProofUniqueTraceRate`, `maxVerificationFailureRate`, `maxVerificationP95LatencyMs`, `maxVerificationMeanLatencyMs`, `minVerificationParentTraceRate`, `minUiInteractionRequestCount`, `minUiInteractionSuccessRate`, `minUiInteractionKeyboardActionRate`, `minUiInteractionParentTraceRate`, `maxUiInteractionP95DurationMs`
+  - supports threshold override query params: `minProofRequestCount`, `minVerificationRequestCount`, `minProofCacheHitRate`, `minProofUniqueTraceRate`, `maxProofP95LatencyMs`, `maxProofMeanLatencyMs`, `maxVerificationFailureRate`, `maxVerificationP95LatencyMs`, `maxVerificationMeanLatencyMs`, `minVerificationParentTraceRate`, `minUiInteractionRequestCount`, `minUiInteractionSuccessRate`, `minUiInteractionKeyboardActionRate`, `minUiInteractionParentTraceRate`, `maxUiInteractionP95DurationMs`
 - UI interaction observability contracts:
   - `POST /api/observability/ui-interactions` records deterministic browser interaction traces with canonical `requestId`/`traceId`
     - keyboard intent flows are recorded as `tree_keyboard`; direct tree action events are emitted only for non-keyboard sources to avoid duplicate interaction counts
@@ -70,10 +70,10 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - `query` (`view | diff | leaf-detail | root | children | path | dependency-graph | policy-report | cache-report`)
   - `traceId`
   - fixed span set: `dataset_load`, `query_compute`, `response_materialization`
-  - metrics: `cacheLayer`, `cacheStatus`, `leafCount`, `parentCount`, `nodeCount`, `maxDepth`
+  - metrics: `latencyMs`, `cacheLayer`, `cacheStatus`, `leafCount`, `parentCount`, `nodeCount`, `maxDepth`
 - Core proof-query observability now has a deterministic aggregate export contract:
   - `GET /api/observability/proof-query-metrics`
-  - rolling-window request/correlation/cache aggregates with per-query mean tree sizes and canonical `snapshotHash`
+  - rolling-window request/correlation/cache aggregates with per-query latency stats + mean tree sizes and canonical `snapshotHash`
 - Leaf detail panel is backed by provenance path plus persisted verification history.
 - Node/root/path query routes use canonical tree-storage snapshots, enabling stable root/children/ancestry reads for progressive expansion UIs.
 - Dependency graph route exposes deterministic SCC/reachability data and per-declaration support closures for browser-side provenance checks.

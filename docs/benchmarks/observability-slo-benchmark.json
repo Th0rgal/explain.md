@@ -1,8 +1,8 @@
 {
   "schemaVersion": "1.0.0",
   "generatedAt": "2026-02-27T00:00:00.000Z",
-  "requestHash": "2ae08aa3116c91222e4d42b732f55682e870106c357b0eb07345eaa3861a60b0",
-  "outcomeHash": "68ca419bf99c6114b6e7312ebab6a7bbbf7c2a0ba5df2b8be05ed1a98db69201",
+  "requestHash": "fdcfee39686f91db5fd4fb51a666fdd7531e8239f9e2e7d93aa94a88d9c3f656",
+  "outcomeHash": "a26e9cc73af1b2714f4c4f4625d5380eb2d34d5ed6f444e9f9bf5dbd711559a2",
   "parameters": {
     "profiles": [
       {
@@ -51,6 +51,8 @@
       "minVerificationRequestCount": 3,
       "minProofCacheHitRate": 0,
       "minProofUniqueTraceRate": 1,
+      "maxProofP95LatencyMs": 16,
+      "maxProofMeanLatencyMs": 12,
       "maxVerificationFailureRate": 0,
       "maxVerificationP95LatencyMs": 25,
       "maxVerificationMeanLatencyMs": 20,
@@ -66,6 +68,8 @@
       "minVerificationRequestCount": 4,
       "minProofCacheHitRate": 0.2,
       "minProofUniqueTraceRate": 1,
+      "maxProofP95LatencyMs": 1,
+      "maxProofMeanLatencyMs": 1,
       "maxVerificationFailureRate": 0,
       "maxVerificationP95LatencyMs": 5,
       "maxVerificationMeanLatencyMs": 5,
@@ -83,15 +87,17 @@
       "proofId": "seed-verity",
       "leafId": "Verity.ContractSpec.init_sound",
       "configHash": "a75632c3c71bea58a13445a49951b87763ebd9e868fb4f51ac128e6c783e8af7",
-      "requestHash": "194b72d999edd0a00312cb7e3f027eb91caab603e2a76b0ae59fa2167e60c011",
-      "outcomeHash": "ed858f70708d576821fd2e3de80afb3f3c0138e32d3a6d55bb1048263dc8aa46",
+      "requestHash": "fdf81f2d8ac9af3ccaece6aa28c1ebd4e728d234d585cab166b1ff2250f788b2",
+      "outcomeHash": "8c25fb156165f238d073feb92328b4a71200771660b378b69fafb851124ae1c5",
       "snapshots": {
         "proof": {
-          "snapshotHash": "62b0a6c20db7c8cc394be67ac3fe9cc1d383321b74d993968e70753ab8cb3d6a",
+          "snapshotHash": "e66c594da30daf7eed1a29aad7a9a162fe3e2f1aa87f156a1ce4cac319114469",
           "requestCount": 9,
           "uniqueRequestCount": 9,
           "uniqueTraceCount": 9,
-          "cacheHitRate": 0
+          "cacheHitRate": 0,
+          "maxP95LatencyMs": 7,
+          "maxMeanLatencyMs": 7
         },
         "verification": {
           "snapshotHash": "0af26ffbc50e5f2ea8c10745e5ce4bc931529a266a1057bd866f250da2559e61",
@@ -114,7 +120,7 @@
         "baseline": {
           "thresholdPass": true,
           "thresholdFailureCodes": [],
-          "reportSnapshotHash": "a69bab9779ef17c5cbbf6cbac56c3dc4d715b6cdb7451c9507f318a66415bb0d"
+          "reportSnapshotHash": "a4cfa8a4c9313f373ecb83e7a527078aaf00daeef2d49a124a4a12bf51d57345"
         },
         "strictRegression": {
           "thresholdPass": false,
@@ -122,6 +128,8 @@
             "proof_request_count_below_min",
             "verification_request_count_below_min",
             "proof_cache_hit_rate_below_min",
+            "proof_p95_latency_above_max",
+            "proof_mean_latency_above_max",
             "verification_p95_latency_above_max",
             "verification_mean_latency_above_max",
             "verification_parent_trace_rate_below_min",
@@ -130,7 +138,7 @@
             "ui_interaction_parent_trace_rate_below_min",
             "ui_interaction_p95_duration_above_max"
           ],
-          "reportSnapshotHash": "c14e25da086e8dfd6847d618c8cad73b0d95ed2450c3387fb0c18e9c35d8b544"
+          "reportSnapshotHash": "4cdadf6aefae53915d7d561931d4df7d7ecb74d397ec5fd1b5fc50b02d388788"
         }
       }
     },
@@ -139,15 +147,17 @@
       "proofId": "lean-verity-fixture",
       "leafId": "lean:Verity/Loop:loop_preserves:3:1",
       "configHash": "a75632c3c71bea58a13445a49951b87763ebd9e868fb4f51ac128e6c783e8af7",
-      "requestHash": "3d3e3acd3dfdcffa483870e8e12c74f0486cd66b43eaaa8e2d4879ab071a2641",
-      "outcomeHash": "39a1b3e5efe42a9b6e9527b51ea853e853d80f2fb851f1358506076bf10a7bb6",
+      "requestHash": "9f5fb12b65d03e42bc8d51991b8af90882b201a6cf3c79fc2f09646e43ba56f4",
+      "outcomeHash": "2c9a683f3e53be30cc10662a84d006abc5e07c9339595abbcd6d5918ed12d0f5",
       "snapshots": {
         "proof": {
-          "snapshotHash": "0f605b3f803e81fcdeeceae94c8afbe228f06b93ca2c8cf04f780a00d5be5807",
+          "snapshotHash": "337ea68664eaaf322e6d31530ac3376a8e6d85982d1aab100df03e4e78ebefc0",
           "requestCount": 9,
           "uniqueRequestCount": 9,
           "uniqueTraceCount": 9,
-          "cacheHitRate": 1
+          "cacheHitRate": 1,
+          "maxP95LatencyMs": 7,
+          "maxMeanLatencyMs": 7
         },
         "verification": {
           "snapshotHash": "0af26ffbc50e5f2ea8c10745e5ce4bc931529a266a1057bd866f250da2559e61",
@@ -170,13 +180,15 @@
         "baseline": {
           "thresholdPass": true,
           "thresholdFailureCodes": [],
-          "reportSnapshotHash": "9390ebbfdd1032b2a506a304cd7a439660201bdc9e25ee391e36b22bcab4bea8"
+          "reportSnapshotHash": "17b68f7e8273f78f61b284eba36907a9a25168e0cfc59a74ba9b8e109396ae95"
         },
         "strictRegression": {
           "thresholdPass": false,
           "thresholdFailureCodes": [
             "proof_request_count_below_min",
             "verification_request_count_below_min",
+            "proof_p95_latency_above_max",
+            "proof_mean_latency_above_max",
             "verification_p95_latency_above_max",
             "verification_mean_latency_above_max",
             "verification_parent_trace_rate_below_min",
@@ -185,18 +197,20 @@
             "ui_interaction_parent_trace_rate_below_min",
             "ui_interaction_p95_duration_above_max"
           ],
-          "reportSnapshotHash": "ddcadefbde9402417736fb66bba723ed88569e48672e3fb3a6d495bd6e9d9855"
+          "reportSnapshotHash": "bfd1e494653252c1d3c86a225a219c617cdd462d4accba5d8f79aace0a732d58"
         }
       }
     }
   ],
   "snapshots": {
     "proof": {
-      "snapshotHash": "35f22ee841333035ae9a9d5479ee3a1b9ddcc7c1f76b58e099df607662297b4b",
+      "snapshotHash": "1ed1c377679461a9a88f959f352f0ffe5fc2aaae543abeffafa453f835886c02",
       "requestCount": 18,
       "uniqueRequestCount": 18,
       "uniqueTraceCount": 18,
-      "cacheHitRate": 0.5
+      "cacheHitRate": 0.5,
+      "maxP95LatencyMs": 7,
+      "maxMeanLatencyMs": 7
     },
     "verification": {
       "snapshotHash": "723fe8856a8dd9cf0a8c989f50ff85defb863a19130c49e590fb2fc96147b136",
@@ -219,11 +233,13 @@
     "baseline": {
       "thresholdPass": true,
       "thresholdFailureCodes": [],
-      "reportSnapshotHash": "6162acb11b5dee816f07589201c1482b3efa776cbadff34155f35cff9e1425be"
+      "reportSnapshotHash": "8cd96b84022f864e0234ea304130220d5ffc641b73e2255505e50b603ef6bc1b"
     },
     "strictRegression": {
       "thresholdPass": false,
       "thresholdFailureCodes": [
+        "lean-verity-fixture:proof_mean_latency_above_max",
+        "lean-verity-fixture:proof_p95_latency_above_max",
         "lean-verity-fixture:proof_request_count_below_min",
         "lean-verity-fixture:ui_interaction_keyboard_action_rate_below_min",
         "lean-verity-fixture:ui_interaction_p95_duration_above_max",
@@ -234,6 +250,8 @@
         "lean-verity-fixture:verification_parent_trace_rate_below_min",
         "lean-verity-fixture:verification_request_count_below_min",
         "seed-verity:proof_cache_hit_rate_below_min",
+        "seed-verity:proof_mean_latency_above_max",
+        "seed-verity:proof_p95_latency_above_max",
         "seed-verity:proof_request_count_below_min",
         "seed-verity:ui_interaction_keyboard_action_rate_below_min",
         "seed-verity:ui_interaction_p95_duration_above_max",
@@ -244,7 +262,7 @@
         "seed-verity:verification_parent_trace_rate_below_min",
         "seed-verity:verification_request_count_below_min"
       ],
-      "reportSnapshotHash": "42f87b4803195587bb8d14ca846dcfd539b971f6063cb3ae640cdf059b96b1d8"
+      "reportSnapshotHash": "39b8648d60510d7cc2bf2f979e423d4479c01de6a9c85540891c8a74138a2a3f"
     },
     "byProfile": [
       {
@@ -252,7 +270,7 @@
         "baseline": {
           "thresholdPass": true,
           "thresholdFailureCodes": [],
-          "reportSnapshotHash": "a69bab9779ef17c5cbbf6cbac56c3dc4d715b6cdb7451c9507f318a66415bb0d"
+          "reportSnapshotHash": "a4cfa8a4c9313f373ecb83e7a527078aaf00daeef2d49a124a4a12bf51d57345"
         },
         "strictRegression": {
           "thresholdPass": false,
@@ -260,6 +278,8 @@
             "proof_request_count_below_min",
             "verification_request_count_below_min",
             "proof_cache_hit_rate_below_min",
+            "proof_p95_latency_above_max",
+            "proof_mean_latency_above_max",
             "verification_p95_latency_above_max",
             "verification_mean_latency_above_max",
             "verification_parent_trace_rate_below_min",
@@ -268,7 +288,7 @@
             "ui_interaction_parent_trace_rate_below_min",
             "ui_interaction_p95_duration_above_max"
           ],
-          "reportSnapshotHash": "c14e25da086e8dfd6847d618c8cad73b0d95ed2450c3387fb0c18e9c35d8b544"
+          "reportSnapshotHash": "4cdadf6aefae53915d7d561931d4df7d7ecb74d397ec5fd1b5fc50b02d388788"
         }
       },
       {
@@ -276,13 +296,15 @@
         "baseline": {
           "thresholdPass": true,
           "thresholdFailureCodes": [],
-          "reportSnapshotHash": "9390ebbfdd1032b2a506a304cd7a439660201bdc9e25ee391e36b22bcab4bea8"
+          "reportSnapshotHash": "17b68f7e8273f78f61b284eba36907a9a25168e0cfc59a74ba9b8e109396ae95"
         },
         "strictRegression": {
           "thresholdPass": false,
           "thresholdFailureCodes": [
             "proof_request_count_below_min",
             "verification_request_count_below_min",
+            "proof_p95_latency_above_max",
+            "proof_mean_latency_above_max",
             "verification_p95_latency_above_max",
             "verification_mean_latency_above_max",
             "verification_parent_trace_rate_below_min",
@@ -291,7 +313,7 @@
             "ui_interaction_parent_trace_rate_below_min",
             "ui_interaction_p95_duration_above_max"
           ],
-          "reportSnapshotHash": "ddcadefbde9402417736fb66bba723ed88569e48672e3fb3a6d495bd6e9d9855"
+          "reportSnapshotHash": "bfd1e494653252c1d3c86a225a219c617cdd462d4accba5d8f79aace0a732d58"
         }
       }
     ]

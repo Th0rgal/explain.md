@@ -29,6 +29,8 @@ function parseThresholds(params: URLSearchParams): Partial<ObservabilitySloThres
     minVerificationRequestCount: parseOptionalInteger(params, "minVerificationRequestCount"),
     minProofCacheHitRate: parseOptionalNumber(params, "minProofCacheHitRate"),
     minProofUniqueTraceRate: parseOptionalNumber(params, "minProofUniqueTraceRate"),
+    maxProofP95LatencyMs: parseOptionalNumber(params, "maxProofP95LatencyMs"),
+    maxProofMeanLatencyMs: parseOptionalNumber(params, "maxProofMeanLatencyMs"),
     maxVerificationFailureRate: parseOptionalNumber(params, "maxVerificationFailureRate"),
     maxVerificationP95LatencyMs: parseOptionalNumber(params, "maxVerificationP95LatencyMs"),
     maxVerificationMeanLatencyMs: parseOptionalNumber(params, "maxVerificationMeanLatencyMs"),

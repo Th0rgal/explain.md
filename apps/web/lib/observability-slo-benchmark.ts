@@ -15,9 +15,11 @@ import {
   buildProofProjection,
   buildProofRootView,
   clearProofDatasetCacheForTests,
+  configureProofQueryObservabilityClockForTests,
   clearProofQueryObservabilityMetricsForTests,
   exportProofQueryObservabilityMetrics,
   LEAN_FIXTURE_PROOF_ID,
+  resetProofQueryObservabilityClockForTests,
   SEED_PROOF_ID,
 } from "./proof-service";
 import {
@@ -97,6 +99,8 @@ export interface ObservabilitySloBenchmarkReport {
       uniqueRequestCount: number;
       uniqueTraceCount: number;
       cacheHitRate: number;
+      maxP95LatencyMs: number;
+      maxMeanLatencyMs: number;
     };
     verification: {
       snapshotHash: string;
@@ -146,6 +150,8 @@ interface BenchmarkProfileReport {
       uniqueRequestCount: number;
       uniqueTraceCount: number;
       cacheHitRate: number;
+      maxP95LatencyMs: number;
+      maxMeanLatencyMs: number;
     };
     verification: {
       snapshotHash: string;
@@ -251,6 +257,10 @@ export async function runObservabilitySloBenchmark(
     uniqueTraceCount: sum(profileReports.map((profile) => profile.snapshots.proof.uniqueTraceCount)),
     cacheHitRate:
       profileReports.length === 0 ? 0 : sum(profileReports.map((profile) => profile.snapshots.proof.cacheHitRate)) / profileReports.length,
+    maxP95LatencyMs:
+      profileReports.length === 0 ? 0 : Math.max(...profileReports.map((profile) => profile.snapshots.proof.maxP95LatencyMs)),
+    maxMeanLatencyMs:
+      profileReports.length === 0 ? 0 : Math.max(...profileReports.map((profile) => profile.snapshots.proof.maxMeanLatencyMs)),
   };
   const aggregateVerification = {
     snapshotHash: computeHash(profileReports.map((profile) => profile.snapshots.verification.snapshotHash)),
@@ -350,6 +360,7 @@ async function runBenchmarkProfile(options: {
 
   clearProofDatasetCacheForTests();
   clearProofQueryObservabilityMetricsForTests();
+  resetProofQueryObservabilityClockForTests();
   clearUiInteractionObservabilityMetricsForTests();
   clearVerificationObservabilityMetricsForTests();
   resetVerificationServiceForTests();
@@ -364,6 +375,11 @@ async function runBenchmarkProfile(options: {
       now: () => new Date(generatedAt),
       nowMs: buildDeterministicNowMs([1000, 1010, 2000, 2008, 3000, 3012]),
     });
+    configureProofQueryObservabilityClockForTests(
+      buildDeterministicNowMs([
+        1000, 1004, 1010, 1015, 1020, 1024, 1030, 1033, 1040, 1046, 1050, 1053, 1060, 1067, 1070, 1072, 1080, 1083,
+      ]),
+    );
 
     await buildProofProjection({
       proofId: profile.proofId,
@@ -510,6 +526,8 @@ async function runBenchmarkProfile(options: {
           uniqueRequestCount: proofMetrics.uniqueRequestCount,
           uniqueTraceCount: proofMetrics.uniqueTraceCount,
           cacheHitRate: proofMetrics.cache.hitRate,
+          maxP95LatencyMs: Math.max(...proofMetrics.queries.map((query) => query.p95LatencyMs), 0),
+          maxMeanLatencyMs: Math.max(...proofMetrics.queries.map((query) => query.meanLatencyMs), 0),
         },
         verification: {
           snapshotHash: verificationMetrics.snapshotHash,
@@ -534,6 +552,7 @@ async function runBenchmarkProfile(options: {
       },
     };
   } finally {
+    resetProofQueryObservabilityClockForTests();
     resetVerificationServiceForTests();
     clearVerificationObservabilityMetricsForTests();
     clearUiInteractionObservabilityMetricsForTests();
@@ -599,6 +618,8 @@ function buildBaselineThresholds(): ObservabilitySloThresholds {
     minVerificationRequestCount: 3,
     minProofCacheHitRate: 0,
     minProofUniqueTraceRate: 1,
+    maxProofP95LatencyMs: 16,
+    maxProofMeanLatencyMs: 12,
     maxVerificationFailureRate: 0,
     maxVerificationP95LatencyMs: 25,
     maxVerificationMeanLatencyMs: 20,
@@ -617,6 +638,8 @@ function buildStrictThresholds(): ObservabilitySloThresholds {
     minVerificationRequestCount: 4,
     minProofCacheHitRate: 0.2,
     minProofUniqueTraceRate: 1,
+    maxProofP95LatencyMs: 1,
+    maxProofMeanLatencyMs: 1,
     maxVerificationFailureRate: 0,
     maxVerificationP95LatencyMs: 5,
     maxVerificationMeanLatencyMs: 5,
