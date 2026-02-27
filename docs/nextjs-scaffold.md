@@ -51,7 +51,7 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 - Shared config query parsing now covers the full pedagogy knob surface used by generation and hashing:
   - `abstractionLevel`, `complexityLevel`, `maxChildrenPerParent`
   - `audienceLevel`, `language`, `readingLevelTarget`
-  - `complexityBandWidth`, `termIntroductionBudget`, `proofDetailMode`
+  - `complexityBandWidth`, `termIntroductionBudget`, `proofDetailMode`, `entailmentMode`
 - Config profiles are persisted/queryable through deterministic API contracts with canonical storage keys, profile `configHash`, and response-level `requestHash` + `ledgerHash`.
 - Lean fixture datasets are persisted under `.explain-md/web-proof-cache` (override with `EXPLAIN_MD_WEB_PROOF_CACHE_DIR`) and invalidated by source fingerprint + config hash.
 - Lean fixture root lookup can be overridden with `EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT` for deterministic benchmark/invalidation runs against temporary fixture copies.

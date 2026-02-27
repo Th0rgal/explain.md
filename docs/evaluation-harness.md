@@ -55,6 +55,7 @@ The evaluator computes a threshold verdict (`thresholdPass`) with machine-readab
 - `repartition_max_round`
 
 Defaults are deterministic and can be overridden in `options.thresholds`.
+When `config.entailmentMode` is `strict`, the support-coverage floor is fixed at `1.0` (no unsupported lexical claims).
 
 ## Human review rubric
 Use this rubric when manually spot-checking parent nodes flagged by the automated report:

@@ -38,6 +38,7 @@ const DEFAULT_CONFIG: ProofConfigInput = {
   complexityBandWidth: 1,
   termIntroductionBudget: 2,
   proofDetailMode: "balanced",
+  entailmentMode: "calibrated",
 };
 
 const DEFAULT_PROFILE_USER_ID = "local-user";

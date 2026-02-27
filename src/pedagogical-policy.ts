@@ -7,7 +7,8 @@ export type PolicyViolationCode =
   | "prerequisite_order"
   | "term_budget"
   | "evidence_coverage"
-  | "vocabulary_continuity";
+  | "vocabulary_continuity"
+  | "entailment";
 
 export interface PolicyViolation {
   code: PolicyViolationCode;
@@ -190,6 +191,10 @@ export function evaluatePostSummaryPolicy(
 }
 
 function computeVocabularyContinuityFloor(config: ExplanationConfig): number {
+  if (config.entailmentMode === "strict") {
+    return 1;
+  }
+
   const baseByAudience: Record<ExplanationConfig["audienceLevel"], number> = {
     novice: 0.72,
     intermediate: 0.62,

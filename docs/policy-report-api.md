@@ -20,6 +20,7 @@ Shared config knobs (same parser as other proof query routes):
 - `complexityBandWidth`
 - `termIntroductionBudget`
 - `proofDetailMode`
+- `entailmentMode`
 
 Optional threshold overrides (`[0,1]`):
 - `maxUnsupportedParentRate`

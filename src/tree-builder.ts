@@ -790,8 +790,9 @@ function mapCriticViolationToPolicyViolation(
       return { code: "evidence_coverage", message: violation.message, details: violation.details };
     case "schema":
     case "complexity_band":
-    case "unsupported_terms":
       return { code: "vocabulary_continuity", message: violation.message, details: violation.details };
+    case "unsupported_terms":
+      return { code: "entailment", message: violation.message, details: violation.details };
     default: {
       const exhaustiveCheck: never = violation.code;
       throw new Error(`Unhandled critic violation code: ${String(exhaustiveCheck)}`);

@@ -4,7 +4,7 @@
     {
       "presetName": "fixture-verity-broad",
       "presetHash": "6ddee2e1c8a4e96630ded749e609925f54bf1d6bddfebaedf78d5793f607eb18",
-      "qualityReportHash": "f2bf3ca5caa80f41bfbcbf538d3ab149dff7355f36c35235a65932e4b6b6c0fa",
+      "qualityReportHash": "eb2806b98f1dbe1185ca749a0b0ee432729f93ded64292957ba2297fa4b0fab3",
       "thresholdPass": true,
       "leafCount": 13,
       "parentCount": 5,
@@ -14,7 +14,7 @@
     {
       "presetName": "fixture-verity-counter-snapshot",
       "presetHash": "84b172d99c48903f75b41d945ca91d3a39d1aac945402406cef203fb16ee305d",
-      "qualityReportHash": "d341ba5cf0898d1d4d1606af261ef8e971c1229ae21a14138d7c13e9ee69ef7e",
+      "qualityReportHash": "b5d8dd175795e9215d1eaccc5fed0fe13999f396878ae3e7e5bd37a55bf7a35b",
       "thresholdPass": true,
       "leafCount": 30,
       "parentCount": 8,
@@ -24,7 +24,7 @@
     {
       "presetName": "fixture-verity-pressure",
       "presetHash": "5251da16b02169e49c30cb4aed8f05b07caab119bbde8d7f98fca170d825705a",
-      "qualityReportHash": "34efa2a67254563a5b78fd6c541847ceabc971be078eb03ceacf58f92b486d8d",
+      "qualityReportHash": "99b41a2ee5b628ec05b0037d96af24fc596db44328ba1c561b90290e100d0bcb",
       "thresholdPass": true,
       "leafCount": 4,
       "parentCount": 3,
@@ -32,5 +32,5 @@
       "repartitionMaxRound": 0
     }
   ],
-  "outcomeHash": "babbdf697936493b794f3a0b0a75dec95041e41b35bc14b1765e6fad6d4319ad"
+  "outcomeHash": "adc49cf385978f78845f7d2be55e49bc8707811369ea41d6bd7c89e46238f346"
 }

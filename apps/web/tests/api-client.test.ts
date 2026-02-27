@@ -55,6 +55,7 @@ describe("api client", () => {
       complexityBandWidth: 2,
       termIntroductionBudget: 1,
       proofDetailMode: "formal",
+      entailmentMode: "strict",
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -70,6 +71,7 @@ describe("api client", () => {
     expect(requestUrl).toContain("complexityBandWidth=2");
     expect(requestUrl).toContain("termIntroductionBudget=1");
     expect(requestUrl).toContain("proofDetailMode=formal");
+    expect(requestUrl).toContain("entailmentMode=strict");
   });
 
   it("encodes node id and pagination for children queries", async () => {
@@ -205,6 +207,7 @@ describe("api client", () => {
         complexityBandWidth: 1,
         termIntroductionBudget: 1,
         proofDetailMode: "minimal",
+        entailmentMode: "calibrated",
       },
       candidateConfig: {
         abstractionLevel: 4,
@@ -216,6 +219,7 @@ describe("api client", () => {
         complexityBandWidth: 2,
         termIntroductionBudget: 3,
         proofDetailMode: "formal",
+        entailmentMode: "strict",
       },
     });
 
@@ -235,6 +239,7 @@ describe("api client", () => {
           complexityBandWidth: 1,
           termIntroductionBudget: 1,
           proofDetailMode: "minimal",
+          entailmentMode: "calibrated",
         },
         candidateConfig: {
           abstractionLevel: 4,
@@ -246,6 +251,7 @@ describe("api client", () => {
           complexityBandWidth: 2,
           termIntroductionBudget: 3,
           proofDetailMode: "formal",
+          entailmentMode: "strict",
         },
       }),
     );
@@ -463,6 +469,7 @@ describe("api client", () => {
       complexityBandWidth: 2,
       termIntroductionBudget: 1,
       proofDetailMode: "formal",
+      entailmentMode: "strict",
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -478,6 +485,7 @@ describe("api client", () => {
     expect(requestUrl).toContain("complexityBandWidth=2");
     expect(requestUrl).toContain("termIntroductionBudget=1");
     expect(requestUrl).toContain("proofDetailMode=formal");
+    expect(requestUrl).toContain("entailmentMode=strict");
   });
 
   it("encodes config profile list query parameters", async () => {

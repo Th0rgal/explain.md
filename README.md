@@ -16,7 +16,7 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #25 follow-up: prerequisite-order policy now evaluates deterministic grouping order (not lexical IDs) and treats cyclic in-group edges as explicit violations that deterministically trigger repartition or fail-fast.
 - Issue #25 follow-up: tree builder now reorders each group by local prerequisites and uses a safe depth guard with explicit no-progress failure diagnostics for large Lean corpora.
 - Issue #25 follow-up: web proof service now exposes deterministic pedagogy policy reports (threshold-calibrated quality metrics + canonical report hashing) via `GET /api/proofs/policy-report`.
-- Issue #23 follow-up: web config/query contracts now expose advanced pedagogy knobs (`readingLevelTarget`, `complexityBandWidth`, `proofDetailMode`) with strict deterministic parsing across routes and explorer controls.
+- Issue #23 follow-up: web config/query contracts now expose advanced pedagogy knobs (`readingLevelTarget`, `complexityBandWidth`, `proofDetailMode`, `entailmentMode`) with strict deterministic parsing across routes and explorer controls.
 - Issue #23 follow-up: `/api/proofs/view` and `/api/proofs/diff` now share the same full-knob parser as query routes, so regeneration planning cannot drift from configured pedagogy controls.
 - Issue #23 follow-up: web config profile APIs now persist/query deterministic per-project/user profile records with canonical storage keys, `configHash`, and response-level `requestHash`/`ledgerHash`.
 - Issue #17: browser-triggered verification workflow core with deterministic queue/status lifecycle, reproducibility contracts, and canonical ledger persistence.

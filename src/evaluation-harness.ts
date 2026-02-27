@@ -585,6 +585,10 @@ function clampNonNegativeInteger(value: number, fallback: number): number {
 }
 
 function computeSupportCoverageFloor(config: ExplanationConfig): number {
+  if (config.entailmentMode === "strict") {
+    return 1;
+  }
+
   const audienceBump = config.audienceLevel === "expert" ? 0.05 : config.audienceLevel === "novice" ? -0.05 : 0;
   const proofBump = config.proofDetailMode === "formal" ? 0.1 : config.proofDetailMode === "minimal" ? -0.05 : 0;
   const raw = 0.5 + audienceBump + proofBump;

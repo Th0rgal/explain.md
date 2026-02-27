@@ -46,7 +46,7 @@ The tree panel uses incremental root/children/path queries:
 - Query/config contracts now expose the full pedagogy controls used by tree generation:
   - `abstractionLevel`, `complexityLevel`, `maxChildrenPerParent`
   - `audienceLevel`, `language`, `readingLevelTarget`
-  - `complexityBandWidth`, `termIntroductionBudget`, `proofDetailMode`
+  - `complexityBandWidth`, `termIntroductionBudget`, `proofDetailMode`, `entailmentMode`
 - Config profile persistence/query is deterministic and file-backed:
   - per-project/user profile scope
   - canonical storage keys via `buildProfileStorageKey(...)`

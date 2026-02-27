@@ -14,7 +14,7 @@ This module enforces deterministic pedagogy constraints around parent generation
 - Post-summary:
   - full evidence coverage (`evidence_refs` must include every child ID)
   - low term-introduction budget (`termIntroductionBudget`)
-  - vocabulary continuity floor (deterministic by `audienceLevel` + `proofDetailMode`)
+  - vocabulary continuity floor (deterministic by `entailmentMode`, `audienceLevel`, `proofDetailMode`)
 
 ## Integration with tree building
 - Tree construction runs pre-summary policy before each parent summary call.

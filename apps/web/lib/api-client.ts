@@ -8,6 +8,7 @@ export interface ProofConfigInput {
   complexityBandWidth?: number;
   termIntroductionBudget?: number;
   proofDetailMode?: "minimal" | "balanced" | "formal";
+  entailmentMode?: "calibrated" | "strict";
 }
 
 interface ApiSuccess<T> {
@@ -635,6 +636,9 @@ function toConfigSearchParams(proofId: string, config: ProofConfigInput): URLSea
   }
   if (config.proofDetailMode) {
     params.set("proofDetailMode", config.proofDetailMode);
+  }
+  if (config.entailmentMode) {
+    params.set("entailmentMode", config.entailmentMode);
   }
   return params;
 }

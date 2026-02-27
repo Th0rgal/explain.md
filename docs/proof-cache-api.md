@@ -10,7 +10,7 @@ Deterministic cache-reuse diagnostics for proof dataset generation.
 - Full shared config knobs (same parser as other proof query routes):
   - `abstractionLevel`, `complexityLevel`, `maxChildrenPerParent`
   - `audienceLevel`, `language`, `readingLevelTarget`
-  - `complexityBandWidth`, `termIntroductionBudget`, `proofDetailMode`
+  - `complexityBandWidth`, `termIntroductionBudget`, `proofDetailMode`, `entailmentMode`
 
 ## Response
 ```json

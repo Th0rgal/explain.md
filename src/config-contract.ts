@@ -5,6 +5,7 @@ export type ComplexityLevel = 1 | 2 | 3 | 4 | 5;
 export type AudienceLevel = "novice" | "intermediate" | "expert";
 export type ReadingLevelTarget = "elementary" | "middle_school" | "high_school" | "undergraduate" | "graduate";
 export type ProofDetailMode = "minimal" | "balanced" | "formal";
+export type EntailmentMode = "calibrated" | "strict";
 
 export interface ModelProviderConfig {
   provider: string;
@@ -28,6 +29,7 @@ export interface ExplanationConfig {
   complexityBandWidth: number;
   termIntroductionBudget: number;
   proofDetailMode: ProofDetailMode;
+  entailmentMode: EntailmentMode;
   modelProvider: ModelProviderConfig;
 }
 
@@ -55,6 +57,7 @@ export const DEFAULT_CONFIG: ExplanationConfig = {
   complexityBandWidth: 1,
   termIntroductionBudget: 2,
   proofDetailMode: "balanced",
+  entailmentMode: "calibrated",
   modelProvider: {
     provider: "openai-compatible",
     endpoint: "http://localhost:8080/v1",
@@ -144,6 +147,9 @@ export function validateConfig(config: ExplanationConfig): ValidationResult {
 
   if (!["minimal", "balanced", "formal"].includes(config.proofDetailMode)) {
     errors.push({ path: "proofDetailMode", message: "Must be one of: minimal, balanced, formal." });
+  }
+  if (!["calibrated", "strict"].includes(config.entailmentMode)) {
+    errors.push({ path: "entailmentMode", message: "Must be one of: calibrated, strict." });
   }
 
   if (!config.modelProvider.provider) {
@@ -240,6 +246,7 @@ const FULL_REGEN_FIELDS = new Set<string>([
   "complexityBandWidth",
   "termIntroductionBudget",
   "proofDetailMode",
+  "entailmentMode",
   "modelProvider.provider",
   "modelProvider.endpoint",
   "modelProvider.model",
