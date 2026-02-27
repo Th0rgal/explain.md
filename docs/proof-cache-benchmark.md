@@ -14,7 +14,8 @@ By default this writes:
 - Cold path (`coldNoPersistentCache`): persistent cache removed before each iteration.
 - Warm path (`warmPersistentCache`): persistent cache prewarmed, in-memory cache cleared between iterations.
 - Invalidation path (`invalidation`): mutates `Verity/Core.lean` in a temporary fixture copy, then verifies deterministic topology-plan evidence plus recovery.
-  - current benchmark mutation intentionally blocks declarations, so `afterChangeTopologyPlan.fullRebuildRequired=true` and `recoveryStatus=hit`.
+  - benchmark mutation rewrites one declaration statement (topology-stable semantic delta), so `afterChangeTopologyPlan.fullRebuildRequired=true` while recovery can still return `cache_blocked_subtree_rebuild_hit`.
+  - expected status flow is `beforeChangeStatus=hit`, `afterChangeStatus=hit`, `recoveryStatus=hit`.
 
 ## Determinism and Auditability
 - Report includes:

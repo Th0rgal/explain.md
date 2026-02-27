@@ -1,18 +1,18 @@
 {
   "schemaVersion": "1.0.0",
-  "generatedAt": "2026-02-27T10:11:56.901Z",
+  "generatedAt": "2026-02-27T14:51:07.874Z",
   "proofId": "lean-verity-fixture",
-  "configHash": "1b1e2b9ff73897b141a9f88c8d23a3b884495340813865fd955fa8fc3eaa4da2",
-  "requestHash": "e6f53e14545f9579927084e1924992e7294f331551f9b89f4e93dc25669d6696",
-  "outcomeHash": "ec2b03224d76766cd0843374222e86b81bb998cfb852163c698c5a91341537a3",
+  "configHash": "a75632c3c71bea58a13445a49951b87763ebd9e868fb4f51ac128e6c783e8af7",
+  "requestHash": "3f46810b2ac7310b0662c6e01ba36ed7e2f53d0d01cd2f7653b72ffecf20dc0e",
+  "outcomeHash": "e00b0573eef063b8d7df333daf69089eef11fa736eb32a71717b1e011f9e084e",
   "parameters": {
     "coldIterations": 3,
     "warmIterations": 3,
     "mutationTargetPath": "Verity/Core.lean"
   },
   "paths": {
-    "fixtureProjectRootHash": "3141e6d7973b11835552d95f82f26c9650f6eda5d724222ee48693f5286f3682",
-    "cacheDirHash": "5a4bfd6d6e97d0a0354b242bd562187a5404306404b4755615beb98ec13c0b39"
+    "fixtureProjectRootHash": "3eab3bcda6674007d4ef35a4c637cf229e44de229e6da75d14e2cb5763d8225f",
+    "cacheDirHash": "4fdf600813adb01a13a4c69175b61528fac3c5c6628181b77c3c9c26dd0f5a59"
   },
   "scenarios": {
     "coldNoPersistentCache": {
@@ -22,10 +22,10 @@
         "miss",
         "miss"
       ],
-      "meanMs": 11.696,
-      "medianMs": 6.987,
-      "minMs": 3.911,
-      "maxMs": 24.189
+      "meanMs": 10.645,
+      "medianMs": 5.161,
+      "minMs": 4.583,
+      "maxMs": 22.19
     },
     "warmPersistentCache": {
       "iterations": 3,
@@ -34,20 +34,26 @@
         "hit",
         "hit"
       ],
-      "meanMs": 1.374,
-      "medianMs": 1.313,
-      "minMs": 1.09,
-      "maxMs": 1.719
+      "meanMs": 1.806,
+      "medianMs": 1.801,
+      "minMs": 1.699,
+      "maxMs": 1.917
     },
     "invalidation": {
       "beforeChangeStatus": "hit",
-      "afterChangeStatus": "miss",
+      "afterChangeStatus": "hit",
       "afterChangeDiagnostics": [
+        "cache_blocked_subtree_rebuild_hit",
         "cache_miss"
       ],
-      "afterChangeSnapshotHash": "7a452c77177ec47e9c602b9068cb0f5223386278de9ba674d2822bdb132b4ec4",
+      "afterChangeTopologyPlan": {
+        "fullRebuildRequired": true,
+        "blockedDeclarationCount": 1,
+        "planHash": "3ebdcaa87c2e49bd92d213278adc6eba21f82a63e1d512e7e8ccf5bb52bbf925"
+      },
+      "afterChangeSnapshotHash": "56fb158b538cf875d314fd69d9c36dfd62325a618b86e12937477c844cdc4bdc",
       "recoveryStatus": "hit",
-      "recoverySnapshotHash": "7a452c77177ec47e9c602b9068cb0f5223386278de9ba674d2822bdb132b4ec4"
+      "recoverySnapshotHash": "56fb158b538cf875d314fd69d9c36dfd62325a618b86e12937477c844cdc4bdc"
     }
   }
 }

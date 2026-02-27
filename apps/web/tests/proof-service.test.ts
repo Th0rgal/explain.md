@@ -327,6 +327,120 @@ describe("proof service", () => {
       expect(recovered.cache.blockedSubtreePlan?.blockedLeafIds).toEqual([]);
       expect(recovered.cache.blockedSubtreePlan?.executionBatches).toEqual([]);
       expect(recovered.cache.blockedSubtreePlan?.planHash).toHaveLength(64);
+      expect(recovered.cache.snapshotHash).toBe(warm.cache.snapshotHash);
+    } finally {
+      clearProofDatasetCacheForTests();
+      if (previousCacheDir === undefined) {
+        delete process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR;
+      } else {
+        process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR = previousCacheDir;
+      }
+      if (previousFixtureRoot === undefined) {
+        delete process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT;
+      } else {
+        process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT = previousFixtureRoot;
+      }
+      await fs.rm(tempCacheDir, { recursive: true, force: true });
+      await fs.rm(tempFixtureRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("rebases recovered snapshot provenance for source-span-only mutations without full rebuild", async () => {
+    const previousCacheDir = process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR;
+    const previousFixtureRoot = process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT;
+    const tempCacheDir = await fs.mkdtemp(path.join(os.tmpdir(), "explain-md-proof-cache-"));
+    const fixtureSourceRoot = await resolveFixtureSourceRootForTests();
+    const tempFixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), "explain-md-proof-fixture-"));
+    process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR = tempCacheDir;
+    process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT = tempFixtureRoot;
+    await copyDirectory(fixtureSourceRoot, tempFixtureRoot);
+
+    try {
+      clearProofDatasetCacheForTests();
+      await buildProofCacheReportView({
+        proofId: LEAN_FIXTURE_PROOF_ID,
+      });
+
+      clearProofDatasetCacheForTests();
+      const warm = await buildProofCacheReportView({
+        proofId: LEAN_FIXTURE_PROOF_ID,
+      });
+      expect(warm.cache.status).toBe("hit");
+
+      const corePath = path.join(tempFixtureRoot, "Verity", "Core.lean");
+      const coreBefore = await fs.readFile(corePath, "utf8");
+      await fs.writeFile(corePath, `${coreBefore.trimEnd()}\n-- trailing provenance-only mutation\n`, "utf8");
+
+      clearProofDatasetCacheForTests();
+      const recovered = await buildProofCacheReportView({
+        proofId: LEAN_FIXTURE_PROOF_ID,
+      });
+
+      expect(recovered.cache.status).toBe("hit");
+      expect(recovered.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_topology_recovery_hit")).toBe(true);
+      expect(recovered.cache.blockedSubtreePlan?.fullRebuildRequired).toBe(false);
+      expect(recovered.cache.blockedSubtreePlan?.blockedDeclarationIds).toEqual([]);
+      expect(recovered.cache.snapshotHash).not.toBe(warm.cache.snapshotHash);
+      expect(recovered.cache.cacheEntryHash).not.toBe(warm.cache.cacheEntryHash);
+    } finally {
+      clearProofDatasetCacheForTests();
+      if (previousCacheDir === undefined) {
+        delete process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR;
+      } else {
+        process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR = previousCacheDir;
+      }
+      if (previousFixtureRoot === undefined) {
+        delete process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT;
+      } else {
+        process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT = previousFixtureRoot;
+      }
+      await fs.rm(tempCacheDir, { recursive: true, force: true });
+      await fs.rm(tempFixtureRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("recovers deterministic cache hit by recomputing blocked-subtree ancestors on topology-stable semantic mutation", async () => {
+    const previousCacheDir = process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR;
+    const previousFixtureRoot = process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT;
+    const tempCacheDir = await fs.mkdtemp(path.join(os.tmpdir(), "explain-md-proof-cache-"));
+    const fixtureSourceRoot = await resolveFixtureSourceRootForTests();
+    const tempFixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), "explain-md-proof-fixture-"));
+    process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR = tempCacheDir;
+    process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT = tempFixtureRoot;
+    await copyDirectory(fixtureSourceRoot, tempFixtureRoot);
+
+    try {
+      clearProofDatasetCacheForTests();
+      await buildProofCacheReportView({
+        proofId: LEAN_FIXTURE_PROOF_ID,
+      });
+
+      clearProofDatasetCacheForTests();
+      const warm = await buildProofCacheReportView({
+        proofId: LEAN_FIXTURE_PROOF_ID,
+      });
+      expect(warm.cache.status).toBe("hit");
+
+      const corePath = path.join(tempFixtureRoot, "Verity", "Core.lean");
+      const coreBefore = await fs.readFile(corePath, "utf8");
+      const semanticMutationTarget = "lemma inc_nonzero (n : Nat) : inc n > 0 := by";
+      const semanticMutationReplacement = "lemma inc_nonzero (n : Nat) : inc n >= 1 := by";
+      expect(coreBefore.includes(semanticMutationTarget)).toBe(true);
+      await fs.writeFile(corePath, coreBefore.replace(semanticMutationTarget, semanticMutationReplacement), "utf8");
+
+      clearProofDatasetCacheForTests();
+      const recovered = await buildProofCacheReportView({
+        proofId: LEAN_FIXTURE_PROOF_ID,
+      });
+
+      expect(recovered.cache.status).toBe("hit");
+      expect(recovered.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_blocked_subtree_rebuild_hit")).toBe(
+        true,
+      );
+      expect(recovered.cache.blockedSubtreePlan?.fullRebuildRequired).toBe(true);
+      expect((recovered.cache.blockedSubtreePlan?.blockedDeclarationIds.length ?? 0) > 0).toBe(true);
+      expect(recovered.cache.snapshotHash).not.toBe(warm.cache.snapshotHash);
+      expect(recovered.cache.cacheEntryHash).not.toBe(warm.cache.cacheEntryHash);
     } finally {
       clearProofDatasetCacheForTests();
       if (previousCacheDir === undefined) {

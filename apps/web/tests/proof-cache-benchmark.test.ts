@@ -15,8 +15,9 @@ describe("proof cache benchmark", () => {
     expect(report.scenarios.coldNoPersistentCache.statuses).toEqual(["miss", "miss"]);
     expect(report.scenarios.warmPersistentCache.statuses).toEqual(["hit", "hit"]);
     expect(report.scenarios.invalidation.beforeChangeStatus).toBe("hit");
-    expect(report.scenarios.invalidation.afterChangeStatus).toBe("miss");
+    expect(report.scenarios.invalidation.afterChangeStatus).toBe("hit");
     expect(report.scenarios.invalidation.afterChangeDiagnostics).toContain("cache_miss");
+    expect(report.scenarios.invalidation.afterChangeDiagnostics).toContain("cache_blocked_subtree_rebuild_hit");
     expect(report.scenarios.invalidation.afterChangeTopologyPlan?.fullRebuildRequired).toBe(true);
     expect((report.scenarios.invalidation.afterChangeTopologyPlan?.blockedDeclarationCount ?? 0) > 0).toBe(true);
     expect(report.scenarios.invalidation.afterChangeTopologyPlan?.planHash).toHaveLength(64);

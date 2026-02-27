@@ -58,7 +58,10 @@ Deterministic cache-reuse diagnostics for proof dataset generation.
 - Cache entry integrity is checked by snapshot/dependency hash validation before reuse.
 - On source-fingerprint mismatch, the service computes a deterministic blocked-subtree plan:
   - if no declarations are blocked and dependency topology is unchanged, cache reuse is recovered with diagnostic `cache_topology_recovery_hit`.
+  - this recovery path rebases snapshot leaves to current ingestion output so source spans/source URLs stay provenance-accurate.
+  - if declarations are blocked but topology and cached leaf IDs are still reusable, ancestor parents are recomputed deterministically on cached topology with diagnostic `cache_blocked_subtree_rebuild_hit`.
   - otherwise `blockedSubtreePlan.fullRebuildRequired=true` and dataset rebuild continues deterministically.
+- `blockedSubtreePlan.changedDeclarationIds` is computed from a semantic declaration fingerprint (statement + dependencies + declaration identity), so pure source-span/source-url shifts do not force full rebuild.
 - On invalid entry or topology mismatch, the dataset is rebuilt deterministically and cache is overwritten.
 
 ## Environment

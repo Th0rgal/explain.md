@@ -313,6 +313,7 @@ export interface CacheReportResponse {
       code:
         | "cache_hit"
         | "cache_topology_recovery_hit"
+        | "cache_blocked_subtree_rebuild_hit"
         | "cache_miss"
         | "cache_write_failed"
         | "cache_read_failed"

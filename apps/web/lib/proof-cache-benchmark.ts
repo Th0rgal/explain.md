@@ -8,7 +8,8 @@ import { LEAN_FIXTURE_PROOF_ID, buildProofCacheReportView, clearProofDatasetCach
 
 const BENCHMARK_SCHEMA_VERSION = "1.0.0";
 const MUTATION_TARGET_RELATIVE_PATH = "Verity/Core.lean";
-const MUTATION_COMMENT = "-- explain-md benchmark mutation";
+const MUTATION_TARGET_TEXT = "lemma inc_nonzero (n : Nat) : inc n > 0 := by";
+const MUTATION_REPLACEMENT_TEXT = "lemma inc_nonzero (n : Nat) : inc n >= 1 := by";
 
 export interface ProofCacheBenchmarkOptions {
   proofId?: string;
@@ -121,7 +122,12 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
     let afterChange: Awaited<ReturnType<typeof buildProofCacheReportView>>;
     let recovery: Awaited<ReturnType<typeof buildProofCacheReportView>>;
     try {
-      await fs.writeFile(mutationPath, `${originalContent.trimEnd()}\n${MUTATION_COMMENT}\n`, "utf8");
+      if (!originalContent.includes(MUTATION_TARGET_TEXT)) {
+        throw new Error(
+          `benchmark mutation target text not found in ${MUTATION_TARGET_RELATIVE_PATH}: ${MUTATION_TARGET_TEXT}`,
+        );
+      }
+      await fs.writeFile(mutationPath, originalContent.replace(MUTATION_TARGET_TEXT, MUTATION_REPLACEMENT_TEXT), "utf8");
 
       clearProofDatasetCacheForTests();
       afterChange = await buildProofCacheReportView({ proofId, config: normalizedConfig });

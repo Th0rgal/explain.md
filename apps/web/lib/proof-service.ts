@@ -7,7 +7,10 @@ import {
   computeTreeQualityReportHash,
   computeDependencyGraphHash,
   computeLeanIngestionHash,
+  evaluatePostSummaryPolicy,
+  evaluatePreSummaryPolicy,
   evaluateExplanationTreeQuality,
+  generateParentSummary,
   getDirectDependencies,
   getDirectDependents,
   getSupportingDeclarations,
@@ -18,8 +21,10 @@ import {
   validateExplanationTree,
   type DependencyGraph,
   type ExplanationTree,
+  type ExplanationTreeNode,
   type ExplanationConfig,
   type ExplanationConfigInput,
+  type ParentPolicyDiagnostics,
   type TreeQualityThresholds,
   type ProviderClient,
   type TheoremLeafRecord,
@@ -88,6 +93,7 @@ export interface ProofDatasetCacheDiagnostic {
   code:
     | "cache_hit"
     | "cache_topology_recovery_hit"
+    | "cache_blocked_subtree_rebuild_hit"
     | "cache_miss"
     | "cache_write_failed"
     | "cache_read_failed"
@@ -917,6 +923,12 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
       !blockedSubtreePlan.fullRebuildRequired && dependencyGraphHash === cached.entry.dependencyGraphHash;
 
     if (topologyIsStable) {
+      const recoveredSnapshot = exportTreeStorageSnapshot(cachedTreeForTopologyRecovery, {
+        proofId,
+        leaves: theoremLeaves,
+        config,
+      });
+      const recoveredSnapshotHash = computeTreeStorageSnapshotHash(recoveredSnapshot);
       const recoveredCacheEntry: ProofDatasetCacheEntry = {
         schemaVersion: PROOF_DATASET_CACHE_SCHEMA_VERSION,
         proofId,
@@ -924,8 +936,8 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
         sourceFingerprint,
         ingestionHash,
         dependencyGraphHash: cached.entry.dependencyGraphHash,
-        snapshotHash: cached.entry.snapshotHash,
-        snapshot: cached.entry.snapshot,
+        snapshotHash: recoveredSnapshotHash,
+        snapshot: recoveredSnapshot,
       };
       const cacheWriteError = await writeProofDatasetCacheEntry(cachePath, recoveredCacheEntry);
       if (cacheWriteError) {
@@ -941,6 +953,7 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
         details: {
           cachePath,
           planHash: blockedSubtreePlan.planHash,
+          rebasedSnapshotHash: recoveredSnapshotHash,
         },
       });
 
@@ -955,15 +968,77 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
           dependencyGraph,
           dependencyGraphHash,
         },
-        queryApi: createTreeQueryApi(cached.entry.snapshot),
+        queryApi: createTreeQueryApi(recoveredSnapshot),
         cache: {
           layer: "persistent",
           status: "hit",
           cacheKey,
           sourceFingerprint,
           cachePath,
-          snapshotHash: cached.entry.snapshotHash,
+          snapshotHash: recoveredSnapshotHash,
           cacheEntryHash: computeProofDatasetCacheEntryHash(recoveredCacheEntry),
+          diagnostics: cacheDiagnostics,
+          blockedSubtreePlan,
+        },
+      };
+    }
+
+    const blockedSubtreeRecovery = await attemptBlockedSubtreeRecovery({
+      proofId,
+      config,
+      configHash,
+      sourceFingerprint,
+      ingestionHash,
+      dependencyGraphHash,
+      cachePath,
+      blockedSubtreePlan,
+      cachedTree: cachedTreeForTopologyRecovery,
+      currentLeaves: theoremLeaves,
+      provider: createDeterministicSummaryProvider(),
+    });
+
+    if (blockedSubtreeRecovery) {
+      const cacheWriteError = await writeProofDatasetCacheEntry(cachePath, blockedSubtreeRecovery.cacheEntry);
+      if (cacheWriteError) {
+        cacheDiagnostics.push({
+          code: "cache_write_failed",
+          message: "Failed writing blocked-subtree recovery cache entry; continuing with recovered dataset.",
+          details: { cachePath, error: cacheWriteError },
+        });
+      }
+
+      cacheDiagnostics.push({
+        code: "cache_blocked_subtree_rebuild_hit",
+        message: "Recovered cached dataset by recomputing blocked-subtree ancestor parents on cached topology.",
+        details: {
+          cachePath,
+          planHash: blockedSubtreePlan.planHash,
+          recomputedLeafCount: blockedSubtreeRecovery.recomputedLeafIds.length,
+          recomputedParentCount: blockedSubtreeRecovery.recomputedParentIds.length,
+          recomputeHash: blockedSubtreeRecovery.recomputeHash,
+        },
+      });
+
+      return {
+        dataset: {
+          proofId,
+          title: `Lean Verity fixture (${theoremLeaves.length} declarations, ingestion=${ingestionHash.slice(0, 8)}, depgraph=${dependencyGraphHash.slice(0, 8)})`,
+          config,
+          configHash,
+          tree: blockedSubtreeRecovery.tree,
+          leaves: theoremLeaves,
+          dependencyGraph,
+          dependencyGraphHash,
+        },
+        queryApi: createTreeQueryApi(blockedSubtreeRecovery.cacheEntry.snapshot),
+        cache: {
+          layer: "persistent",
+          status: "hit",
+          cacheKey,
+          sourceFingerprint,
+          cachePath,
+          snapshotHash: blockedSubtreeRecovery.cacheEntry.snapshotHash,
+          cacheEntryHash: computeProofDatasetCacheEntryHash(blockedSubtreeRecovery.cacheEntry),
           diagnostics: cacheDiagnostics,
           blockedSubtreePlan,
         },
@@ -1178,7 +1253,7 @@ function buildBlockedSubtreePlan(
     if (!cached || !current) {
       return true;
     }
-    return computeLeafTopologyFingerprint(cached) !== computeLeafTopologyFingerprint(current);
+    return computeLeafSemanticFingerprint(cached) !== computeLeafSemanticFingerprint(current);
   });
 
   const currentDependentsByDeclaration = buildDependentsByDeclaration(currentLeaves);
@@ -1228,7 +1303,7 @@ function buildBlockedSubtreePlan(
   };
 }
 
-function computeLeafTopologyFingerprint(leaf: TheoremLeafRecord): string {
+function computeLeafSemanticFingerprint(leaf: TheoremLeafRecord): string {
   return computeCanonicalRequestHash({
     id: leaf.id,
     declarationId: leaf.declarationId,
@@ -1237,11 +1312,300 @@ function computeLeafTopologyFingerprint(leaf: TheoremLeafRecord): string {
     declarationName: leaf.declarationName,
     statementText: leaf.statementText,
     prettyStatement: leaf.prettyStatement,
-    sourceSpan: leaf.sourceSpan,
     dependencyIds: [...leaf.dependencyIds].sort((a, b) => a.localeCompare(b)),
     tags: [...leaf.tags].sort((a, b) => a.localeCompare(b)),
-    sourceUrl: leaf.sourceUrl ?? "",
   });
+}
+
+interface BlockedSubtreeRecoveryRequest {
+  proofId: string;
+  config: ExplanationConfig;
+  configHash: string;
+  sourceFingerprint: string;
+  ingestionHash: string;
+  dependencyGraphHash: string;
+  cachePath: string;
+  blockedSubtreePlan: ProofDatasetBlockedSubtreePlan;
+  cachedTree: ExplanationTree;
+  currentLeaves: TheoremLeafRecord[];
+  provider: ProviderClient;
+}
+
+interface BlockedSubtreeRecoveryResult {
+  tree: ExplanationTree;
+  cacheEntry: ProofDatasetCacheEntry;
+  recomputedLeafIds: string[];
+  recomputedParentIds: string[];
+  recomputeHash: string;
+}
+
+async function attemptBlockedSubtreeRecovery(
+  request: BlockedSubtreeRecoveryRequest,
+): Promise<BlockedSubtreeRecoveryResult | undefined> {
+  if (!request.blockedSubtreePlan.fullRebuildRequired) {
+    return undefined;
+  }
+  if (request.blockedSubtreePlan.cyclicBatchCount > 0) {
+    return undefined;
+  }
+  if (request.blockedSubtreePlan.executionBatches.length === 0) {
+    return undefined;
+  }
+
+  const currentLeafByDeclarationId = new Map(request.currentLeaves.map((leaf) => [leaf.declarationId, leaf]));
+  const currentLeafById = new Map(request.currentLeaves.map((leaf) => [leaf.id, leaf]));
+  const cachedLeafIdSet = new Set(request.cachedTree.leafIds);
+  if (cachedLeafIdSet.size !== request.currentLeaves.length) {
+    return undefined;
+  }
+  for (const leaf of request.currentLeaves) {
+    if (!cachedLeafIdSet.has(leaf.id)) {
+      return undefined;
+    }
+  }
+
+  const recomputeLeafIds: string[] = [];
+  for (const batch of request.blockedSubtreePlan.executionBatches) {
+    for (const declarationId of batch) {
+      const leaf = currentLeafByDeclarationId.get(declarationId);
+      if (!leaf) {
+        return undefined;
+      }
+      if (!recomputeLeafIds.includes(leaf.id)) {
+        recomputeLeafIds.push(leaf.id);
+      }
+    }
+  }
+  if (recomputeLeafIds.length === 0) {
+    return undefined;
+  }
+
+  const nextNodes: Record<string, ExplanationTreeNode> = {};
+  for (const [nodeId, node] of Object.entries(request.cachedTree.nodes)) {
+    nextNodes[nodeId] = {
+      ...node,
+      childIds: node.childIds.slice(),
+      evidenceRefs: node.evidenceRefs.slice(),
+      newTermsIntroduced: node.newTermsIntroduced ? node.newTermsIntroduced.slice() : undefined,
+      policyDiagnostics: node.policyDiagnostics
+        ? {
+            depth: node.policyDiagnostics.depth,
+            groupIndex: node.policyDiagnostics.groupIndex,
+            retriesUsed: node.policyDiagnostics.retriesUsed,
+            preSummary: {
+              ok: node.policyDiagnostics.preSummary.ok,
+              violations: node.policyDiagnostics.preSummary.violations.map((violation) => ({ ...violation })),
+              metrics: { ...node.policyDiagnostics.preSummary.metrics },
+            },
+            postSummary: {
+              ok: node.policyDiagnostics.postSummary.ok,
+              violations: node.policyDiagnostics.postSummary.violations.map((violation) => ({ ...violation })),
+              metrics: { ...node.policyDiagnostics.postSummary.metrics },
+            },
+          }
+        : undefined,
+    };
+  }
+
+  for (const [leafId, leaf] of currentLeafById.entries()) {
+    const existing = nextNodes[leafId];
+    if (!existing || existing.kind !== "leaf") {
+      return undefined;
+    }
+    nextNodes[leafId] = {
+      ...existing,
+      statement: leaf.prettyStatement,
+      evidenceRefs: [leaf.id],
+    };
+  }
+
+  const parentsByChildId = buildParentsByChildId(nextNodes);
+  const recomputeParentSet = new Set<string>();
+  const stack = recomputeLeafIds.slice();
+  while (stack.length > 0) {
+    const nodeId = stack.pop() as string;
+    for (const parentId of parentsByChildId.get(nodeId) ?? []) {
+      if (recomputeParentSet.has(parentId)) {
+        continue;
+      }
+      recomputeParentSet.add(parentId);
+      stack.push(parentId);
+    }
+  }
+
+  const recomputeParentIds = [...recomputeParentSet].sort((left, right) => {
+    const depthDelta = (nextNodes[left]?.depth ?? 0) - (nextNodes[right]?.depth ?? 0);
+    if (depthDelta !== 0) {
+      return depthDelta;
+    }
+    return left.localeCompare(right);
+  });
+
+  const policyDiagnosticsByParent: Record<string, ParentPolicyDiagnostics> = {};
+  for (const [parentId, diagnostics] of Object.entries(request.cachedTree.policyDiagnosticsByParent)) {
+    policyDiagnosticsByParent[parentId] = {
+      depth: diagnostics.depth,
+      groupIndex: diagnostics.groupIndex,
+      retriesUsed: diagnostics.retriesUsed,
+      preSummary: {
+        ok: diagnostics.preSummary.ok,
+        violations: diagnostics.preSummary.violations.map((violation) => ({ ...violation })),
+        metrics: { ...diagnostics.preSummary.metrics },
+      },
+      postSummary: {
+        ok: diagnostics.postSummary.ok,
+        violations: diagnostics.postSummary.violations.map((violation) => ({ ...violation })),
+        metrics: { ...diagnostics.postSummary.metrics },
+      },
+    };
+  }
+
+  for (const parentId of recomputeParentIds) {
+    const parentNode = nextNodes[parentId];
+    if (!parentNode || parentNode.kind !== "parent") {
+      return undefined;
+    }
+    const children = parentNode.childIds.map((childId) => {
+      const childNode = nextNodes[childId];
+      if (!childNode) {
+        return undefined;
+      }
+      return {
+        id: childNode.id,
+        statement: childNode.statement,
+        complexity: childNode.complexityScore,
+        prerequisiteIds: childNode.kind === "leaf" ? currentLeafById.get(childNode.id)?.dependencyIds : undefined,
+      };
+    });
+    if (children.some((child) => child === undefined)) {
+      return undefined;
+    }
+    const resolvedChildren = children as Array<{
+      id: string;
+      statement: string;
+      complexity?: number;
+      prerequisiteIds?: string[];
+    }>;
+    const preSummaryDecision = evaluatePreSummaryPolicy(resolvedChildren, request.config);
+    if (!preSummaryDecision.ok) {
+      return undefined;
+    }
+
+    const summaryResult = await generateParentSummary(request.provider, {
+      children: resolvedChildren,
+      config: request.config,
+    });
+    const postSummaryDecision = evaluatePostSummaryPolicy(resolvedChildren, summaryResult.summary, request.config);
+    if (!postSummaryDecision.ok) {
+      return undefined;
+    }
+
+    const nextPolicyDiagnostics: ParentPolicyDiagnostics = {
+      depth: parentNode.depth,
+      groupIndex: parentNode.policyDiagnostics?.groupIndex ?? 0,
+      retriesUsed: 0,
+      preSummary: preSummaryDecision,
+      postSummary: postSummaryDecision,
+    };
+    policyDiagnosticsByParent[parentId] = nextPolicyDiagnostics;
+    nextNodes[parentId] = {
+      ...parentNode,
+      statement: summaryResult.summary.parent_statement,
+      complexityScore: summaryResult.summary.complexity_score,
+      abstractionScore: summaryResult.summary.abstraction_score,
+      confidence: summaryResult.summary.confidence,
+      whyTrueFromChildren: summaryResult.summary.why_true_from_children,
+      newTermsIntroduced: summaryResult.summary.new_terms_introduced,
+      evidenceRefs: summaryResult.summary.evidence_refs,
+      policyDiagnostics: nextPolicyDiagnostics,
+    };
+  }
+
+  const recoveredTree: ExplanationTree = {
+    rootId: request.cachedTree.rootId,
+    leafIds: request.cachedTree.leafIds.slice(),
+    nodes: nextNodes,
+    configHash: computeConfigHash(request.config),
+    groupPlan: request.cachedTree.groupPlan.map((entry) => ({
+      depth: entry.depth,
+      index: entry.index,
+      inputNodeIds: entry.inputNodeIds.slice(),
+      outputNodeId: entry.outputNodeId,
+      complexitySpread: entry.complexitySpread,
+    })),
+    groupingDiagnostics: request.cachedTree.groupingDiagnostics.map((entry) => ({
+      depth: entry.depth,
+      orderedNodeIds: entry.orderedNodeIds.slice(),
+      complexitySpreadByGroup: entry.complexitySpreadByGroup.slice(),
+      warnings: entry.warnings.map((warning) => ({ ...warning })),
+      repartitionEvents: entry.repartitionEvents?.map((event) => ({
+        depth: event.depth,
+        groupIndex: event.groupIndex,
+        round: event.round,
+        reason: event.reason,
+        inputNodeIds: event.inputNodeIds.slice(),
+        outputGroups: event.outputGroups.map((group) => group.slice()),
+        violationCodes: event.violationCodes.slice(),
+      })),
+    })),
+    policyDiagnosticsByParent,
+    maxDepth: request.cachedTree.maxDepth,
+  };
+
+  const validation = validateExplanationTree(recoveredTree, request.config.maxChildrenPerParent);
+  if (!validation.ok) {
+    return undefined;
+  }
+
+  const recoveredSnapshot = exportTreeStorageSnapshot(recoveredTree, {
+    proofId: request.proofId,
+    leaves: request.currentLeaves,
+    config: request.config,
+  });
+  const recoveredSnapshotHash = computeTreeStorageSnapshotHash(recoveredSnapshot);
+  const cacheEntry: ProofDatasetCacheEntry = {
+    schemaVersion: PROOF_DATASET_CACHE_SCHEMA_VERSION,
+    proofId: request.proofId,
+    configHash: request.configHash,
+    sourceFingerprint: request.sourceFingerprint,
+    ingestionHash: request.ingestionHash,
+    dependencyGraphHash: request.dependencyGraphHash,
+    snapshotHash: recoveredSnapshotHash,
+    snapshot: recoveredSnapshot,
+  };
+
+  return {
+    tree: recoveredTree,
+    cacheEntry,
+    recomputedLeafIds: recomputeLeafIds.slice().sort((left, right) => left.localeCompare(right)),
+    recomputedParentIds: recomputeParentIds.slice(),
+    recomputeHash: computeCanonicalRequestHash({
+      planHash: request.blockedSubtreePlan.planHash,
+      recomputedLeafIds: recomputeLeafIds.slice().sort((left, right) => left.localeCompare(right)),
+      recomputedParentIds: recomputeParentIds,
+      dependencyGraphHash: request.dependencyGraphHash,
+    }),
+  };
+}
+
+function buildParentsByChildId(nodes: Record<string, ExplanationTreeNode>): Map<string, string[]> {
+  const parents = new Map<string, string[]>();
+  for (const node of Object.values(nodes)) {
+    if (node.kind !== "parent") {
+      continue;
+    }
+    for (const childId of node.childIds) {
+      const existing = parents.get(childId) ?? [];
+      existing.push(node.id);
+      parents.set(childId, existing);
+    }
+  }
+
+  for (const [childId, parentIds] of parents.entries()) {
+    parentIds.sort((left, right) => left.localeCompare(right));
+    parents.set(childId, parentIds);
+  }
+  return parents;
 }
 
 function buildDependentsByDeclaration(leaves: TheoremLeafRecord[]): Map<string, string[]> {
