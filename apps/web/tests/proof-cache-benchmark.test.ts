@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { runProofCacheBenchmark } from "../lib/proof-cache-benchmark";
 
 describe("proof cache benchmark", () => {
-  it("produces machine-checkable cold/warm/semantic-noop/invalidation outcomes", async () => {
+  it("produces machine-checkable cold/warm/semantic-noop/invalidation/topology-change outcomes", async () => {
     const report = await runProofCacheBenchmark({
       coldIterations: 2,
       warmIterations: 2,
@@ -22,6 +22,11 @@ describe("proof cache benchmark", () => {
     expect(report.scenarios.invalidation.afterChangeDiagnostics).toContain("cache_incremental_subtree_rebuild");
     expect(report.scenarios.invalidation.afterChangeDiagnostics).not.toContain("cache_incremental_rebuild");
     expect(report.scenarios.invalidation.recoveryStatus).toBe("hit");
+    expect(report.scenarios.topologyChange.beforeChangeStatus).toBe("hit");
+    expect(report.scenarios.topologyChange.afterChangeStatus).toBe("hit");
+    expect(report.scenarios.topologyChange.afterChangeDiagnostics).toContain("cache_incremental_topology_rebuild");
+    expect(report.scenarios.topologyChange.afterChangeDiagnostics).not.toContain("cache_incremental_rebuild");
+    expect(report.scenarios.topologyChange.recoveryStatus).toBe("hit");
   });
 
   it("keeps deterministic outcome hash across reruns for identical inputs", async () => {

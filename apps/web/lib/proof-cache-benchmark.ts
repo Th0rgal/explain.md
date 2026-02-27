@@ -8,9 +8,11 @@ import { LEAN_FIXTURE_PROOF_ID, buildProofCacheReportView, clearProofDatasetCach
 
 const BENCHMARK_SCHEMA_VERSION = "1.0.0";
 const MUTATION_TARGET_RELATIVE_PATH = "Verity/Core.lean";
+const TOPOLOGY_MUTATION_TARGET_RELATIVE_PATH = "Verity/Loop.lean";
 const NOOP_MUTATION_COMMENT = "-- explain-md benchmark noop mutation";
 const INCREMENTAL_REBUILD_MUTATION_FROM = "theorem core_safe (n : Nat) : inc n = Nat.succ n := by";
 const INCREMENTAL_REBUILD_MUTATION_TO = "theorem core_safe (n : Nat) : inc n = Nat.succ (Nat.succ n) := by";
+const TOPOLOGY_REBUILD_MUTATION_BLOCK = ["theorem loop_bridge (n : Nat) : core_safe n := by", "  exact core_safe n"].join("\n");
 
 export interface ProofCacheBenchmarkOptions {
   proofId?: string;
@@ -53,6 +55,14 @@ export interface ProofCacheBenchmarkReport {
       afterChangeSnapshotHash: string;
     };
     invalidation: {
+      beforeChangeStatus: "hit" | "miss";
+      afterChangeStatus: "hit" | "miss";
+      afterChangeDiagnostics: string[];
+      afterChangeSnapshotHash: string;
+      recoveryStatus: "hit" | "miss";
+      recoverySnapshotHash: string;
+    };
+    topologyChange: {
       beforeChangeStatus: "hit" | "miss";
       afterChangeStatus: "hit" | "miss";
       afterChangeDiagnostics: string[];
@@ -140,6 +150,19 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
     const recovery = await buildProofCacheReportView({ proofId, config: normalizedConfig });
     await fs.writeFile(mutationPath, originalContent, "utf8");
 
+    clearProofDatasetCacheForTests();
+    const beforeTopologyChange = await buildProofCacheReportView({ proofId, config: normalizedConfig });
+    const topologyMutationPath = path.join(fixtureProjectRoot, TOPOLOGY_MUTATION_TARGET_RELATIVE_PATH);
+    const originalTopologyContent = await fs.readFile(topologyMutationPath, "utf8");
+    const topologyMutationApplied = [originalTopologyContent.trimEnd(), "", TOPOLOGY_REBUILD_MUTATION_BLOCK, ""].join("\n");
+    await fs.writeFile(topologyMutationPath, topologyMutationApplied, "utf8");
+
+    clearProofDatasetCacheForTests();
+    const afterTopologyChange = await buildProofCacheReportView({ proofId, config: normalizedConfig });
+    clearProofDatasetCacheForTests();
+    const topologyRecovery = await buildProofCacheReportView({ proofId, config: normalizedConfig });
+    await fs.writeFile(topologyMutationPath, originalTopologyContent, "utf8");
+
     const coldSummary = summarizeScenario(coldSamples);
     const warmSummary = summarizeScenario(warmSamples);
     const semanticNoop = {
@@ -155,6 +178,14 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
       afterChangeSnapshotHash: afterChange.cache.snapshotHash,
       recoveryStatus: recovery.cache.status,
       recoverySnapshotHash: recovery.cache.snapshotHash,
+    };
+    const topologyChange = {
+      beforeChangeStatus: beforeTopologyChange.cache.status,
+      afterChangeStatus: afterTopologyChange.cache.status,
+      afterChangeDiagnostics: afterTopologyChange.cache.diagnostics.map((diagnostic) => diagnostic.code).sort(),
+      afterChangeSnapshotHash: afterTopologyChange.cache.snapshotHash,
+      recoveryStatus: topologyRecovery.cache.status,
+      recoverySnapshotHash: topologyRecovery.cache.snapshotHash,
     };
 
     const requestHash = computeStableHash({
@@ -177,6 +208,13 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
         afterChangeDiagnostics: invalidation.afterChangeDiagnostics,
         recoveryStatus: invalidation.recoveryStatus,
         snapshotChangedOnMutation: invalidation.afterChangeSnapshotHash !== beforeChange.cache.snapshotHash,
+      },
+      topologyChange: {
+        beforeChangeStatus: topologyChange.beforeChangeStatus,
+        afterChangeStatus: topologyChange.afterChangeStatus,
+        afterChangeDiagnostics: topologyChange.afterChangeDiagnostics,
+        recoveryStatus: topologyChange.recoveryStatus,
+        snapshotChangedOnMutation: topologyChange.afterChangeSnapshotHash !== beforeTopologyChange.cache.snapshotHash,
       },
     });
 
@@ -201,6 +239,7 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
         warmPersistentCache: warmSummary,
         semanticNoop,
         invalidation,
+        topologyChange,
       },
     };
   } finally {

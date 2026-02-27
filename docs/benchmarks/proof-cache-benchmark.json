@@ -1,18 +1,18 @@
 {
   "schemaVersion": "1.0.0",
-  "generatedAt": "2026-02-27T10:37:09.149Z",
+  "generatedAt": "2026-02-27T10:43:46.019Z",
   "proofId": "lean-verity-fixture",
   "configHash": "1b1e2b9ff73897b141a9f88c8d23a3b884495340813865fd955fa8fc3eaa4da2",
   "requestHash": "e6f53e14545f9579927084e1924992e7294f331551f9b89f4e93dc25669d6696",
-  "outcomeHash": "54a874350b821815f02b66e980629593f87a0437e65b931f9e49ea642586678e",
+  "outcomeHash": "20e93a8d9439af1b82b1f0f201d92903cc74f7b929fe5d54ca30f82aa3be74d0",
   "parameters": {
     "coldIterations": 3,
     "warmIterations": 3,
     "mutationTargetPath": "Verity/Core.lean"
   },
   "paths": {
-    "fixtureProjectRootHash": "8840d855b46f6c0102ce26b416deb785e79f0702864d6421875e52212777eb00",
-    "cacheDirHash": "a4729a3286b96929d64e6050f7e5cf1d2cc807ffa33f7a4571673faa4fcabfe8"
+    "fixtureProjectRootHash": "69ffaf3f301ab1ab7ffc5a350b34eae44da2dfac80fad528a68e8e37c6c6a9e1",
+    "cacheDirHash": "45af56d6c56c58dd235e18355f8d3db9530ed78031765e44e878d5ce5933c082"
   },
   "scenarios": {
     "coldNoPersistentCache": {
@@ -22,10 +22,10 @@
         "miss",
         "miss"
       ],
-      "meanMs": 13.318,
-      "medianMs": 6.845,
-      "minMs": 3.84,
-      "maxMs": 29.27
+      "meanMs": 12.491,
+      "medianMs": 5.643,
+      "minMs": 4.514,
+      "maxMs": 27.316
     },
     "warmPersistentCache": {
       "iterations": 3,
@@ -34,10 +34,10 @@
         "hit",
         "hit"
       ],
-      "meanMs": 1.879,
-      "medianMs": 1.739,
-      "minMs": 1.738,
-      "maxMs": 2.161
+      "meanMs": 1.419,
+      "medianMs": 1.5,
+      "minMs": 1.117,
+      "maxMs": 1.642
     },
     "semanticNoop": {
       "beforeChangeStatus": "hit",
@@ -58,6 +58,17 @@
       "afterChangeSnapshotHash": "6d82a245190ac7ac68063a9f778311c7ef4b62480843fc31410a5328efdff595",
       "recoveryStatus": "hit",
       "recoverySnapshotHash": "6d82a245190ac7ac68063a9f778311c7ef4b62480843fc31410a5328efdff595"
+    },
+    "topologyChange": {
+      "beforeChangeStatus": "hit",
+      "afterChangeStatus": "hit",
+      "afterChangeDiagnostics": [
+        "cache_incremental_topology_rebuild",
+        "cache_miss"
+      ],
+      "afterChangeSnapshotHash": "40996c1ce2f9bdae613d9c4e1b905a1a654a9732ec5e0e8afa6dadaf9050f454",
+      "recoveryStatus": "hit",
+      "recoverySnapshotHash": "40996c1ce2f9bdae613d9c4e1b905a1a654a9732ec5e0e8afa6dadaf9050f454"
     }
   }
 }

@@ -94,6 +94,7 @@ export interface ProofDatasetCacheDiagnostic {
     | "cache_hit"
     | "cache_semantic_hit"
     | "cache_incremental_subtree_rebuild"
+    | "cache_incremental_topology_rebuild"
     | "cache_incremental_rebuild"
     | "cache_miss"
     | "cache_write_failed"
@@ -998,6 +999,70 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
         }
       }
 
+      const topologyRebuild = await rebuildSnapshotWithParentSummaryReuse({
+        previousSnapshot: cached.entry.snapshot,
+        proofId,
+        leaves: rebuiltIngestion.theoremLeaves,
+        config,
+      });
+      if (topologyRebuild) {
+        const topologyEntry: ProofDatasetCacheEntry = {
+          ...cached.entry,
+          sourceFingerprint,
+          ingestionHash: rebuiltIngestion.ingestionHash,
+          dependencyGraphHash: rebuiltIngestion.dependencyGraphHash,
+          snapshot: topologyRebuild.snapshot,
+          snapshotHash: topologyRebuild.snapshotHash,
+        };
+        const cacheWriteError = await writeProofDatasetCacheEntry(cachePath, topologyEntry);
+        if (cacheWriteError) {
+          cacheDiagnostics.push({
+            code: "cache_write_failed",
+            message: "Failed writing persistent cache entry after topology-aware rebuild.",
+            details: { cachePath, error: cacheWriteError },
+          });
+        }
+        cacheDiagnostics.push({
+          code: "cache_incremental_topology_rebuild",
+          message: "Detected theorem topology/structure delta; rebuilt tree with deterministic parent-summary reuse.",
+          details: {
+            cachePath,
+            changedLeafCount: delta.changedLeafCount,
+            addedLeafCount: delta.addedLeafCount,
+            removedLeafCount: delta.removedLeafCount,
+            changedLeafIds: delta.changedLeafIds.slice(0, 16),
+            reusedParentSummaryCount: topologyRebuild.reusedParentSummaryCount,
+            generatedParentSummaryCount: topologyRebuild.generatedParentSummaryCount,
+            previousParentCount: topologyRebuild.previousParentCount,
+            nextParentCount: topologyRebuild.nextParentCount,
+          },
+        });
+
+        return {
+          dataset: {
+            proofId,
+            title: `Lean Verity fixture (${rebuiltIngestion.theoremLeaves.length} declarations, ingestion=${rebuiltIngestion.ingestionHash.slice(0, 8)}, depgraph=${rebuiltIngestion.dependencyGraphHash.slice(0, 8)})`,
+            config,
+            configHash,
+            tree: topologyRebuild.tree,
+            leaves: rebuiltIngestion.theoremLeaves,
+            dependencyGraph: rebuiltIngestion.dependencyGraph,
+            dependencyGraphHash: rebuiltIngestion.dependencyGraphHash,
+          },
+          queryApi: createTreeQueryApi(topologyRebuild.snapshot),
+          cache: {
+            layer: "persistent",
+            status: "hit",
+            cacheKey,
+            sourceFingerprint,
+            cachePath,
+            snapshotHash: topologyEntry.snapshotHash,
+            cacheEntryHash: computeProofDatasetCacheEntryHash(topologyEntry),
+            diagnostics: cacheDiagnostics,
+          },
+        };
+      }
+
       cacheDiagnostics.push({
         code: "cache_incremental_rebuild",
         message: "Detected theorem-level delta; rebuilding explanation tree from updated leaves.",
@@ -1510,6 +1575,151 @@ async function rebuildSnapshotForChangedLeaves(input: {
     affectedParentCount: affectedParents.length,
     reusedNodeCount: Object.keys(treeNodes).length - affectedParents.length,
   };
+}
+
+interface ParentSummaryRecord {
+  parent_statement: string;
+  why_true_from_children: string;
+  new_terms_introduced: string[];
+  complexity_score: number;
+  abstraction_score: number;
+  evidence_refs: string[];
+  confidence: number;
+}
+
+async function rebuildSnapshotWithParentSummaryReuse(input: {
+  previousSnapshot: TreeStorageSnapshot;
+  proofId: string;
+  leaves: TheoremLeafRecord[];
+  config: ExplanationConfig;
+}): Promise<
+  | {
+      tree: ExplanationTree;
+      snapshot: TreeStorageSnapshot;
+      snapshotHash: string;
+      reusedParentSummaryCount: number;
+      generatedParentSummaryCount: number;
+      previousParentCount: number;
+      nextParentCount: number;
+    }
+  | undefined
+> {
+  const imported = importTreeStorageSnapshot(input.previousSnapshot);
+  const hasImportErrors = imported.diagnostics.some((diagnostic) => diagnostic.severity === "error");
+  if (hasImportErrors || !imported.tree) {
+    return undefined;
+  }
+
+  const reuseCandidates = buildReusableParentSummaryMap(imported.tree);
+  let reusedParentSummaryCount = 0;
+  let generatedParentSummaryCount = 0;
+  const baseProvider = createDeterministicSummaryProvider();
+  const provider: ProviderClient = {
+    generate: async (request) => {
+      const prompt = request.messages[1]?.content ?? "";
+      const children = parseChildrenFromPrompt(prompt);
+      const targetComplexity = parsePromptNumericConstraint(prompt, "target_complexity", 3, 1, 5);
+      const targetAbstraction = parsePromptNumericConstraint(prompt, "target_abstraction", 3, 1, 5);
+      const reuseKey = computeParentSummaryReuseKey(children, targetComplexity, targetAbstraction);
+      const reusable = reuseCandidates.get(reuseKey);
+      if (reusable) {
+        reusedParentSummaryCount += 1;
+        return {
+          text: JSON.stringify(reusable),
+          model: "cache-parent-summary-reuse",
+          finishReason: "stop",
+          raw: { reuseKey },
+        };
+      }
+      generatedParentSummaryCount += 1;
+      return baseProvider.generate(request);
+    },
+    stream: baseProvider.stream,
+  };
+
+  const tree = await buildRecursiveExplanationTree(provider, {
+    leaves: mapTheoremLeavesToTreeLeaves(input.leaves),
+    config: input.config,
+  });
+  const validation = validateExplanationTree(tree, input.config.maxChildrenPerParent);
+  if (!validation.ok) {
+    throw new Error(
+      `Topology-aware rebuild validation failed: ${validation.issues.map((issue) => issue.code).join(", ")}`,
+    );
+  }
+
+  const snapshot = exportTreeStorageSnapshot(tree, {
+    proofId: input.proofId,
+    leaves: input.leaves,
+    config: input.config,
+  });
+  return {
+    tree,
+    snapshot,
+    snapshotHash: computeTreeStorageSnapshotHash(snapshot),
+    reusedParentSummaryCount,
+    generatedParentSummaryCount,
+    previousParentCount: Object.values(imported.tree.nodes).filter((node) => node.kind === "parent").length,
+    nextParentCount: Object.values(tree.nodes).filter((node) => node.kind === "parent").length,
+  };
+}
+
+function buildReusableParentSummaryMap(tree: ExplanationTree): Map<string, ParentSummaryRecord> {
+  const reusable = new Map<string, ParentSummaryRecord>();
+  const parents = Object.values(tree.nodes)
+    .filter((node): node is ExplanationTree["nodes"][string] & { kind: "parent" } => node.kind === "parent")
+    .sort((left, right) => left.id.localeCompare(right.id));
+  for (const parent of parents) {
+    if (
+      parent.whyTrueFromChildren === undefined ||
+      parent.complexityScore === undefined ||
+      parent.abstractionScore === undefined ||
+      parent.confidence === undefined
+    ) {
+      continue;
+    }
+    const children: Array<{ id: string; statement: string }> = [];
+    let missingChild = false;
+    for (const childId of parent.childIds) {
+      const child = tree.nodes[childId];
+      if (!child) {
+        missingChild = true;
+        break;
+      }
+      children.push({ id: child.id, statement: child.statement });
+    }
+    if (missingChild) {
+      continue;
+    }
+    const summary: ParentSummaryRecord = {
+      parent_statement: parent.statement,
+      why_true_from_children: parent.whyTrueFromChildren,
+      new_terms_introduced: (parent.newTermsIntroduced ?? []).slice(),
+      complexity_score: parent.complexityScore,
+      abstraction_score: parent.abstractionScore,
+      evidence_refs: parent.evidenceRefs.slice(),
+      confidence: parent.confidence,
+    };
+    const key = computeParentSummaryReuseKey(children, summary.complexity_score, summary.abstraction_score);
+    if (!reusable.has(key)) {
+      reusable.set(key, summary);
+    }
+  }
+  return reusable;
+}
+
+function computeParentSummaryReuseKey(
+  children: Array<{ id: string; statement: string }>,
+  targetComplexity: number,
+  targetAbstraction: number,
+): string {
+  return computeCanonicalRequestHash({
+    targetComplexity,
+    targetAbstraction,
+    children: children
+      .map((child) => ({ id: child.id, statement: child.statement }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+  });
 }
 
 function parseParentGroupIndex(parentId: string): number {
