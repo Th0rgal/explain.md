@@ -47,6 +47,7 @@ The tree panel uses incremental root/children/path queries:
   - `abstractionLevel`, `complexityLevel`, `maxChildrenPerParent`
   - `audienceLevel`, `language`, `readingLevelTarget`
   - `complexityBandWidth`, `termIntroductionBudget`, `proofDetailMode`, `entailmentMode`
+- Proof Explorer controls expose an explicit `entailmentMode` selector (`calibrated` vs `strict`) and propagate it through root/tree/policy queries.
 - Config profile persistence/query is deterministic and file-backed:
   - per-project/user profile scope
   - canonical storage keys via `buildProfileStorageKey(...)`

@@ -28,7 +28,7 @@ import {
 } from "../lib/api-client";
 import { formatPolicyThresholdFailure } from "../lib/policy-thresholds";
 
-const DEFAULT_CONFIG: ProofConfigInput = {
+export const DEFAULT_CONFIG: ProofConfigInput = {
   abstractionLevel: 3,
   complexityLevel: 3,
   maxChildrenPerParent: 3,
@@ -42,6 +42,10 @@ const DEFAULT_CONFIG: ProofConfigInput = {
 };
 
 const DEFAULT_PROFILE_USER_ID = "local-user";
+export const ENTAILMENT_MODE_OPTIONS: Array<{ value: NonNullable<ProofConfigInput["entailmentMode"]>; label: string }> = [
+  { value: "calibrated", label: "Calibrated" },
+  { value: "strict", label: "Strict" },
+];
 
 interface ProofExplorerProps {
   proofId: string;
@@ -572,6 +576,19 @@ export function ProofExplorer(props: ProofExplorerProps) {
             <option value="minimal">Minimal</option>
             <option value="balanced">Balanced</option>
             <option value="formal">Formal</option>
+          </select>
+        </label>
+        <label>
+          Entailment mode
+          <select
+            value={config.entailmentMode}
+            onChange={(event) => updateConfig("entailmentMode", event.target.value as "calibrated" | "strict")}
+          >
+            {ENTAILMENT_MODE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
         </label>
         <label>
