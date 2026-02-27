@@ -31,6 +31,8 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - `GET /api/verification/jobs/:jobId`
   - `GET /api/observability/verification-metrics`
   - `GET /api/observability/proof-query-metrics`
+  - `GET /api/observability/ui-interaction-metrics`
+  - `POST /api/observability/ui-interactions`
   - `GET /api/observability/slo-report`
 - Verification state is persisted in a canonical ledger at `.explain-md/web-verification-ledger.json`.
 - Leaf detail uses persisted verification jobs from the ledger, so panel metadata is queryable and stable across reloads.
@@ -46,8 +48,11 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - rolling-window aggregates with `requestCount`, `failureCount`, per-query `meanLatencyMs`/`p95LatencyMs`, and canonical `snapshotHash`
 - Observability SLO report contract:
   - `GET /api/observability/slo-report`
-  - combines proof-query and verification snapshots into deterministic threshold evaluation (`thresholdPass`, `thresholdFailures`, `snapshotHash`)
-  - supports threshold override query params: `minProofRequestCount`, `minVerificationRequestCount`, `minProofCacheHitRate`, `minProofUniqueTraceRate`, `maxVerificationFailureRate`, `maxVerificationP95LatencyMs`, `maxVerificationMeanLatencyMs`, `minVerificationParentTraceRate`
+  - combines proof-query, verification, and UI-interaction snapshots into deterministic threshold evaluation (`thresholdPass`, `thresholdFailures`, `snapshotHash`)
+  - supports threshold override query params: `minProofRequestCount`, `minVerificationRequestCount`, `minProofCacheHitRate`, `minProofUniqueTraceRate`, `maxVerificationFailureRate`, `maxVerificationP95LatencyMs`, `maxVerificationMeanLatencyMs`, `minVerificationParentTraceRate`, `minUiInteractionRequestCount`, `minUiInteractionSuccessRate`, `minUiInteractionParentTraceRate`, `maxUiInteractionP95DurationMs`
+- UI interaction observability contracts:
+  - `POST /api/observability/ui-interactions` records deterministic browser interaction traces with canonical `requestId`/`traceId`
+  - `GET /api/observability/ui-interaction-metrics` exports deterministic rolling-window UI interaction aggregates (`requestCount`, success/failure rate, parent-trace rate, per-interaction duration stats) with `snapshotHash`
 
 ## Determinism and provenance
 - Two deterministic datasets are exposed through one contract:

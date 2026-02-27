@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { ProofQueryObservabilityMetricsSnapshot } from "./proof-service";
+import type { UiInteractionObservabilityMetricsSnapshot } from "./ui-interaction-observability";
 import type { VerificationObservabilityMetricsSnapshot } from "./verification-service";
 
 export interface ObservabilitySloThresholds {
@@ -11,6 +12,10 @@ export interface ObservabilitySloThresholds {
   maxVerificationP95LatencyMs: number;
   maxVerificationMeanLatencyMs: number;
   minVerificationParentTraceRate: number;
+  minUiInteractionRequestCount: number;
+  minUiInteractionSuccessRate: number;
+  minUiInteractionParentTraceRate: number;
+  maxUiInteractionP95DurationMs: number;
 }
 
 export interface ObservabilitySloThresholdFailure {
@@ -22,7 +27,11 @@ export interface ObservabilitySloThresholdFailure {
     | "verification_failure_rate_above_max"
     | "verification_p95_latency_above_max"
     | "verification_mean_latency_above_max"
-    | "verification_parent_trace_rate_below_min";
+    | "verification_parent_trace_rate_below_min"
+    | "ui_interaction_request_count_below_min"
+    | "ui_interaction_success_rate_below_min"
+    | "ui_interaction_parent_trace_rate_below_min"
+    | "ui_interaction_p95_duration_above_max";
   message: string;
   details: {
     metric: string;
@@ -48,11 +57,18 @@ export interface ObservabilitySloReport {
       maxMeanLatencyMs: number;
       parentTraceProvidedRate: number;
     };
+    uiInteraction: {
+      requestCount: number;
+      successRate: number;
+      parentTraceProvidedRate: number;
+      maxP95DurationMs: number;
+    };
   };
   thresholdPass: boolean;
   thresholdFailures: ObservabilitySloThresholdFailure[];
   proofSnapshotHash: string;
   verificationSnapshotHash: string;
+  uiInteractionSnapshotHash: string;
   generatedAt: string;
   snapshotHash: string;
 }
@@ -66,11 +82,16 @@ export const DEFAULT_OBSERVABILITY_SLO_THRESHOLDS: ObservabilitySloThresholds = 
   maxVerificationP95LatencyMs: 250,
   maxVerificationMeanLatencyMs: 200,
   minVerificationParentTraceRate: 0,
+  minUiInteractionRequestCount: 1,
+  minUiInteractionSuccessRate: 0.95,
+  minUiInteractionParentTraceRate: 0,
+  maxUiInteractionP95DurationMs: 500,
 };
 
 export function evaluateObservabilitySLOs(input: {
   proof: ProofQueryObservabilityMetricsSnapshot;
   verification: VerificationObservabilityMetricsSnapshot;
+  uiInteraction: UiInteractionObservabilityMetricsSnapshot;
   thresholds?: Partial<ObservabilitySloThresholds>;
   generatedAt?: string;
 }): ObservabilitySloReport {
@@ -89,6 +110,13 @@ export function evaluateObservabilitySLOs(input: {
       ? 0
       : Math.max(...input.verification.queries.map((query) => query.meanLatencyMs));
   const parentTraceProvidedRate = input.verification.correlation.parentTraceProvidedRate;
+  const uiInteractionRequestCount = input.uiInteraction.requestCount;
+  const uiInteractionSuccessRate = uiInteractionRequestCount === 0 ? 0 : input.uiInteraction.successCount / uiInteractionRequestCount;
+  const uiInteractionParentTraceRate = input.uiInteraction.correlation.parentTraceProvidedRate;
+  const uiInteractionMaxP95DurationMs =
+    input.uiInteraction.interactions.length === 0
+      ? 0
+      : Math.max(...input.uiInteraction.interactions.map((entry) => entry.p95DurationMs));
 
   const failures: ObservabilitySloThresholdFailure[] = [];
   pushFailureIfLessThan(failures, {
@@ -147,6 +175,34 @@ export function evaluateObservabilitySLOs(input: {
     metric: "verification.parentTraceProvidedRate",
     message: "Verification parent-trace correlation rate is below configured minimum.",
   });
+  pushFailureIfLessThan(failures, {
+    actual: uiInteractionRequestCount,
+    expected: thresholds.minUiInteractionRequestCount,
+    code: "ui_interaction_request_count_below_min",
+    metric: "uiInteraction.requestCount",
+    message: "UI interaction observability request volume is below configured minimum.",
+  });
+  pushFailureIfLessThan(failures, {
+    actual: uiInteractionSuccessRate,
+    expected: thresholds.minUiInteractionSuccessRate,
+    code: "ui_interaction_success_rate_below_min",
+    metric: "uiInteraction.successRate",
+    message: "UI interaction success rate is below configured minimum.",
+  });
+  pushFailureIfLessThan(failures, {
+    actual: uiInteractionParentTraceRate,
+    expected: thresholds.minUiInteractionParentTraceRate,
+    code: "ui_interaction_parent_trace_rate_below_min",
+    metric: "uiInteraction.parentTraceProvidedRate",
+    message: "UI interaction parent-trace correlation rate is below configured minimum.",
+  });
+  pushFailureIfGreaterThan(failures, {
+    actual: uiInteractionMaxP95DurationMs,
+    expected: thresholds.maxUiInteractionP95DurationMs,
+    code: "ui_interaction_p95_duration_above_max",
+    metric: "uiInteraction.maxP95DurationMs",
+    message: "UI interaction p95 duration exceeds configured maximum.",
+  });
 
   const generatedAt = input.generatedAt ?? new Date().toISOString();
   const withoutHash = {
@@ -165,11 +221,18 @@ export function evaluateObservabilitySLOs(input: {
         maxMeanLatencyMs: verificationMaxMeanLatencyMs,
         parentTraceProvidedRate,
       },
+      uiInteraction: {
+        requestCount: uiInteractionRequestCount,
+        successRate: uiInteractionSuccessRate,
+        parentTraceProvidedRate: uiInteractionParentTraceRate,
+        maxP95DurationMs: uiInteractionMaxP95DurationMs,
+      },
     },
     thresholdPass: failures.length === 0,
     thresholdFailures: failures,
     proofSnapshotHash: input.proof.snapshotHash,
     verificationSnapshotHash: input.verification.snapshotHash,
+    uiInteractionSnapshotHash: input.uiInteraction.snapshotHash,
     generatedAt,
   };
 
@@ -206,6 +269,22 @@ function resolveThresholds(overrides: Partial<ObservabilitySloThresholds> | unde
     minVerificationParentTraceRate: clampUnit(
       overrides?.minVerificationParentTraceRate,
       DEFAULT_OBSERVABILITY_SLO_THRESHOLDS.minVerificationParentTraceRate,
+    ),
+    minUiInteractionRequestCount: clampInteger(
+      overrides?.minUiInteractionRequestCount,
+      DEFAULT_OBSERVABILITY_SLO_THRESHOLDS.minUiInteractionRequestCount,
+    ),
+    minUiInteractionSuccessRate: clampUnit(
+      overrides?.minUiInteractionSuccessRate,
+      DEFAULT_OBSERVABILITY_SLO_THRESHOLDS.minUiInteractionSuccessRate,
+    ),
+    minUiInteractionParentTraceRate: clampUnit(
+      overrides?.minUiInteractionParentTraceRate,
+      DEFAULT_OBSERVABILITY_SLO_THRESHOLDS.minUiInteractionParentTraceRate,
+    ),
+    maxUiInteractionP95DurationMs: clampNonNegative(
+      overrides?.maxUiInteractionP95DurationMs,
+      DEFAULT_OBSERVABILITY_SLO_THRESHOLDS.maxUiInteractionP95DurationMs,
     ),
   };
 }

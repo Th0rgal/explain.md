@@ -23,6 +23,8 @@ This Next.js app provides a deterministic frontend scaffold for explain.md.
   - `GET /api/verification/jobs/:jobId`
   - `GET /api/observability/verification-metrics`
   - `GET /api/observability/proof-query-metrics`
+  - `GET /api/observability/ui-interaction-metrics`
+  - `POST /api/observability/ui-interactions`
   - `GET /api/observability/slo-report`
 - Client API layer in `lib/api-client.ts`.
 - Loading and error boundaries (`app/loading.tsx`, `app/error.tsx`).
@@ -53,9 +55,15 @@ The tree panel uses incremental root/children/path queries:
 - Core proof-query dashboard export endpoint:
   - `GET /api/observability/proof-query-metrics`
   - deterministic rolling-window aggregates (`requestCount`, unique request/trace counts, cache hit rate, per-query mean tree sizes) + `snapshotHash`
+- UI interaction observability endpoint contracts:
+  - `POST /api/observability/ui-interactions`
+    - accepted `interaction` values: `config_update`, `tree_expand_toggle`, `tree_load_more`, `tree_select_leaf`, `tree_keyboard`, `verification_run`, `verification_job_select`, `profile_save`, `profile_delete`, `profile_apply`
+    - emits deterministic `requestId` and `traceId`
+  - `GET /api/observability/ui-interaction-metrics`
+    - deterministic rolling-window aggregates (`requestCount`, `successCount`, `failureCount`, `uniqueTraceCount`, parent-trace rate, per-interaction `meanDurationMs`/`p95DurationMs`) + `snapshotHash`
 - Observability SLO/alert report endpoint:
   - `GET /api/observability/slo-report`
-  - deterministic policy report across proof-query + verification snapshots with threshold pass/fail diagnostics and `snapshotHash`
+  - deterministic policy report across proof-query + verification + UI-interaction snapshots with threshold pass/fail diagnostics and `snapshotHash`
   - optional threshold overrides via query params:
     - `minProofRequestCount`
     - `minVerificationRequestCount`
@@ -65,6 +73,10 @@ The tree panel uses incremental root/children/path queries:
     - `maxVerificationP95LatencyMs`
     - `maxVerificationMeanLatencyMs`
     - `minVerificationParentTraceRate`
+    - `minUiInteractionRequestCount`
+    - `minUiInteractionSuccessRate`
+    - `minUiInteractionParentTraceRate`
+    - `maxUiInteractionP95DurationMs`
 - Query deterministic pedagogy calibration metrics + threshold gates with `/api/proofs/policy-report`.
   - Optional threshold overrides: `maxUnsupportedParentRate`, `maxPrerequisiteViolationRate`, `maxPolicyViolationRate`, `maxTermJumpRate`, `maxComplexitySpreadMean`, `minEvidenceCoverageMean`, `minVocabularyContinuityMean`, `minRepartitionEventRate`, `maxRepartitionEventRate`, `maxRepartitionMaxRound`.
 - Query deterministic cache reuse diagnostics with `/api/proofs/cache-report` (`status`, `cacheKey`, `sourceFingerprint`, `snapshotHash`, `cacheEntryHash`) plus optional `blockedSubtreePlan` for topology-recovery auditing (`cache_topology_recovery_hit`, `cache_blocked_subtree_rebuild_hit`, `cache_topology_removal_subtree_rebuild_hit`, `cache_topology_addition_subtree_insertion_rebuild_hit`, `cache_topology_addition_subtree_regeneration_rebuild_hit`, `cache_topology_mixed_subtree_regeneration_rebuild_hit`, `cache_topology_regeneration_rebuild_hit`, `cache_blocked_subtree_full_rebuild`). Topology-removal hits include machine-checkable subtree recovery counters and `recoveryHash`; addition-only shape hits include `recoveryMode`, `addedLeafCount`, `insertedParentCount`, and `additionRecoveryHash`; mixed-shape hits include removal + regeneration telemetry and `mixedRecoveryHash`; topology-regeneration hits include reuse-mode counters and `regenerationHash`.

@@ -550,6 +550,37 @@ export interface VerificationObservabilityMetricsResponse {
   snapshotHash: string;
 }
 
+export interface UiInteractionObservabilityMetricsResponse {
+  schemaVersion: "1.0.0";
+  requestCount: number;
+  successCount: number;
+  failureCount: number;
+  uniqueTraceCount: number;
+  correlation: {
+    parentTraceProvidedCount: number;
+    parentTraceProvidedRate: number;
+  };
+  interactions: Array<{
+    interaction:
+      | "config_update"
+      | "tree_expand_toggle"
+      | "tree_load_more"
+      | "tree_select_leaf"
+      | "tree_keyboard"
+      | "verification_run"
+      | "verification_job_select"
+      | "profile_save"
+      | "profile_delete"
+      | "profile_apply";
+    requestCount: number;
+    successRate: number;
+    meanDurationMs: number;
+    p95DurationMs: number;
+  }>;
+  generatedAt: string;
+  snapshotHash: string;
+}
+
 export interface ObservabilitySloThresholdsInput {
   minProofRequestCount?: number;
   minVerificationRequestCount?: number;
@@ -559,6 +590,10 @@ export interface ObservabilitySloThresholdsInput {
   maxVerificationP95LatencyMs?: number;
   maxVerificationMeanLatencyMs?: number;
   minVerificationParentTraceRate?: number;
+  minUiInteractionRequestCount?: number;
+  minUiInteractionSuccessRate?: number;
+  minUiInteractionParentTraceRate?: number;
+  maxUiInteractionP95DurationMs?: number;
 }
 
 export interface ObservabilitySloReportResponse {
@@ -572,6 +607,10 @@ export interface ObservabilitySloReportResponse {
     maxVerificationP95LatencyMs: number;
     maxVerificationMeanLatencyMs: number;
     minVerificationParentTraceRate: number;
+    minUiInteractionRequestCount: number;
+    minUiInteractionSuccessRate: number;
+    minUiInteractionParentTraceRate: number;
+    maxUiInteractionP95DurationMs: number;
   };
   metrics: {
     proof: {
@@ -586,6 +625,12 @@ export interface ObservabilitySloReportResponse {
       maxMeanLatencyMs: number;
       parentTraceProvidedRate: number;
     };
+    uiInteraction: {
+      requestCount: number;
+      successRate: number;
+      parentTraceProvidedRate: number;
+      maxP95DurationMs: number;
+    };
   };
   thresholdPass: boolean;
   thresholdFailures: Array<{
@@ -597,7 +642,11 @@ export interface ObservabilitySloReportResponse {
       | "verification_failure_rate_above_max"
       | "verification_p95_latency_above_max"
       | "verification_mean_latency_above_max"
-      | "verification_parent_trace_rate_below_min";
+      | "verification_parent_trace_rate_below_min"
+      | "ui_interaction_request_count_below_min"
+      | "ui_interaction_success_rate_below_min"
+      | "ui_interaction_parent_trace_rate_below_min"
+      | "ui_interaction_p95_duration_above_max";
     message: string;
     details: {
       metric: string;
@@ -608,6 +657,7 @@ export interface ObservabilitySloReportResponse {
   }>;
   proofSnapshotHash: string;
   verificationSnapshotHash: string;
+  uiInteractionSnapshotHash: string;
   generatedAt: string;
   snapshotHash: string;
 }
@@ -801,6 +851,43 @@ export async function fetchVerificationObservabilityMetrics(): Promise<Verificat
 
 export async function fetchProofQueryObservabilityMetrics(): Promise<ProofQueryObservabilityMetricsResponse> {
   return requestJson<ProofQueryObservabilityMetricsResponse>("/api/observability/proof-query-metrics");
+}
+
+export async function fetchUiInteractionObservabilityMetrics(): Promise<UiInteractionObservabilityMetricsResponse> {
+  return requestJson<UiInteractionObservabilityMetricsResponse>("/api/observability/ui-interaction-metrics");
+}
+
+export async function postUiInteractionObservabilityEvent(payload: {
+  proofId: string;
+  interaction:
+    | "config_update"
+    | "tree_expand_toggle"
+    | "tree_load_more"
+    | "tree_select_leaf"
+    | "tree_keyboard"
+    | "verification_run"
+    | "verification_job_select"
+    | "profile_save"
+    | "profile_delete"
+    | "profile_apply";
+  source: "mouse" | "keyboard" | "programmatic";
+  success?: boolean;
+  parentTraceId?: string;
+  durationMs?: number;
+}): Promise<{
+  schemaVersion: "1.0.0";
+  requestId: string;
+  traceId: string;
+}> {
+  return requestJson<{
+    schemaVersion: "1.0.0";
+    requestId: string;
+    traceId: string;
+  }>("/api/observability/ui-interactions", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function fetchObservabilitySloReport(

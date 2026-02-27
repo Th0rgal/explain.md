@@ -4,7 +4,9 @@ import {
   fetchConfigProfiles,
   fetchObservabilitySloReport,
   fetchProofQueryObservabilityMetrics,
+  fetchUiInteractionObservabilityMetrics,
   fetchVerificationObservabilityMetrics,
+  postUiInteractionObservabilityEvent,
   fetchDiff,
   fetchDependencyGraph,
   removeConfigProfile,
@@ -411,6 +413,72 @@ describe("api client", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/observability/proof-query-metrics", undefined);
   });
 
+  it("fetches UI interaction observability metrics export endpoint", async () => {
+    const fetchMock = vi.fn(async () =>
+      buildMockResponse({
+        ok: true,
+        data: {
+          schemaVersion: "1.0.0",
+          requestCount: 3,
+          successCount: 3,
+          failureCount: 0,
+          uniqueTraceCount: 3,
+          correlation: {
+            parentTraceProvidedCount: 2,
+            parentTraceProvidedRate: 2 / 3,
+          },
+          interactions: [],
+          generatedAt: "2026-02-27T00:00:00.000Z",
+          snapshotHash: "f".repeat(64),
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchUiInteractionObservabilityMetrics();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith("/api/observability/ui-interaction-metrics", undefined);
+  });
+
+  it("posts UI interaction observability events deterministically", async () => {
+    const fetchMock = vi.fn(async (_input: string, _init?: RequestInit) =>
+      buildMockResponse({
+        ok: true,
+        data: {
+          schemaVersion: "1.0.0",
+          requestId: "a".repeat(64),
+          traceId: "b".repeat(64),
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await postUiInteractionObservabilityEvent({
+      proofId: "seed-verity",
+      interaction: "tree_select_leaf",
+      source: "mouse",
+      success: true,
+      parentTraceId: "trace-parent-a",
+      durationMs: 9,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/api/observability/ui-interactions");
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(init.method).toBe("POST");
+    expect(init.body).toBe(
+      JSON.stringify({
+        proofId: "seed-verity",
+        interaction: "tree_select_leaf",
+        source: "mouse",
+        success: true,
+        parentTraceId: "trace-parent-a",
+        durationMs: 9,
+      }),
+    );
+  });
+
   it("fetches observability SLO report with threshold overrides", async () => {
     const fetchMock = vi.fn(async (_input: string) =>
       buildMockResponse({
@@ -426,6 +494,10 @@ describe("api client", () => {
             maxVerificationP95LatencyMs: 300,
             maxVerificationMeanLatencyMs: 250,
             minVerificationParentTraceRate: 0.5,
+            minUiInteractionRequestCount: 2,
+            minUiInteractionSuccessRate: 0.95,
+            minUiInteractionParentTraceRate: 0.4,
+            maxUiInteractionP95DurationMs: 200,
           },
           metrics: {
             proof: {
@@ -440,11 +512,18 @@ describe("api client", () => {
               maxMeanLatencyMs: 70,
               parentTraceProvidedRate: 1,
             },
+            uiInteraction: {
+              requestCount: 3,
+              successRate: 1,
+              parentTraceProvidedRate: 2 / 3,
+              maxP95DurationMs: 12,
+            },
           },
           thresholdPass: true,
           thresholdFailures: [],
           proofSnapshotHash: "a".repeat(64),
           verificationSnapshotHash: "b".repeat(64),
+          uiInteractionSnapshotHash: "d".repeat(64),
           generatedAt: "2026-02-27T00:00:00.000Z",
           snapshotHash: "c".repeat(64),
         },
@@ -459,6 +538,10 @@ describe("api client", () => {
       maxVerificationP95LatencyMs: 300,
       maxVerificationMeanLatencyMs: 250,
       minVerificationParentTraceRate: 0.5,
+      minUiInteractionRequestCount: 2,
+      minUiInteractionSuccessRate: 0.95,
+      minUiInteractionParentTraceRate: 0.4,
+      maxUiInteractionP95DurationMs: 200,
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -469,6 +552,10 @@ describe("api client", () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("maxVerificationP95LatencyMs=300");
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("maxVerificationMeanLatencyMs=250");
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("minVerificationParentTraceRate=0.5");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("minUiInteractionRequestCount=2");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("minUiInteractionSuccessRate=0.95");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("minUiInteractionParentTraceRate=0.4");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("maxUiInteractionP95DurationMs=200");
   });
 
   it("encodes dependency graph query contract deterministically", async () => {

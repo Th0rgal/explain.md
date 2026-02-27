@@ -21,6 +21,11 @@ import {
   SEED_PROOF_ID,
 } from "./proof-service";
 import {
+  clearUiInteractionObservabilityMetricsForTests,
+  exportUiInteractionObservabilityMetrics,
+  recordUiInteractionEvent,
+} from "./ui-interaction-observability";
+import {
   clearVerificationObservabilityMetricsForTests,
   configureVerificationServiceForTests,
   exportVerificationObservabilityMetrics,
@@ -80,6 +85,7 @@ export interface ObservabilitySloBenchmarkReport {
     }>;
     proofQueries: string[];
     verificationQueries: string[];
+    uiInteractionKinds: string[];
     baselineThresholds: ObservabilitySloThresholds;
     strictThresholds: ObservabilitySloThresholds;
   };
@@ -99,6 +105,13 @@ export interface ObservabilitySloBenchmarkReport {
       parentTraceProvidedRate: number;
       maxP95LatencyMs: number;
       maxMeanLatencyMs: number;
+    };
+    uiInteraction: {
+      snapshotHash: string;
+      requestCount: number;
+      successRate: number;
+      parentTraceProvidedRate: number;
+      maxP95DurationMs: number;
     };
   };
   evaluation: {
@@ -141,6 +154,13 @@ interface BenchmarkProfileReport {
       maxP95LatencyMs: number;
       maxMeanLatencyMs: number;
     };
+    uiInteraction: {
+      snapshotHash: string;
+      requestCount: number;
+      successRate: number;
+      parentTraceProvidedRate: number;
+      maxP95DurationMs: number;
+    };
   };
   evaluation: {
     baseline: BenchmarkScenario;
@@ -168,6 +188,18 @@ export async function runObservabilitySloBenchmark(
     "cache-report",
   ];
   const verificationQueries = ["verify_leaf", "list_leaf_jobs", "get_job"];
+  const uiInteractionKinds = [
+    "config_update",
+    "tree_expand_toggle",
+    "tree_load_more",
+    "tree_select_leaf",
+    "tree_keyboard",
+    "verification_run",
+    "verification_job_select",
+    "profile_save",
+    "profile_delete",
+    "profile_apply",
+  ];
 
   const requestHash = computeHash({
     schemaVersion: SCHEMA_VERSION,
@@ -180,6 +212,7 @@ export async function runObservabilitySloBenchmark(
     generatedAt,
     proofQueries,
     verificationQueries,
+    uiInteractionKinds,
     baselineThresholds,
     strictThresholds,
   });
@@ -228,6 +261,19 @@ export async function runObservabilitySloBenchmark(
     maxP95LatencyMs: Math.max(...profileReports.map((profile) => profile.snapshots.verification.maxP95LatencyMs), 0),
     maxMeanLatencyMs: Math.max(...profileReports.map((profile) => profile.snapshots.verification.maxMeanLatencyMs), 0),
   };
+  const aggregateUiInteraction = {
+    snapshotHash: computeHash(profileReports.map((profile) => profile.snapshots.uiInteraction.snapshotHash)),
+    requestCount: sum(profileReports.map((profile) => profile.snapshots.uiInteraction.requestCount)),
+    successRate:
+      profileReports.length === 0
+        ? 0
+        : sum(profileReports.map((profile) => profile.snapshots.uiInteraction.successRate)) / profileReports.length,
+    parentTraceProvidedRate:
+      profileReports.length === 0
+        ? 0
+        : sum(profileReports.map((profile) => profile.snapshots.uiInteraction.parentTraceProvidedRate)) / profileReports.length,
+    maxP95DurationMs: Math.max(...profileReports.map((profile) => profile.snapshots.uiInteraction.maxP95DurationMs), 0),
+  };
 
   const outcomeHash = computeHash({
     schemaVersion: SCHEMA_VERSION,
@@ -256,6 +302,7 @@ export async function runObservabilitySloBenchmark(
       })),
       proofQueries,
       verificationQueries,
+      uiInteractionKinds,
       baselineThresholds,
       strictThresholds,
     },
@@ -263,6 +310,7 @@ export async function runObservabilitySloBenchmark(
     snapshots: {
       proof: aggregateProof,
       verification: aggregateVerification,
+      uiInteraction: aggregateUiInteraction,
     },
     evaluation: {
       baseline: aggregateBaseline,
@@ -296,6 +344,7 @@ async function runBenchmarkProfile(options: {
 
   clearProofDatasetCacheForTests();
   clearProofQueryObservabilityMetricsForTests();
+  clearUiInteractionObservabilityMetricsForTests();
   clearVerificationObservabilityMetricsForTests();
   resetVerificationServiceForTests();
 
@@ -360,19 +409,60 @@ async function runBenchmarkProfile(options: {
     await getVerificationJobById(verify.finalJob.jobId, {
       parentTraceId: "trace-parent-benchmark",
     });
+    recordUiInteractionEvent({
+      proofId: profile.proofId,
+      interaction: "config_update",
+      source: "programmatic",
+      success: true,
+      parentTraceId: "trace-parent-benchmark",
+      durationMs: 8,
+    });
+    recordUiInteractionEvent({
+      proofId: profile.proofId,
+      interaction: "tree_expand_toggle",
+      source: "keyboard",
+      success: true,
+      parentTraceId: "trace-parent-benchmark",
+      durationMs: 10,
+    });
+    recordUiInteractionEvent({
+      proofId: profile.proofId,
+      interaction: "tree_select_leaf",
+      source: "mouse",
+      success: true,
+      durationMs: 11,
+    });
+    recordUiInteractionEvent({
+      proofId: profile.proofId,
+      interaction: "verification_run",
+      source: "mouse",
+      success: true,
+      parentTraceId: verify.observability.traceId,
+      durationMs: 12,
+    });
+    recordUiInteractionEvent({
+      proofId: profile.proofId,
+      interaction: "verification_job_select",
+      source: "mouse",
+      success: true,
+      durationMs: 9,
+    });
 
     const proofMetrics = exportProofQueryObservabilityMetrics({ generatedAt });
     const verificationMetrics = exportVerificationObservabilityMetrics({ generatedAt });
+    const uiInteractionMetrics = exportUiInteractionObservabilityMetrics({ generatedAt });
 
     const baselineReport = evaluateObservabilitySLOs({
       proof: proofMetrics,
       verification: verificationMetrics,
+      uiInteraction: uiInteractionMetrics,
       thresholds: baselineThresholds,
       generatedAt,
     });
     const strictReport = evaluateObservabilitySLOs({
       proof: proofMetrics,
       verification: verificationMetrics,
+      uiInteraction: uiInteractionMetrics,
       thresholds: strictThresholds,
       generatedAt,
     });
@@ -392,6 +482,7 @@ async function runBenchmarkProfile(options: {
       profileId: profile.profileId,
       proofSnapshotHash: proofMetrics.snapshotHash,
       verificationSnapshotHash: verificationMetrics.snapshotHash,
+      uiInteractionSnapshotHash: uiInteractionMetrics.snapshotHash,
       baselineSnapshotHash: baselineReport.snapshotHash,
       strictSnapshotHash: strictReport.snapshotHash,
       baselineThresholdPass: baselineReport.thresholdPass,
@@ -422,6 +513,13 @@ async function runBenchmarkProfile(options: {
           maxP95LatencyMs: Math.max(...verificationMetrics.queries.map((query) => query.p95LatencyMs), 0),
           maxMeanLatencyMs: Math.max(...verificationMetrics.queries.map((query) => query.meanLatencyMs), 0),
         },
+        uiInteraction: {
+          snapshotHash: uiInteractionMetrics.snapshotHash,
+          requestCount: uiInteractionMetrics.requestCount,
+          successRate: uiInteractionMetrics.requestCount === 0 ? 0 : uiInteractionMetrics.successCount / uiInteractionMetrics.requestCount,
+          parentTraceProvidedRate: uiInteractionMetrics.correlation.parentTraceProvidedRate,
+          maxP95DurationMs: Math.max(...uiInteractionMetrics.interactions.map((entry) => entry.p95DurationMs), 0),
+        },
       },
       evaluation: {
         baseline: toScenario(baselineReport),
@@ -431,6 +529,7 @@ async function runBenchmarkProfile(options: {
   } finally {
     resetVerificationServiceForTests();
     clearVerificationObservabilityMetricsForTests();
+    clearUiInteractionObservabilityMetricsForTests();
     clearProofQueryObservabilityMetricsForTests();
     clearProofDatasetCacheForTests();
     await fs.rm(tempDir, { recursive: true, force: true });
@@ -497,6 +596,10 @@ function buildBaselineThresholds(): ObservabilitySloThresholds {
     maxVerificationP95LatencyMs: 25,
     maxVerificationMeanLatencyMs: 20,
     minVerificationParentTraceRate: 0.66,
+    minUiInteractionRequestCount: 5,
+    minUiInteractionSuccessRate: 1,
+    minUiInteractionParentTraceRate: 0.4,
+    maxUiInteractionP95DurationMs: 25,
   };
 }
 
@@ -510,6 +613,10 @@ function buildStrictThresholds(): ObservabilitySloThresholds {
     maxVerificationP95LatencyMs: 5,
     maxVerificationMeanLatencyMs: 5,
     minVerificationParentTraceRate: 0.9,
+    minUiInteractionRequestCount: 6,
+    minUiInteractionSuccessRate: 1,
+    minUiInteractionParentTraceRate: 0.8,
+    maxUiInteractionP95DurationMs: 10,
   };
 }
 

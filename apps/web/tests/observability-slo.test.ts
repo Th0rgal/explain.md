@@ -1,29 +1,35 @@
 import { describe, expect, it } from "vitest";
 import { evaluateObservabilitySLOs } from "../lib/observability-slo";
 import type { ProofQueryObservabilityMetricsSnapshot } from "../lib/proof-service";
+import type { UiInteractionObservabilityMetricsSnapshot } from "../lib/ui-interaction-observability";
 import type { VerificationObservabilityMetricsSnapshot } from "../lib/verification-service";
 
 describe("observability SLO policy", () => {
   it("passes deterministically when all thresholds are satisfied", () => {
     const proof = buildProofSnapshot();
     const verification = buildVerificationSnapshot();
+    const uiInteraction = buildUiInteractionSnapshot();
 
     const first = evaluateObservabilitySLOs({
       proof,
       verification,
+      uiInteraction,
       generatedAt: "2026-02-27T00:00:00.000Z",
       thresholds: {
         minProofUniqueTraceRate: 0.75,
         maxVerificationFailureRate: 0.3,
+        minUiInteractionSuccessRate: 0.6,
       },
     });
     const second = evaluateObservabilitySLOs({
       proof,
       verification,
+      uiInteraction,
       generatedAt: "2026-02-27T00:00:00.000Z",
       thresholds: {
         minProofUniqueTraceRate: 0.75,
         maxVerificationFailureRate: 0.3,
+        minUiInteractionSuccessRate: 0.6,
       },
     });
 
@@ -32,15 +38,18 @@ describe("observability SLO policy", () => {
     expect(first.snapshotHash).toBe(second.snapshotHash);
     expect(first.metrics.proof.cacheHitRate).toBe(0.5);
     expect(first.metrics.verification.maxP95LatencyMs).toBe(120);
+    expect(first.metrics.uiInteraction.successRate).toBe(0.75);
   });
 
   it("emits machine-checkable failures when thresholds regress", () => {
     const proof = buildProofSnapshot();
     const verification = buildVerificationSnapshot();
+    const uiInteraction = buildUiInteractionSnapshot();
 
     const result = evaluateObservabilitySLOs({
       proof,
       verification,
+      uiInteraction,
       generatedAt: "2026-02-27T00:00:00.000Z",
       thresholds: {
         minProofCacheHitRate: 0.8,
@@ -48,6 +57,9 @@ describe("observability SLO policy", () => {
         maxVerificationFailureRate: 0.05,
         maxVerificationP95LatencyMs: 100,
         maxVerificationMeanLatencyMs: 80,
+        minUiInteractionSuccessRate: 0.9,
+        minUiInteractionParentTraceRate: 0.6,
+        maxUiInteractionP95DurationMs: 10,
       },
     });
 
@@ -58,6 +70,9 @@ describe("observability SLO policy", () => {
       "verification_failure_rate_above_max",
       "verification_p95_latency_above_max",
       "verification_mean_latency_above_max",
+      "ui_interaction_success_rate_below_min",
+      "ui_interaction_parent_trace_rate_below_min",
+      "ui_interaction_p95_duration_above_max",
     ]);
   });
 });
@@ -210,5 +225,93 @@ function buildVerificationSnapshot(): VerificationObservabilityMetricsSnapshot {
     ],
     generatedAt: "2026-02-27T00:00:00.000Z",
     snapshotHash: "b".repeat(64),
+  };
+}
+
+function buildUiInteractionSnapshot(): UiInteractionObservabilityMetricsSnapshot {
+  return {
+    schemaVersion: "1.0.0",
+    requestCount: 4,
+    successCount: 3,
+    failureCount: 1,
+    uniqueTraceCount: 4,
+    correlation: {
+      parentTraceProvidedCount: 2,
+      parentTraceProvidedRate: 0.5,
+    },
+    interactions: [
+      {
+        interaction: "config_update",
+        requestCount: 1,
+        successRate: 1,
+        meanDurationMs: 8,
+        p95DurationMs: 8,
+      },
+      {
+        interaction: "tree_expand_toggle",
+        requestCount: 1,
+        successRate: 1,
+        meanDurationMs: 10,
+        p95DurationMs: 10,
+      },
+      {
+        interaction: "tree_load_more",
+        requestCount: 0,
+        successRate: 0,
+        meanDurationMs: 0,
+        p95DurationMs: 0,
+      },
+      {
+        interaction: "tree_select_leaf",
+        requestCount: 1,
+        successRate: 1,
+        meanDurationMs: 11,
+        p95DurationMs: 11,
+      },
+      {
+        interaction: "tree_keyboard",
+        requestCount: 0,
+        successRate: 0,
+        meanDurationMs: 0,
+        p95DurationMs: 0,
+      },
+      {
+        interaction: "verification_run",
+        requestCount: 1,
+        successRate: 0,
+        meanDurationMs: 12,
+        p95DurationMs: 12,
+      },
+      {
+        interaction: "verification_job_select",
+        requestCount: 0,
+        successRate: 0,
+        meanDurationMs: 0,
+        p95DurationMs: 0,
+      },
+      {
+        interaction: "profile_save",
+        requestCount: 0,
+        successRate: 0,
+        meanDurationMs: 0,
+        p95DurationMs: 0,
+      },
+      {
+        interaction: "profile_delete",
+        requestCount: 0,
+        successRate: 0,
+        meanDurationMs: 0,
+        p95DurationMs: 0,
+      },
+      {
+        interaction: "profile_apply",
+        requestCount: 0,
+        successRate: 0,
+        meanDurationMs: 0,
+        p95DurationMs: 0,
+      },
+    ],
+    generatedAt: "2026-02-27T00:00:00.000Z",
+    snapshotHash: "c".repeat(64),
   };
 }

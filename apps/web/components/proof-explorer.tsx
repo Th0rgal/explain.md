@@ -6,6 +6,7 @@ import {
   fetchDiff,
   fetchLeafDetail,
   fetchLeafVerificationJobs,
+  postUiInteractionObservabilityEvent,
   fetchPolicyReport,
   fetchNodeChildren,
   fetchNodePath,
@@ -105,6 +106,35 @@ export function ProofExplorer(props: ProofExplorerProps) {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const profileProjectId = useMemo(() => props.proofId, [props.proofId]);
+
+  function emitUiInteraction(input: {
+    interaction:
+      | "config_update"
+      | "tree_expand_toggle"
+      | "tree_load_more"
+      | "tree_select_leaf"
+      | "tree_keyboard"
+      | "verification_run"
+      | "verification_job_select"
+      | "profile_save"
+      | "profile_delete"
+      | "profile_apply";
+    source: "mouse" | "keyboard" | "programmatic";
+    success?: boolean;
+    durationMs?: number;
+    parentTraceId?: string;
+  }): void {
+    void postUiInteractionObservabilityEvent({
+      proofId: props.proofId,
+      interaction: input.interaction,
+      source: input.source,
+      success: input.success,
+      durationMs: input.durationMs,
+      parentTraceId: input.parentTraceId,
+    }).catch(() => {
+      // Intentionally swallow telemetry failures; explorer behavior must remain unaffected.
+    });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -475,11 +505,20 @@ export function ProofExplorer(props: ProofExplorerProps) {
     }
   }, [activeTreeNodeId, isVirtualizedTree, treeScrollTopPx, visibleRows]);
 
-  function updateConfig<Key extends keyof ProofConfigInput>(key: Key, value: ProofConfigInput[Key]): void {
+  function updateConfig<Key extends keyof ProofConfigInput>(
+    key: Key,
+    value: ProofConfigInput[Key],
+    source: "mouse" | "keyboard" | "programmatic" = "programmatic",
+  ): void {
     setConfig((current) => ({
       ...current,
       [key]: value,
     }));
+    emitUiInteraction({
+      interaction: "config_update",
+      source,
+      success: true,
+    });
   }
 
   function toggleExpansion(nodeId: string): void {
@@ -493,9 +532,15 @@ export function ProofExplorer(props: ProofExplorerProps) {
     if (node?.kind === "parent" && !childrenByParentId[nodeId]) {
       void loadChildrenPage(nodeId);
     }
+    emitUiInteraction({
+      interaction: "tree_expand_toggle",
+      source: "mouse",
+      success: true,
+    });
   }
 
   async function loadChildrenPage(nodeId: string): Promise<void> {
+    const startedAt = Date.now();
     const existing = childrenByParentId[nodeId];
     if (existing?.loading) {
       return;
@@ -547,6 +592,12 @@ export function ProofExplorer(props: ProofExplorerProps) {
           },
         };
       });
+      emitUiInteraction({
+        interaction: "tree_load_more",
+        source: "mouse",
+        success: true,
+        durationMs: Date.now() - startedAt,
+      });
     } catch (childrenError) {
       setChildrenByParentId((current) => ({
         ...current,
@@ -560,10 +611,17 @@ export function ProofExplorer(props: ProofExplorerProps) {
         },
       }));
       setError(childrenError instanceof Error ? childrenError.message : String(childrenError));
+      emitUiInteraction({
+        interaction: "tree_load_more",
+        source: "mouse",
+        success: false,
+        durationMs: Date.now() - startedAt,
+      });
     }
   }
 
   async function selectLeaf(nodeId: string): Promise<void> {
+    const startedAt = Date.now();
     setSelectedLeafId(nodeId);
     try {
       const path = await fetchNodePath(props.proofId, nodeId, config);
@@ -579,9 +637,21 @@ export function ProofExplorer(props: ProofExplorerProps) {
           }
         }
       }
+      emitUiInteraction({
+        interaction: "tree_select_leaf",
+        source: "mouse",
+        success: true,
+        durationMs: Date.now() - startedAt,
+      });
     } catch (pathError) {
       setPathResult(null);
       setError(pathError instanceof Error ? pathError.message : String(pathError));
+      emitUiInteraction({
+        interaction: "tree_select_leaf",
+        source: "mouse",
+        success: false,
+        durationMs: Date.now() - startedAt,
+      });
     }
   }
 
@@ -592,6 +662,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
 
     setVerificationError(null);
     setIsVerifying(true);
+    const startedAt = Date.now();
 
     try {
       await verifyLeaf(props.proofId, selectedLeafId, true);
@@ -602,8 +673,20 @@ export function ProofExplorer(props: ProofExplorerProps) {
       setLeafDetail(leafResult);
       setVerificationJobs(jobsResult);
       setSelectedVerificationJobId(jobsResult.jobs[jobsResult.jobs.length - 1]?.jobId ?? null);
+      emitUiInteraction({
+        interaction: "verification_run",
+        source: "mouse",
+        success: true,
+        durationMs: Date.now() - startedAt,
+      });
     } catch (runError) {
       setVerificationError(runError instanceof Error ? runError.message : String(runError));
+      emitUiInteraction({
+        interaction: "verification_run",
+        source: "mouse",
+        success: false,
+        durationMs: Date.now() - startedAt,
+      });
     } finally {
       setIsVerifying(false);
     }
@@ -643,6 +726,11 @@ export function ProofExplorer(props: ProofExplorerProps) {
             depthFromRoot: activeRow.depthFromRoot,
           }),
         );
+        emitUiInteraction({
+          interaction: "tree_keyboard",
+          source: "keyboard",
+          success: true,
+        });
         return;
       }
 
@@ -658,6 +746,11 @@ export function ProofExplorer(props: ProofExplorerProps) {
             childCount: childrenByParentId[activeRow.node.id]?.childIds.length ?? 0,
           }),
         );
+        emitUiInteraction({
+          interaction: "tree_keyboard",
+          source: "keyboard",
+          success: true,
+        });
         return;
       }
 
@@ -672,6 +765,11 @@ export function ProofExplorer(props: ProofExplorerProps) {
             depthFromRoot: activeRow.depthFromRoot,
           }),
         );
+        emitUiInteraction({
+          interaction: "tree_keyboard",
+          source: "keyboard",
+          success: true,
+        });
       }
       return;
     }
@@ -697,6 +795,11 @@ export function ProofExplorer(props: ProofExplorerProps) {
         }),
       );
       toggleExpansion(activeRow.node.id);
+      emitUiInteraction({
+        interaction: "tree_keyboard",
+        source: "keyboard",
+        success: true,
+      });
       return;
     }
     setTreeA11yAnnouncement(
@@ -707,6 +810,11 @@ export function ProofExplorer(props: ProofExplorerProps) {
       }),
     );
     await selectLeaf(activeRow.node.id);
+    emitUiInteraction({
+      interaction: "tree_keyboard",
+      source: "keyboard",
+      success: true,
+    });
   }
 
   async function refreshProfiles(): Promise<void> {
@@ -718,6 +826,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
   async function saveCurrentProfile(): Promise<void> {
     setProfileError(null);
     try {
+      const startedAt = Date.now();
       const result = await saveConfigProfile({
         projectId: profileProjectId,
         userId: DEFAULT_PROFILE_USER_ID,
@@ -728,21 +837,44 @@ export function ProofExplorer(props: ProofExplorerProps) {
       setProfileId(result.profile.profileId);
       setProfileName(result.profile.name);
       await refreshProfiles();
+      emitUiInteraction({
+        interaction: "profile_save",
+        source: "mouse",
+        success: true,
+        durationMs: Date.now() - startedAt,
+      });
     } catch (saveError) {
       setProfileError(saveError instanceof Error ? saveError.message : String(saveError));
+      emitUiInteraction({
+        interaction: "profile_save",
+        source: "mouse",
+        success: false,
+      });
     }
   }
 
   async function deleteSelectedProfile(): Promise<void> {
     setProfileError(null);
     try {
+      const startedAt = Date.now();
       const response = await removeConfigProfile(profileProjectId, DEFAULT_PROFILE_USER_ID, profileId);
       if (!response.deleted) {
         setProfileError(`Profile '${profileId}' was not found.`);
       }
       await refreshProfiles();
+      emitUiInteraction({
+        interaction: "profile_delete",
+        source: "mouse",
+        success: response.deleted,
+        durationMs: Date.now() - startedAt,
+      });
     } catch (deleteError) {
       setProfileError(deleteError instanceof Error ? deleteError.message : String(deleteError));
+      emitUiInteraction({
+        interaction: "profile_delete",
+        source: "mouse",
+        success: false,
+      });
     }
   }
 
@@ -754,6 +886,11 @@ export function ProofExplorer(props: ProofExplorerProps) {
     setProfileId(selected.profileId);
     setProfileName(selected.name);
     setConfig(selected.config as ProofConfigInput);
+    emitUiInteraction({
+      interaction: "profile_apply",
+      source: "mouse",
+      success: true,
+    });
   }
 
   if (isLoading) {
@@ -779,7 +916,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
             min={1}
             max={5}
             value={config.abstractionLevel}
-            onChange={(event) => updateConfig("abstractionLevel", Number(event.target.value))}
+            onChange={(event) => updateConfig("abstractionLevel", Number(event.target.value), "mouse")}
           />
         </label>
         <label>
@@ -789,7 +926,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
             min={1}
             max={5}
             value={config.complexityLevel}
-            onChange={(event) => updateConfig("complexityLevel", Number(event.target.value))}
+            onChange={(event) => updateConfig("complexityLevel", Number(event.target.value), "mouse")}
           />
         </label>
         <label>
@@ -799,14 +936,14 @@ export function ProofExplorer(props: ProofExplorerProps) {
             min={2}
             max={12}
             value={config.maxChildrenPerParent}
-            onChange={(event) => updateConfig("maxChildrenPerParent", Number(event.target.value))}
+            onChange={(event) => updateConfig("maxChildrenPerParent", Number(event.target.value), "mouse")}
           />
         </label>
         <label>
           Audience
           <select
             value={config.audienceLevel}
-            onChange={(event) => updateConfig("audienceLevel", event.target.value as "novice" | "intermediate" | "expert")}
+            onChange={(event) => updateConfig("audienceLevel", event.target.value as "novice" | "intermediate" | "expert", "mouse")}
           >
             <option value="novice">Novice</option>
             <option value="intermediate">Intermediate</option>
@@ -821,6 +958,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
               updateConfig(
                 "readingLevelTarget",
                 event.target.value as "elementary" | "middle_school" | "high_school" | "undergraduate" | "graduate",
+                "mouse",
               )
             }
           >
@@ -835,7 +973,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
           Proof detail
           <select
             value={config.proofDetailMode}
-            onChange={(event) => updateConfig("proofDetailMode", event.target.value as "minimal" | "balanced" | "formal")}
+            onChange={(event) => updateConfig("proofDetailMode", event.target.value as "minimal" | "balanced" | "formal", "mouse")}
           >
             <option value="minimal">Minimal</option>
             <option value="balanced">Balanced</option>
@@ -846,7 +984,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
           Entailment mode
           <select
             value={config.entailmentMode}
-            onChange={(event) => updateConfig("entailmentMode", event.target.value as "calibrated" | "strict")}
+            onChange={(event) => updateConfig("entailmentMode", event.target.value as "calibrated" | "strict", "mouse")}
           >
             {ENTAILMENT_MODE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -862,7 +1000,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
             min={0}
             max={3}
             value={config.complexityBandWidth}
-            onChange={(event) => updateConfig("complexityBandWidth", Number(event.target.value))}
+            onChange={(event) => updateConfig("complexityBandWidth", Number(event.target.value), "mouse")}
           />
         </label>
         <label>
@@ -872,14 +1010,14 @@ export function ProofExplorer(props: ProofExplorerProps) {
             min={0}
             max={8}
             value={config.termIntroductionBudget}
-            onChange={(event) => updateConfig("termIntroductionBudget", Number(event.target.value))}
+            onChange={(event) => updateConfig("termIntroductionBudget", Number(event.target.value), "mouse")}
           />
         </label>
         <label>
           Language
           <select
             value={config.language}
-            onChange={(event) => updateConfig("language", event.target.value as "en" | "fr")}
+            onChange={(event) => updateConfig("language", event.target.value as "en" | "fr", "mouse")}
           >
             {LANGUAGE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -1267,7 +1405,14 @@ export function ProofExplorer(props: ProofExplorerProps) {
                 <li key={job.jobId}>
                   <button
                     type="button"
-                    onClick={() => setSelectedVerificationJobId(job.jobId)}
+                    onClick={() => {
+                      setSelectedVerificationJobId(job.jobId);
+                      emitUiInteraction({
+                        interaction: "verification_job_select",
+                        source: "mouse",
+                        success: true,
+                      });
+                    }}
                     aria-pressed={selectedVerificationJobId === job.jobId}
                   >
                     {job.jobId} - {job.status}

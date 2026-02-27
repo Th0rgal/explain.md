@@ -1,6 +1,7 @@
 import { jsonError, jsonSuccess } from "../../../../lib/http-contract";
 import { evaluateObservabilitySLOs, type ObservabilitySloThresholds } from "../../../../lib/observability-slo";
 import { exportProofQueryObservabilityMetrics } from "../../../../lib/proof-service";
+import { exportUiInteractionObservabilityMetrics } from "../../../../lib/ui-interaction-observability";
 import { exportVerificationObservabilityMetrics } from "../../../../lib/verification-service";
 
 export const runtime = "nodejs";
@@ -12,6 +13,7 @@ export async function GET(request: Request) {
     const report = evaluateObservabilitySLOs({
       proof: exportProofQueryObservabilityMetrics(),
       verification: exportVerificationObservabilityMetrics(),
+      uiInteraction: exportUiInteractionObservabilityMetrics(),
       thresholds,
     });
     return jsonSuccess(report);
@@ -31,6 +33,10 @@ function parseThresholds(params: URLSearchParams): Partial<ObservabilitySloThres
     maxVerificationP95LatencyMs: parseOptionalNumber(params, "maxVerificationP95LatencyMs"),
     maxVerificationMeanLatencyMs: parseOptionalNumber(params, "maxVerificationMeanLatencyMs"),
     minVerificationParentTraceRate: parseOptionalNumber(params, "minVerificationParentTraceRate"),
+    minUiInteractionRequestCount: parseOptionalInteger(params, "minUiInteractionRequestCount"),
+    minUiInteractionSuccessRate: parseOptionalNumber(params, "minUiInteractionSuccessRate"),
+    minUiInteractionParentTraceRate: parseOptionalNumber(params, "minUiInteractionParentTraceRate"),
+    maxUiInteractionP95DurationMs: parseOptionalNumber(params, "maxUiInteractionP95DurationMs"),
   };
 }
 
