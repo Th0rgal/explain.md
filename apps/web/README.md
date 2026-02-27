@@ -76,6 +76,11 @@ The tree panel uses incremental root/children/path queries:
   - `abstractionLevel`, `complexityLevel`, `maxChildrenPerParent`
   - `audienceLevel`, `language`, `readingLevelTarget`
   - `complexityBandWidth`, `termIntroductionBudget`, `proofDetailMode`, `entailmentMode`
+- Language resolution is deterministic across API + UI:
+  - supported explanation languages: `en`, `fr`
+  - locale variants fallback by base tag (`fr-ca` -> `fr`)
+  - unsupported tags fallback to `en`
+- Proof Explorer language control is an explicit toggle (`English`, `French`) mapped to the same route-level config contract.
 - Proof Explorer controls expose an explicit `entailmentMode` selector (`calibrated` vs `strict`) and propagate it through root/tree/policy queries.
 - Large trees use deterministic render-window planning to bound DOM row count while preserving root-first ordering.
   - Window diagnostics are surfaced as `data-tree-*` attributes on the tree panel (`mode`, `total`, `rendered`, `hiddenAbove`, `hiddenBelow`).

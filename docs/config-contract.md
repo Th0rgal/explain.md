@@ -21,6 +21,10 @@ This module defines a single typed contract shared by backend and frontend for e
 
 ## Determinism Rules
 - Language and provider are canonicalized to lowercase.
+- Language is resolved through a deterministic locale contract:
+  - supported: `en`, `fr`
+  - locale variants fallback by base tag (`fr-ca` -> `fr`)
+  - unsupported tags fallback to `en`
 - String fields are trimmed.
 - Temperature is rounded to 4 decimals.
 - Config serialization sorts object keys before hashing.
@@ -44,7 +48,7 @@ Unknown-field diffs default to `full` for safety.
 - `complexityBandWidth`: integer 0..3.
 - `termIntroductionBudget`: integer 0..8.
 - `entailmentMode`: `calibrated` or `strict`.
-- `language`: ISO-like tag (`en`, `en-us`).
+- `language`: must resolve to one of `en` or `fr` after deterministic fallback.
 - Audience/readability compatibility gate is enforced.
 - `modelProvider.timeoutMs`: integer `1000..120000`.
 - `modelProvider.maxRetries`: integer `0..8`.

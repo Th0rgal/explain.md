@@ -6,6 +6,7 @@ export * from "./domain-adapters.js";
 export * from "./child-grouping.js";
 export * from "./openai-provider.js";
 export * from "./summary-pipeline.js";
+export * from "./language-contract.js";
 export * from "./tree-builder.js";
 export * from "./leaf-detail.js";
 export * from "./evaluation-harness.js";

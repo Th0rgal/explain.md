@@ -1,4 +1,5 @@
 import type { ExplanationConfigInput } from "../../../src/config-contract";
+import { resolveExplanationLanguage } from "../../../src/language-contract";
 import { normalizeEnum, normalizeInteger, normalizeOptionalInteger, normalizeString } from "./http-contract";
 
 interface RawConfigInput {
@@ -20,7 +21,7 @@ export function normalizeConfigInput(input: RawConfigInput = {}): ExplanationCon
     complexityLevel: normalizeInteger(input.complexityLevel, 3, 1, 5) as 1 | 2 | 3 | 4 | 5,
     maxChildrenPerParent: normalizeInteger(input.maxChildrenPerParent, 3, 2, 12),
     audienceLevel: normalizeEnum(input.audienceLevel, "intermediate", ["novice", "intermediate", "expert"] as const, "audienceLevel"),
-    language: normalizeString(input.language, "en").toLowerCase(),
+    language: resolveExplanationLanguage(normalizeString(input.language, "en")).effective,
     readingLevelTarget: normalizeEnum(
       input.readingLevelTarget,
       "high_school",

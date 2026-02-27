@@ -29,6 +29,7 @@ import {
   type ProviderClient,
   type TheoremLeafRecord,
 } from "../../../dist/index";
+import { resolveExplanationLanguage } from "../../../src/language-contract";
 import {
   buildExplanationDiffReport,
   buildProgressiveDisclosureView,
@@ -4165,11 +4166,12 @@ function createDeterministicSummaryProvider(): ProviderClient {
     generate: async (request) => {
       const prompt = request.messages[1]?.content ?? "";
       const children = parseChildrenFromPrompt(prompt);
+      const language = parsePromptLanguageConstraint(prompt);
       const targetComplexity = parsePromptNumericConstraint(prompt, "target_complexity", 3, 1, 5);
       const targetAbstraction = parsePromptNumericConstraint(prompt, "target_abstraction", 3, 1, 5);
       const evidenceRefs = children.map((child) => child.id);
-      const composed = children.map((child) => child.statement).join(" and ");
-      const parentStatement = composed.length > 0 ? composed : "No child statements provided.";
+      const composed = children.map((child) => child.statement).join(language === "fr" ? " et " : " and ");
+      const parentStatement = composed.length > 0 ? composed : language === "fr" ? "Aucun enonce enfant fourni." : "No child statements provided.";
 
       return {
         text: JSON.stringify({
@@ -4220,6 +4222,12 @@ function parsePromptNumericConstraint(
     return fallback;
   }
   return Math.max(min, Math.min(max, Math.trunc(parsed)));
+}
+
+function parsePromptLanguageConstraint(prompt: string): "en" | "fr" {
+  const match = prompt.match(/language=([^\s]+)/);
+  const requested = match?.[1] ?? "en";
+  return resolveExplanationLanguage(requested).effective;
 }
 
 function assertSeedProof(proofId: string): void {

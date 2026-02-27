@@ -77,6 +77,10 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - `abstractionLevel`, `complexityLevel`, `maxChildrenPerParent`
   - `audienceLevel`, `language`, `readingLevelTarget`
   - `complexityBandWidth`, `termIntroductionBudget`, `proofDetailMode`, `entailmentMode`
+- Language handling is deterministic in route parsing + config normalization:
+  - supported: `en`, `fr`
+  - locale-variant fallback by base tag (`fr-ca` -> `fr`)
+  - unsupported fallback to `en`
 - Proof Explorer control panel exposes `entailmentMode` directly so strict lexical-entailment runs can be triggered and audited from browser routes.
 - Config profiles are persisted/queryable through deterministic API contracts with canonical storage keys, profile `configHash`, and response-level `requestHash` + `ledgerHash`.
 - Lean fixture datasets are persisted under `.explain-md/web-proof-cache` (override with `EXPLAIN_MD_WEB_PROOF_CACHE_DIR`) and invalidated by source fingerprint + config hash.

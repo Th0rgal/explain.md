@@ -91,6 +91,22 @@ describe("proof service", () => {
     expect(() => buildSeedProjection({ proofId: "unknown-proof" })).toThrow(/Unsupported proofId/);
   });
 
+  it("renders seed proof in selected supported language with stable structure", () => {
+    const english = buildSeedRootView(SEED_PROOF_ID, { language: "en" });
+    const french = buildSeedRootView(SEED_PROOF_ID, { language: "fr" });
+
+    expect(english.root.node?.id).toBe(french.root.node?.id);
+    expect(english.root.node?.childIds).toEqual(french.root.node?.childIds);
+    expect(english.root.node?.statement).not.toBe(french.root.node?.statement);
+    expect(french.root.node?.statement).toContain("Cadre");
+  });
+
+  it("falls back unsupported language tags deterministically to english", () => {
+    const fallback = buildSeedRootView(SEED_PROOF_ID, { language: "de" as unknown as "en" });
+    const english = buildSeedRootView(SEED_PROOF_ID, { language: "en" });
+    expect(fallback.root.node?.statement).toBe(english.root.node?.statement);
+  });
+
   it("returns deterministic root/children/path query views", () => {
     clearProofQueryObservabilityMetricsForTests();
     const root = buildSeedRootView(SEED_PROOF_ID, {
@@ -210,6 +226,15 @@ describe("proof service", () => {
     } else {
       expect(path.path.diagnostics.some((diagnostic) => diagnostic.severity === "error")).toBe(true);
     }
+  });
+
+  it("resolves Lean fixture language deterministically with locale fallback", async () => {
+    const frenchRoot = await buildProofRootView(LEAN_FIXTURE_PROOF_ID, { language: "fr" });
+    const fallbackRoot = await buildProofRootView(LEAN_FIXTURE_PROOF_ID, { language: "de" as unknown as "en" });
+    const englishRoot = await buildProofRootView(LEAN_FIXTURE_PROOF_ID, { language: "en" });
+
+    expect(frenchRoot.root.node?.statement).toContain(" et ");
+    expect(fallbackRoot.root.node?.statement).toBe(englishRoot.root.node?.statement);
   });
 
   it("computes diff deterministically for Lean-ingested fixture proof", async () => {

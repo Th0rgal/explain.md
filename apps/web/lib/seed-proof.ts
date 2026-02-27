@@ -5,6 +5,7 @@ import {
   type ExplanationConfig,
   type ExplanationConfigInput,
 } from "../../../dist/config-contract";
+import { type SupportedExplanationLanguage } from "../../../src/language-contract";
 import type { TheoremLeafRecord } from "../../../dist/leaf-schema";
 
 interface SeedTreeNode {
@@ -309,7 +310,17 @@ const BASE_NODES: SeedTree["nodes"] = {
   }
 };
 
-function audiencePrefix(level: ExplanationConfig["audienceLevel"]): string {
+function audiencePrefix(level: ExplanationConfig["audienceLevel"], language: SupportedExplanationLanguage): string {
+  if (language === "fr") {
+    if (level === "novice") {
+      return "Cadre debutant";
+    }
+    if (level === "expert") {
+      return "Cadre expert";
+    }
+    return "Cadre intermediaire";
+  }
+
   if (level === "novice") {
     return "Novice framing";
   }
@@ -319,14 +330,38 @@ function audiencePrefix(level: ExplanationConfig["audienceLevel"]): string {
   return "Intermediate framing";
 }
 
+function renderLocalizedSeedStatement(
+  statementId: "p1_invariant" | "p1_safety" | "p2_root",
+  config: ExplanationConfig,
+  prefix: string,
+): string {
+  if (config.language === "fr") {
+    if (statementId === "p1_invariant") {
+      return `${prefix}: les lemmes d'initialisation et de boucle preservent l'invariant de stockage.`;
+    }
+    if (statementId === "p1_safety") {
+      return `${prefix}: les lemmes de sortie et de composition impliquent une terminaison sure.`;
+    }
+    return `${prefix}: les deux branches prouvent la correction du contrat avec abstraction=${config.abstractionLevel} et complexite=${config.complexityLevel}.`;
+  }
+
+  if (statementId === "p1_invariant") {
+    return `${prefix}: initialization and loop lemmas maintain the storage invariant.`;
+  }
+  if (statementId === "p1_safety") {
+    return `${prefix}: exit and composition lemmas imply safe termination.`;
+  }
+  return `${prefix}: combined branches prove contract soundness with abstraction=${config.abstractionLevel} and complexity=${config.complexityLevel}.`;
+}
+
 export function buildConfiguredSeedTree(input: ExplanationConfigInput = {}): SeedTree {
   const config = normalizeConfig({ ...seedConfig, ...input });
   const nodes = structuredClone(BASE_NODES);
-  const prefix = audiencePrefix(config.audienceLevel);
+  const prefix = audiencePrefix(config.audienceLevel, config.language);
 
-  nodes.p1_invariant.statement = `${prefix}: initialization and loop lemmas maintain the storage invariant.`;
-  nodes.p1_safety.statement = `${prefix}: exit and composition lemmas imply safe termination.`;
-  nodes.p2_root.statement = `${prefix}: combined branches prove contract soundness with abstraction=${config.abstractionLevel} and complexity=${config.complexityLevel}.`;
+  nodes.p1_invariant.statement = renderLocalizedSeedStatement("p1_invariant", config, prefix);
+  nodes.p1_safety.statement = renderLocalizedSeedStatement("p1_safety", config, prefix);
+  nodes.p2_root.statement = renderLocalizedSeedStatement("p2_root", config, prefix);
 
   return {
     rootId: "p2_root",

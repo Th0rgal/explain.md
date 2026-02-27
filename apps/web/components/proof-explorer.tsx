@@ -62,6 +62,10 @@ export const ENTAILMENT_MODE_OPTIONS: Array<{ value: NonNullable<ProofConfigInpu
   { value: "calibrated", label: "Calibrated" },
   { value: "strict", label: "Strict" },
 ];
+export const LANGUAGE_OPTIONS: Array<{ value: "en" | "fr"; label: string }> = [
+  { value: "en", label: "English" },
+  { value: "fr", label: "French" },
+];
 export const TREE_RENDER_SETTINGS = resolveTreeRenderSettings(process.env);
 export const TREE_VIRTUALIZATION_SETTINGS = resolveTreeVirtualizationSettings(process.env);
 export const DIFF_PANEL_SETTINGS = resolveExplanationDiffPanelSettings(process.env);
@@ -873,7 +877,16 @@ export function ProofExplorer(props: ProofExplorerProps) {
         </label>
         <label>
           Language
-          <input type="text" value={config.language} onChange={(event) => updateConfig("language", event.target.value)} />
+          <select
+            value={config.language}
+            onChange={(event) => updateConfig("language", event.target.value as "en" | "fr")}
+          >
+            {LANGUAGE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
           Saved profiles
