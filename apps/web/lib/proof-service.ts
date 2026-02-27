@@ -57,6 +57,16 @@ const LEAN_FIXTURE_SOURCE_BASE_URL =
 const PROOF_DATASET_CACHE_SCHEMA_VERSION = "1.0.0";
 const DEFAULT_PROOF_DATASET_CACHE_DIR = path.resolve(process.cwd(), ".explain-md", "web-proof-cache");
 const PROOF_QUERY_OBSERVABILITY_SAMPLE_WINDOW = 1024;
+const PROOF_QUERY_LATENCY_BUCKETS = [
+  { bucket: "lte_5ms", maxInclusiveMs: 5 },
+  { bucket: "lte_10ms", maxInclusiveMs: 10 },
+  { bucket: "lte_25ms", maxInclusiveMs: 25 },
+  { bucket: "lte_50ms", maxInclusiveMs: 50 },
+  { bucket: "gt_50ms", maxInclusiveMs: null },
+] as const satisfies ReadonlyArray<{
+  bucket: ProofQueryLatencyHistogramBucket["bucket"];
+  maxInclusiveMs: number | null;
+}>;
 let proofNowMs: () => number = () => Date.now();
 
 const SUPPORTED_PROOF_IDS = [SEED_PROOF_ID, LEAN_FIXTURE_PROOF_ID] as const;
@@ -320,6 +330,7 @@ export interface ProofQueryObservabilityMetricsSnapshot {
     missCount: number;
     hitRate: number;
   };
+  latencyHistogram: ProofQueryLatencyHistogramBucket[];
   queries: Array<{
     query: ProofObservabilityQuery;
     requestCount: number;
@@ -329,6 +340,7 @@ export interface ProofQueryObservabilityMetricsSnapshot {
     maxLatencyMs: number;
     meanLatencyMs: number;
     p95LatencyMs: number;
+    latencyHistogram: ProofQueryLatencyHistogramBucket[];
     meanLeafCount: number;
     meanParentCount: number;
     meanNodeCount: number;
@@ -336,6 +348,12 @@ export interface ProofQueryObservabilityMetricsSnapshot {
   }>;
   generatedAt: string;
   snapshotHash: string;
+}
+
+export interface ProofQueryLatencyHistogramBucket {
+  bucket: "lte_5ms" | "lte_10ms" | "lte_25ms" | "lte_50ms" | "gt_50ms";
+  maxInclusiveMs: number | null;
+  count: number;
 }
 
 export function getSupportedProofIds(): string[] {
@@ -4419,6 +4437,7 @@ export function exportProofQueryObservabilityMetrics(options: { generatedAt?: st
   const uniqueTraceCount = new Set(proofQueryObservabilityEvents.map((event) => event.traceId)).size;
   const hitCount = proofQueryObservabilityEvents.filter((event) => event.cacheStatus === "hit").length;
   const missCount = requestCount - hitCount;
+  const latencyHistogram = buildProofLatencyHistogram(proofQueryObservabilityEvents.map((event) => event.latencyMs));
   const queryOrder: ProofObservabilityQuery[] = [
     "view",
     "diff",
@@ -4453,6 +4472,7 @@ export function exportProofQueryObservabilityMetrics(options: { generatedAt?: st
       maxLatencyMs,
       meanLatencyMs,
       p95LatencyMs,
+      latencyHistogram: buildProofLatencyHistogram(latencies),
       meanLeafCount,
       meanParentCount,
       meanNodeCount,
@@ -4470,6 +4490,7 @@ export function exportProofQueryObservabilityMetrics(options: { generatedAt?: st
       missCount,
       hitRate: requestCount === 0 ? 0 : hitCount / requestCount,
     },
+    latencyHistogram,
     queries,
     generatedAt,
   };
@@ -4516,6 +4537,22 @@ function stableReplacer(_key: string, value: unknown): unknown {
       accumulator[key] = record[key];
       return accumulator;
     }, {});
+}
+
+function buildProofLatencyHistogram(latencies: number[]): ProofQueryLatencyHistogramBucket[] {
+  const buckets = PROOF_QUERY_LATENCY_BUCKETS.map((definition) => ({
+    bucket: definition.bucket,
+    maxInclusiveMs: definition.maxInclusiveMs,
+    count: 0,
+  }));
+  for (const rawLatency of latencies) {
+    const latencyMs = normalizeLatencyMs(rawLatency);
+    const bucket = buckets.find((entry) => entry.maxInclusiveMs === null || latencyMs <= entry.maxInclusiveMs);
+    if (bucket) {
+      bucket.count += 1;
+    }
+  }
+  return buckets;
 }
 
 function sum(values: number[]): number {

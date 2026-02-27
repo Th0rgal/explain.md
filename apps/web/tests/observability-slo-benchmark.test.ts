@@ -16,6 +16,7 @@ describe("observability SLO benchmark", () => {
     expect(report.snapshots.proof.requestCount).toBe(18);
     expect(report.snapshots.proof.uniqueRequestCount).toBe(18);
     expect(report.snapshots.proof.uniqueTraceCount).toBe(18);
+    expect(report.snapshots.proof.latencyHistogramHash).toHaveLength(64);
     expect(report.snapshots.verification.requestCount).toBe(6);
     expect(report.snapshots.verification.failureCount).toBe(0);
     expect(report.snapshots.verification.parentTraceProvidedRate).toBeCloseTo(2 / 3, 5);

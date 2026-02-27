@@ -2,7 +2,7 @@
   "schemaVersion": "1.0.0",
   "generatedAt": "2026-02-27T00:00:00.000Z",
   "requestHash": "fdcfee39686f91db5fd4fb51a666fdd7531e8239f9e2e7d93aa94a88d9c3f656",
-  "outcomeHash": "a26e9cc73af1b2714f4c4f4625d5380eb2d34d5ed6f444e9f9bf5dbd711559a2",
+  "outcomeHash": "fb223b8a93ddb72c38697f01dfa7a1a13cfb9a72dd4ce2c1b74ee3c8576b6dd8",
   "parameters": {
     "profiles": [
       {
@@ -88,16 +88,17 @@
       "leafId": "Verity.ContractSpec.init_sound",
       "configHash": "a75632c3c71bea58a13445a49951b87763ebd9e868fb4f51ac128e6c783e8af7",
       "requestHash": "fdf81f2d8ac9af3ccaece6aa28c1ebd4e728d234d585cab166b1ff2250f788b2",
-      "outcomeHash": "8c25fb156165f238d073feb92328b4a71200771660b378b69fafb851124ae1c5",
+      "outcomeHash": "9642469594db137e72860fc30eea8578caf8fc861489b65db8828bc4f8d490b2",
       "snapshots": {
         "proof": {
-          "snapshotHash": "e66c594da30daf7eed1a29aad7a9a162fe3e2f1aa87f156a1ce4cac319114469",
+          "snapshotHash": "3b2c28f074663720f1f1e8747797612df373e219e5219ce96f17b167fcfa63f2",
           "requestCount": 9,
           "uniqueRequestCount": 9,
           "uniqueTraceCount": 9,
           "cacheHitRate": 0,
           "maxP95LatencyMs": 7,
-          "maxMeanLatencyMs": 7
+          "maxMeanLatencyMs": 7,
+          "latencyHistogramHash": "312e581f03c90a48ee16a4907e77d399567f843137c86e7b763e1ac45a7354b5"
         },
         "verification": {
           "snapshotHash": "0af26ffbc50e5f2ea8c10745e5ce4bc931529a266a1057bd866f250da2559e61",
@@ -120,7 +121,7 @@
         "baseline": {
           "thresholdPass": true,
           "thresholdFailureCodes": [],
-          "reportSnapshotHash": "a4cfa8a4c9313f373ecb83e7a527078aaf00daeef2d49a124a4a12bf51d57345"
+          "reportSnapshotHash": "e2a0e6d9b441b47f412df22ab14f2d89286e31d02d68aa00a254f3bfe5af81e7"
         },
         "strictRegression": {
           "thresholdPass": false,
@@ -138,7 +139,7 @@
             "ui_interaction_parent_trace_rate_below_min",
             "ui_interaction_p95_duration_above_max"
           ],
-          "reportSnapshotHash": "4cdadf6aefae53915d7d561931d4df7d7ecb74d397ec5fd1b5fc50b02d388788"
+          "reportSnapshotHash": "b0c0c6bb0c2a4531a1edc012495744da8de7bfa8ce9bf4fa5e5f6f2b8760130e"
         }
       }
     },
@@ -148,16 +149,17 @@
       "leafId": "lean:Verity/Loop:loop_preserves:3:1",
       "configHash": "a75632c3c71bea58a13445a49951b87763ebd9e868fb4f51ac128e6c783e8af7",
       "requestHash": "9f5fb12b65d03e42bc8d51991b8af90882b201a6cf3c79fc2f09646e43ba56f4",
-      "outcomeHash": "2c9a683f3e53be30cc10662a84d006abc5e07c9339595abbcd6d5918ed12d0f5",
+      "outcomeHash": "d3f5f34d27d79f345f443ce6eac1bbd73a1cc45ffd4be135077fb6746cae02b0",
       "snapshots": {
         "proof": {
-          "snapshotHash": "337ea68664eaaf322e6d31530ac3376a8e6d85982d1aab100df03e4e78ebefc0",
+          "snapshotHash": "abce5a568ffbe95dd5f5fff9249c40f7bdb9ab4e6c6b69f73d4faeeecd4dbe44",
           "requestCount": 9,
           "uniqueRequestCount": 9,
           "uniqueTraceCount": 9,
           "cacheHitRate": 1,
           "maxP95LatencyMs": 7,
-          "maxMeanLatencyMs": 7
+          "maxMeanLatencyMs": 7,
+          "latencyHistogramHash": "312e581f03c90a48ee16a4907e77d399567f843137c86e7b763e1ac45a7354b5"
         },
         "verification": {
           "snapshotHash": "0af26ffbc50e5f2ea8c10745e5ce4bc931529a266a1057bd866f250da2559e61",
@@ -180,7 +182,7 @@
         "baseline": {
           "thresholdPass": true,
           "thresholdFailureCodes": [],
-          "reportSnapshotHash": "17b68f7e8273f78f61b284eba36907a9a25168e0cfc59a74ba9b8e109396ae95"
+          "reportSnapshotHash": "3d8e77c0421507b804c655fd5f2296383e51a9a6ecb75c4847ba9652f951c8a9"
         },
         "strictRegression": {
           "thresholdPass": false,
@@ -197,20 +199,21 @@
             "ui_interaction_parent_trace_rate_below_min",
             "ui_interaction_p95_duration_above_max"
           ],
-          "reportSnapshotHash": "bfd1e494653252c1d3c86a225a219c617cdd462d4accba5d8f79aace0a732d58"
+          "reportSnapshotHash": "4a97dfc1c94fc4ec1b2cd6b6249ff42f3444bbf4a222b1a2546b0ad69f59fead"
         }
       }
     }
   ],
   "snapshots": {
     "proof": {
-      "snapshotHash": "1ed1c377679461a9a88f959f352f0ffe5fc2aaae543abeffafa453f835886c02",
+      "snapshotHash": "106194c61c458dbc56347f89ca82ea2c0cdb240f099c82ce286715e80e17dc89",
       "requestCount": 18,
       "uniqueRequestCount": 18,
       "uniqueTraceCount": 18,
       "cacheHitRate": 0.5,
       "maxP95LatencyMs": 7,
-      "maxMeanLatencyMs": 7
+      "maxMeanLatencyMs": 7,
+      "latencyHistogramHash": "02a65ccfead3d88b13b0c9dc34668040979307a9972e87e121603e1d9e31700e"
     },
     "verification": {
       "snapshotHash": "723fe8856a8dd9cf0a8c989f50ff85defb863a19130c49e590fb2fc96147b136",
@@ -233,7 +236,7 @@
     "baseline": {
       "thresholdPass": true,
       "thresholdFailureCodes": [],
-      "reportSnapshotHash": "8cd96b84022f864e0234ea304130220d5ffc641b73e2255505e50b603ef6bc1b"
+      "reportSnapshotHash": "049c1192586b8d43a6bde2069b15f65cd98d49f1df8954c6970b85056bc028fd"
     },
     "strictRegression": {
       "thresholdPass": false,
@@ -262,7 +265,7 @@
         "seed-verity:verification_parent_trace_rate_below_min",
         "seed-verity:verification_request_count_below_min"
       ],
-      "reportSnapshotHash": "39b8648d60510d7cc2bf2f979e423d4479c01de6a9c85540891c8a74138a2a3f"
+      "reportSnapshotHash": "2a86a05365a0ba3181d9a9873dfebad293c505399acb2ee4eb7b23762d5d00d9"
     },
     "byProfile": [
       {
@@ -270,7 +273,7 @@
         "baseline": {
           "thresholdPass": true,
           "thresholdFailureCodes": [],
-          "reportSnapshotHash": "a4cfa8a4c9313f373ecb83e7a527078aaf00daeef2d49a124a4a12bf51d57345"
+          "reportSnapshotHash": "e2a0e6d9b441b47f412df22ab14f2d89286e31d02d68aa00a254f3bfe5af81e7"
         },
         "strictRegression": {
           "thresholdPass": false,
@@ -288,7 +291,7 @@
             "ui_interaction_parent_trace_rate_below_min",
             "ui_interaction_p95_duration_above_max"
           ],
-          "reportSnapshotHash": "4cdadf6aefae53915d7d561931d4df7d7ecb74d397ec5fd1b5fc50b02d388788"
+          "reportSnapshotHash": "b0c0c6bb0c2a4531a1edc012495744da8de7bfa8ce9bf4fa5e5f6f2b8760130e"
         }
       },
       {
@@ -296,7 +299,7 @@
         "baseline": {
           "thresholdPass": true,
           "thresholdFailureCodes": [],
-          "reportSnapshotHash": "17b68f7e8273f78f61b284eba36907a9a25168e0cfc59a74ba9b8e109396ae95"
+          "reportSnapshotHash": "3d8e77c0421507b804c655fd5f2296383e51a9a6ecb75c4847ba9652f951c8a9"
         },
         "strictRegression": {
           "thresholdPass": false,
@@ -313,7 +316,7 @@
             "ui_interaction_parent_trace_rate_below_min",
             "ui_interaction_p95_duration_above_max"
           ],
-          "reportSnapshotHash": "bfd1e494653252c1d3c86a225a219c617cdd462d4accba5d8f79aace0a732d58"
+          "reportSnapshotHash": "4a97dfc1c94fc4ec1b2cd6b6249ff42f3444bbf4a222b1a2546b0ad69f59fead"
         }
       }
     ]

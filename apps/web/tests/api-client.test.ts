@@ -400,6 +400,13 @@ describe("api client", () => {
             missCount: 3,
             hitRate: 0.25,
           },
+          latencyHistogram: [
+            { bucket: "lte_5ms", maxInclusiveMs: 5, count: 3 },
+            { bucket: "lte_10ms", maxInclusiveMs: 10, count: 1 },
+            { bucket: "lte_25ms", maxInclusiveMs: 25, count: 0 },
+            { bucket: "lte_50ms", maxInclusiveMs: 50, count: 0 },
+            { bucket: "gt_50ms", maxInclusiveMs: null, count: 0 },
+          ],
           queries: [],
           generatedAt: "2026-02-27T00:00:00.000Z",
           snapshotHash: "e".repeat(64),

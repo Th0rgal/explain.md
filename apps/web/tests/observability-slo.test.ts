@@ -93,6 +93,13 @@ describe("observability SLO policy", () => {
 });
 
 function buildProofSnapshot(): ProofQueryObservabilityMetricsSnapshot {
+  const emptyHistogram = createProofLatencyHistogram({
+    lte5: 0,
+    lte10: 0,
+    lte25: 0,
+    lte50: 0,
+    gt50: 0,
+  });
   return {
     schemaVersion: "1.0.0",
     requestCount: 4,
@@ -103,6 +110,13 @@ function buildProofSnapshot(): ProofQueryObservabilityMetricsSnapshot {
       missCount: 2,
       hitRate: 0.5,
     },
+    latencyHistogram: createProofLatencyHistogram({
+      lte5: 0,
+      lte10: 0,
+      lte25: 1,
+      lte50: 1,
+      gt50: 2,
+    }),
     queries: [
       {
         query: "view",
@@ -113,6 +127,13 @@ function buildProofSnapshot(): ProofQueryObservabilityMetricsSnapshot {
         maxLatencyMs: 80,
         meanLatencyMs: 50,
         p95LatencyMs: 80,
+        latencyHistogram: createProofLatencyHistogram({
+          lte5: 0,
+          lte10: 0,
+          lte25: 1,
+          lte50: 0,
+          gt50: 1,
+        }),
         meanLeafCount: 8,
         meanParentCount: 4,
         meanNodeCount: 12,
@@ -127,6 +148,13 @@ function buildProofSnapshot(): ProofQueryObservabilityMetricsSnapshot {
         maxLatencyMs: 100,
         meanLatencyMs: 70,
         p95LatencyMs: 100,
+        latencyHistogram: createProofLatencyHistogram({
+          lte5: 0,
+          lte10: 0,
+          lte25: 0,
+          lte50: 1,
+          gt50: 1,
+        }),
         meanLeafCount: 8,
         meanParentCount: 4,
         meanNodeCount: 12,
@@ -141,6 +169,7 @@ function buildProofSnapshot(): ProofQueryObservabilityMetricsSnapshot {
         maxLatencyMs: 0,
         meanLatencyMs: 0,
         p95LatencyMs: 0,
+        latencyHistogram: emptyHistogram,
         meanLeafCount: 0,
         meanParentCount: 0,
         meanNodeCount: 0,
@@ -155,6 +184,7 @@ function buildProofSnapshot(): ProofQueryObservabilityMetricsSnapshot {
         maxLatencyMs: 0,
         meanLatencyMs: 0,
         p95LatencyMs: 0,
+        latencyHistogram: emptyHistogram,
         meanLeafCount: 0,
         meanParentCount: 0,
         meanNodeCount: 0,
@@ -169,6 +199,7 @@ function buildProofSnapshot(): ProofQueryObservabilityMetricsSnapshot {
         maxLatencyMs: 0,
         meanLatencyMs: 0,
         p95LatencyMs: 0,
+        latencyHistogram: emptyHistogram,
         meanLeafCount: 0,
         meanParentCount: 0,
         meanNodeCount: 0,
@@ -183,6 +214,7 @@ function buildProofSnapshot(): ProofQueryObservabilityMetricsSnapshot {
         maxLatencyMs: 0,
         meanLatencyMs: 0,
         p95LatencyMs: 0,
+        latencyHistogram: emptyHistogram,
         meanLeafCount: 0,
         meanParentCount: 0,
         meanNodeCount: 0,
@@ -197,6 +229,7 @@ function buildProofSnapshot(): ProofQueryObservabilityMetricsSnapshot {
         maxLatencyMs: 0,
         meanLatencyMs: 0,
         p95LatencyMs: 0,
+        latencyHistogram: emptyHistogram,
         meanLeafCount: 0,
         meanParentCount: 0,
         meanNodeCount: 0,
@@ -211,6 +244,7 @@ function buildProofSnapshot(): ProofQueryObservabilityMetricsSnapshot {
         maxLatencyMs: 0,
         meanLatencyMs: 0,
         p95LatencyMs: 0,
+        latencyHistogram: emptyHistogram,
         meanLeafCount: 0,
         meanParentCount: 0,
         meanNodeCount: 0,
@@ -225,6 +259,7 @@ function buildProofSnapshot(): ProofQueryObservabilityMetricsSnapshot {
         maxLatencyMs: 0,
         meanLatencyMs: 0,
         p95LatencyMs: 0,
+        latencyHistogram: emptyHistogram,
         meanLeafCount: 0,
         meanParentCount: 0,
         meanNodeCount: 0,
@@ -367,4 +402,20 @@ function buildUiInteractionSnapshot(): UiInteractionObservabilityMetricsSnapshot
     generatedAt: "2026-02-27T00:00:00.000Z",
     snapshotHash: "c".repeat(64),
   };
+}
+
+function createProofLatencyHistogram(counts: {
+  lte5: number;
+  lte10: number;
+  lte25: number;
+  lte50: number;
+  gt50: number;
+}) {
+  return [
+    { bucket: "lte_5ms" as const, maxInclusiveMs: 5, count: counts.lte5 },
+    { bucket: "lte_10ms" as const, maxInclusiveMs: 10, count: counts.lte10 },
+    { bucket: "lte_25ms" as const, maxInclusiveMs: 25, count: counts.lte25 },
+    { bucket: "lte_50ms" as const, maxInclusiveMs: 50, count: counts.lte50 },
+    { bucket: "gt_50ms" as const, maxInclusiveMs: null, count: counts.gt50 },
+  ];
 }

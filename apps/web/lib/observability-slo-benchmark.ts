@@ -101,6 +101,7 @@ export interface ObservabilitySloBenchmarkReport {
       cacheHitRate: number;
       maxP95LatencyMs: number;
       maxMeanLatencyMs: number;
+      latencyHistogramHash: string;
     };
     verification: {
       snapshotHash: string;
@@ -152,6 +153,7 @@ interface BenchmarkProfileReport {
       cacheHitRate: number;
       maxP95LatencyMs: number;
       maxMeanLatencyMs: number;
+      latencyHistogramHash: string;
     };
     verification: {
       snapshotHash: string;
@@ -261,6 +263,7 @@ export async function runObservabilitySloBenchmark(
       profileReports.length === 0 ? 0 : Math.max(...profileReports.map((profile) => profile.snapshots.proof.maxP95LatencyMs)),
     maxMeanLatencyMs:
       profileReports.length === 0 ? 0 : Math.max(...profileReports.map((profile) => profile.snapshots.proof.maxMeanLatencyMs)),
+    latencyHistogramHash: computeHash(profileReports.map((profile) => profile.snapshots.proof.latencyHistogramHash)),
   };
   const aggregateVerification = {
     snapshotHash: computeHash(profileReports.map((profile) => profile.snapshots.verification.snapshotHash)),
@@ -528,6 +531,7 @@ async function runBenchmarkProfile(options: {
           cacheHitRate: proofMetrics.cache.hitRate,
           maxP95LatencyMs: Math.max(...proofMetrics.queries.map((query) => query.p95LatencyMs), 0),
           maxMeanLatencyMs: Math.max(...proofMetrics.queries.map((query) => query.meanLatencyMs), 0),
+          latencyHistogramHash: computeHash(proofMetrics.latencyHistogram),
         },
         verification: {
           snapshotHash: verificationMetrics.snapshotHash,

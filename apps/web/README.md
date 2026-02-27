@@ -55,7 +55,7 @@ The tree panel uses incremental root/children/path queries:
   - dashboard-ready metrics (`latencyMs`, `cacheLayer`, `cacheStatus`, `leafCount`, `parentCount`, `nodeCount`, `maxDepth`)
 - Core proof-query dashboard export endpoint:
   - `GET /api/observability/proof-query-metrics`
-  - deterministic rolling-window aggregates (`requestCount`, unique request/trace counts, cache hit rate, per-query latency stats + mean tree sizes) + `snapshotHash`
+  - deterministic rolling-window aggregates (`requestCount`, unique request/trace counts, cache hit rate, global+per-query latency histograms with fixed buckets `<=5ms`, `<=10ms`, `<=25ms`, `<=50ms`, `>50ms`, per-query latency stats + mean tree sizes) + `snapshotHash`
 - UI interaction observability endpoint contracts:
   - `POST /api/observability/ui-interactions`
     - accepted `interaction` values: `config_update`, `tree_expand_toggle`, `tree_load_more`, `tree_select_leaf`, `tree_keyboard`, `verification_run`, `verification_job_select`, `profile_save`, `profile_delete`, `profile_apply`

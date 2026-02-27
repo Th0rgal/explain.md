@@ -73,7 +73,7 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - metrics: `latencyMs`, `cacheLayer`, `cacheStatus`, `leafCount`, `parentCount`, `nodeCount`, `maxDepth`
 - Core proof-query observability now has a deterministic aggregate export contract:
   - `GET /api/observability/proof-query-metrics`
-  - rolling-window request/correlation/cache aggregates with per-query latency stats + mean tree sizes and canonical `snapshotHash`
+  - rolling-window request/correlation/cache aggregates with global+per-query latency histograms (fixed buckets: `<=5ms`, `<=10ms`, `<=25ms`, `<=50ms`, `>50ms`), per-query latency stats + mean tree sizes, and canonical `snapshotHash`
 - Leaf detail panel is backed by provenance path plus persisted verification history.
 - Node/root/path query routes use canonical tree-storage snapshots, enabling stable root/children/ancestry reads for progressive expansion UIs.
 - Dependency graph route exposes deterministic SCC/reachability data and per-declaration support closures for browser-side provenance checks.

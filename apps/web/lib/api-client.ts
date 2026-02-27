@@ -118,6 +118,11 @@ export interface ProofQueryObservabilityMetricsResponse {
     missCount: number;
     hitRate: number;
   };
+  latencyHistogram: Array<{
+    bucket: "lte_5ms" | "lte_10ms" | "lte_25ms" | "lte_50ms" | "gt_50ms";
+    maxInclusiveMs: number | null;
+    count: number;
+  }>;
   queries: Array<{
     query: "view" | "diff" | "leaf-detail" | "root" | "children" | "path" | "dependency-graph" | "policy-report" | "cache-report";
     requestCount: number;
@@ -127,6 +132,11 @@ export interface ProofQueryObservabilityMetricsResponse {
     maxLatencyMs: number;
     meanLatencyMs: number;
     p95LatencyMs: number;
+    latencyHistogram: Array<{
+      bucket: "lte_5ms" | "lte_10ms" | "lte_25ms" | "lte_50ms" | "gt_50ms";
+      maxInclusiveMs: number | null;
+      count: number;
+    }>;
     meanLeafCount: number;
     meanParentCount: number;
     meanNodeCount: number;

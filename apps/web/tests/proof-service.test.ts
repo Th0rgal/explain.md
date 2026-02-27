@@ -18,10 +18,12 @@ import {
   buildSeedRootView,
   clearProofQueryObservabilityMetricsForTests,
   clearProofDatasetCacheForTests,
+  configureProofQueryObservabilityClockForTests,
   exportProofQueryObservabilityMetrics,
   LEAN_FIXTURE_PROOF_ID,
   listProofs,
   listSeedProofs,
+  resetProofQueryObservabilityClockForTests,
   SEED_PROOF_ID,
 } from "../lib/proof-service";
 
@@ -182,14 +184,54 @@ describe("proof service", () => {
     expect(first.cache.hitCount).toBe(0);
     expect(first.cache.missCount).toBe(3);
     expect(first.cache.hitRate).toBe(0);
+    expect(first.latencyHistogram).toHaveLength(5);
+    expect(first.latencyHistogram.reduce((sum, bucket) => sum + bucket.count, 0)).toBe(first.requestCount);
     expect(first.queries.find((entry) => entry.query === "view")?.requestCount).toBe(1);
     expect(first.queries.find((entry) => entry.query === "view")?.p95LatencyMs).toBeGreaterThanOrEqual(0);
+    expect(first.queries.find((entry) => entry.query === "view")?.latencyHistogram.reduce((sum, bucket) => sum + bucket.count, 0)).toBe(
+      1,
+    );
     expect(first.queries.find((entry) => entry.query === "root")?.requestCount).toBe(1);
     expect(first.queries.find((entry) => entry.query === "children")?.requestCount).toBe(1);
     expect(first.queries.find((entry) => entry.query === "diff")?.requestCount).toBe(0);
     expect(first.snapshotHash).toHaveLength(64);
     expect(second.snapshotHash).toHaveLength(64);
     expect(deterministicFirst.snapshotHash).toBe(deterministicSecond.snapshotHash);
+  });
+
+  it("exports deterministic proof latency histogram buckets", () => {
+    clearProofQueryObservabilityMetricsForTests();
+    const nowMs = [1000, 1001, 1010, 1017, 1020, 1080];
+    let index = 0;
+    configureProofQueryObservabilityClockForTests(() => {
+      const value = nowMs[index];
+      index += 1;
+      return value ?? (nowMs[nowMs.length - 1] ?? 0);
+    });
+
+    try {
+      buildSeedProjection({ proofId: SEED_PROOF_ID });
+      buildSeedRootView(SEED_PROOF_ID);
+      buildSeedNodeChildrenView({
+        proofId: SEED_PROOF_ID,
+        nodeId: "p2_root",
+        limit: 1,
+        offset: 0,
+      });
+    } finally {
+      resetProofQueryObservabilityClockForTests();
+    }
+
+    const snapshot = exportProofQueryObservabilityMetrics({
+      generatedAt: "2026-02-27T00:00:00.000Z",
+    });
+    expect(snapshot.latencyHistogram).toEqual([
+      { bucket: "lte_5ms", maxInclusiveMs: 5, count: 1 },
+      { bucket: "lte_10ms", maxInclusiveMs: 10, count: 1 },
+      { bucket: "lte_25ms", maxInclusiveMs: 25, count: 0 },
+      { bucket: "lte_50ms", maxInclusiveMs: 50, count: 0 },
+      { bucket: "gt_50ms", maxInclusiveMs: null, count: 1 },
+    ]);
   });
 
   it("lists both seed and Lean fixture proofs in catalog", async () => {
