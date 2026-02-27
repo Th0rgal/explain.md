@@ -15,7 +15,12 @@
     "eval:tree-pipeline": "npm run -s build && node scripts/eval-tree-pipeline.mjs",
     "eval:leaf-detail": "npm run -s build && node scripts/eval-leaf-detail.mjs",
     "eval:quality": "npm run -s build && node scripts/eval-quality-harness.mjs",
-    "serve:verification": "npm run -s build && node scripts/verification-server.mjs"
+    "serve:verification": "npm run -s build && node scripts/verification-server.mjs",
+    "web:dev": "npm --prefix apps/web run dev",
+    "web:build": "npm --prefix apps/web run build",
+    "web:lint": "npm --prefix apps/web run lint",
+    "web:typecheck": "npm --prefix apps/web run typecheck",
+    "web:test": "npm --prefix apps/web run test"
   },
   "devDependencies": {
     "@types/node": "^24.4.0",

@@ -1,7 +1,4 @@
+.next/
 node_modules/
-dist/
 coverage/
-*.log
 *.tsbuildinfo
-tests/*.js
-tests/*.d.ts
