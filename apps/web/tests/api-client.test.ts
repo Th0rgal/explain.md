@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  fetchDependencyGraph,
   fetchLeafVerificationJobs,
   fetchNodeChildren,
   fetchNodePath,
@@ -196,6 +197,52 @@ describe("api client", () => {
       "/api/proofs/leaves/leaf%20id/verification-jobs?proofId=seed-verity",
     );
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain("/api/verification/jobs/job%20id");
+  });
+
+  it("encodes dependency graph query contract deterministically", async () => {
+    const fetchMock = vi.fn(async (_input: string) =>
+      buildMockResponse({
+        ok: true,
+        data: {
+          proofId: "lean-verity-fixture",
+          configHash: "a".repeat(64),
+          requestHash: "b".repeat(64),
+          dependencyGraphHash: "c".repeat(64),
+          graph: {
+            schemaVersion: "1.0.0",
+            nodeCount: 5,
+            edgeCount: 3,
+            indexedNodeCount: 5,
+            externalNodeCount: 0,
+            missingDependencyRefs: [],
+            sccCount: 5,
+            cyclicSccCount: 0,
+            cyclicSccs: [],
+          },
+          diagnostics: [],
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchDependencyGraph(
+      "lean-verity-fixture",
+      { abstractionLevel: 2, complexityLevel: 4, maxChildrenPerParent: 3 },
+      {
+        declarationId: "lean:Verity/Loop:loop_preserves:3:1",
+        includeExternalSupport: false,
+      },
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const requestUrl = String(fetchMock.mock.calls[0]?.[0]);
+    expect(requestUrl).toContain("/api/proofs/dependency-graph?");
+    expect(requestUrl).toContain("proofId=lean-verity-fixture");
+    expect(requestUrl).toContain("abstractionLevel=2");
+    expect(requestUrl).toContain("complexityLevel=4");
+    expect(requestUrl).toContain("maxChildrenPerParent=3");
+    expect(requestUrl).toContain("declarationId=lean%3AVerity%2FLoop%3Aloop_preserves%3A3%3A1");
+    expect(requestUrl).toContain("includeExternalSupport=false");
   });
 });
 

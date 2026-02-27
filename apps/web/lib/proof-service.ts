@@ -6,11 +6,15 @@ import {
   buildDeclarationDependencyGraph,
   computeDependencyGraphHash,
   computeLeanIngestionHash,
+  getDirectDependencies,
+  getDirectDependents,
+  getSupportingDeclarations,
   ingestLeanSources,
   mapLeanIngestionToTheoremLeaves,
   mapTheoremLeavesToTreeLeaves,
   normalizeConfig,
   validateExplanationTree,
+  type DependencyGraph,
   type ExplanationTree,
   type ExplanationConfig,
   type ExplanationConfigInput,
@@ -60,6 +64,8 @@ interface ProofDataset {
   configHash: string;
   tree: ExplanationTree;
   leaves: TheoremLeafRecord[];
+  dependencyGraph: DependencyGraph;
+  dependencyGraphHash: string;
 }
 
 interface ResolvedDataset {
@@ -101,6 +107,13 @@ export interface NodePathRequest {
   config?: ExplanationConfigInput;
 }
 
+export interface DependencyGraphRequest {
+  proofId: string;
+  declarationId?: string;
+  config?: ExplanationConfigInput;
+  includeExternalSupport?: boolean;
+}
+
 export interface ProofCatalogEntry {
   proofId: string;
   title: string;
@@ -109,6 +122,40 @@ export interface ProofCatalogEntry {
   rootId: string;
   leafCount: number;
   maxDepth: number;
+}
+
+export interface DependencyGraphQueryDiagnostic {
+  code: "declaration_not_found";
+  severity: "error";
+  message: string;
+  details: Record<string, unknown>;
+}
+
+export interface DependencyGraphView {
+  proofId: string;
+  configHash: string;
+  requestHash: string;
+  dependencyGraphHash: string;
+  graph: {
+    schemaVersion: string;
+    nodeCount: number;
+    edgeCount: number;
+    indexedNodeCount: number;
+    externalNodeCount: number;
+    missingDependencyRefs: Array<{ declarationId: string; dependencyId: string }>;
+    sccCount: number;
+    cyclicSccCount: number;
+    cyclicSccs: string[][];
+  };
+  declaration?: {
+    declarationId: string;
+    directDependencies: string[];
+    directDependents: string[];
+    supportingDeclarations: string[];
+    stronglyConnectedComponent: string[];
+    inCycle: boolean;
+  };
+  diagnostics: DependencyGraphQueryDiagnostic[];
 }
 
 export function getSupportedProofIds(): string[] {
@@ -439,6 +486,65 @@ export async function buildProofNodePathView(request: NodePathRequest) {
   };
 }
 
+export async function buildProofDependencyGraphView(request: DependencyGraphRequest): Promise<DependencyGraphView> {
+  const { dataset } = await loadProofDataset(request.proofId, request.config);
+  const declarationId = normalizeOptionalDeclarationId(request.declarationId);
+  const includeExternalSupport = request.includeExternalSupport ?? true;
+  const diagnostics: DependencyGraphQueryDiagnostic[] = [];
+
+  let declaration: DependencyGraphView["declaration"];
+  if (declarationId) {
+    const node = dataset.dependencyGraph.nodes[declarationId];
+    if (!node) {
+      diagnostics.push({
+        code: "declaration_not_found",
+        severity: "error",
+        message: `Declaration '${declarationId}' is not present in dependency graph.`,
+        details: { declarationId },
+      });
+    } else {
+      const stronglyConnectedComponent =
+        dataset.dependencyGraph.sccs.find((component) => component.includes(declarationId))?.slice() ?? [declarationId];
+      declaration = {
+        declarationId,
+        directDependencies: getDirectDependencies(dataset.dependencyGraph, declarationId),
+        directDependents: getDirectDependents(dataset.dependencyGraph, declarationId),
+        supportingDeclarations: getSupportingDeclarations(dataset.dependencyGraph, declarationId, {
+          includeExternal: includeExternalSupport,
+        }),
+        stronglyConnectedComponent,
+        inCycle: dataset.dependencyGraph.cyclicSccs.some((component) => component.includes(declarationId)),
+      };
+    }
+  }
+
+  return {
+    proofId: request.proofId,
+    configHash: dataset.configHash,
+    requestHash: computeCanonicalRequestHash({
+      proofId: request.proofId,
+      declarationId,
+      configHash: dataset.configHash,
+      includeExternalSupport,
+      query: "dependency-graph",
+    }),
+    dependencyGraphHash: dataset.dependencyGraphHash,
+    graph: {
+      schemaVersion: dataset.dependencyGraph.schemaVersion,
+      nodeCount: dataset.dependencyGraph.nodeIds.length,
+      edgeCount: dataset.dependencyGraph.edgeCount,
+      indexedNodeCount: dataset.dependencyGraph.indexedNodeCount,
+      externalNodeCount: dataset.dependencyGraph.externalNodeCount,
+      missingDependencyRefs: dataset.dependencyGraph.missingDependencyRefs.map((ref) => ({ ...ref })),
+      sccCount: dataset.dependencyGraph.sccs.length,
+      cyclicSccCount: dataset.dependencyGraph.cyclicSccs.length,
+      cyclicSccs: dataset.dependencyGraph.cyclicSccs.map((component) => component.slice()),
+    },
+    declaration,
+    diagnostics,
+  };
+}
+
 export function buildSeedNodePathView(request: NodePathRequest) {
   const dataset = loadSeedDataset(request.proofId, request.config);
   const api = createSeedTreeQueryApi(dataset);
@@ -461,11 +567,6 @@ export function buildSeedNodePathView(request: NodePathRequest) {
 
 export async function findProofLeaf(proofId: string, leafId: string): Promise<TheoremLeafRecord | undefined> {
   const { dataset } = await loadProofDataset(proofId, {});
-  return dataset.leaves.find((leaf) => leaf.id === leafId);
-}
-
-export function findSeedLeaf(proofId: string, leafId: string) {
-  const dataset = loadSeedDataset(proofId, {});
   return dataset.leaves.find((leaf) => leaf.id === leafId);
 }
 
@@ -500,6 +601,10 @@ async function loadProofDataset(proofId: string, configInput: ExplanationConfigI
 async function buildDataset(proofId: string, config: ExplanationConfig, configHash: string): Promise<ResolvedDataset> {
   if (proofId === SEED_PROOF_ID) {
     const seed = loadSeedDataset(proofId, config);
+    const dependencyGraph = buildDeclarationDependencyGraph(
+      seed.leaves.map((leaf) => ({ id: leaf.id, dependencyIds: leaf.dependencyIds })),
+    );
+    const dependencyGraphHash = computeDependencyGraphHash(dependencyGraph);
     const snapshot = exportTreeStorageSnapshot(seed.tree as never, {
       proofId: seed.proofId,
       leaves: seed.leaves,
@@ -513,6 +618,8 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
         configHash: seed.configHash,
         tree: seed.tree as ExplanationTree,
         leaves: seed.leaves,
+        dependencyGraph,
+        dependencyGraphHash,
       },
       queryApi: createTreeQueryApi(snapshot),
     };
@@ -563,6 +670,8 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
     configHash,
     tree,
     leaves: theoremLeaves,
+    dependencyGraph,
+    dependencyGraphHash,
   };
 
   return {
@@ -767,4 +876,15 @@ function createSeedTreeQueryApi(dataset: SeedDataset) {
     config: dataset.config,
   });
   return createTreeQueryApi(snapshot);
+}
+
+function normalizeOptionalDeclarationId(input: string | undefined): string | undefined {
+  if (input === undefined) {
+    return undefined;
+  }
+  const normalized = input.trim();
+  if (normalized.length === 0) {
+    throw new Error("Expected declarationId to be non-empty when provided.");
+  }
+  return normalized;
 }

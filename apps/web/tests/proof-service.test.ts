@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildProofDependencyGraphView,
   buildProofDiff,
   buildProofNodeChildrenView,
   buildProofNodePathView,
@@ -169,5 +170,43 @@ describe("proof service", () => {
     expect(first.requestHash).toBe(second.requestHash);
     expect(first.diffHash).toBe(second.diffHash);
     expect(first.report.summary.total).toBeGreaterThanOrEqual(0);
+  });
+
+  it("returns deterministic dependency graph query views for Lean-ingested fixture proof", async () => {
+    const first = await buildProofDependencyGraphView({
+      proofId: LEAN_FIXTURE_PROOF_ID,
+      declarationId: "lean:Verity/Loop:loop_preserves:3:1",
+      includeExternalSupport: true,
+    });
+    const second = await buildProofDependencyGraphView({
+      proofId: LEAN_FIXTURE_PROOF_ID,
+      declarationId: "lean:Verity/Loop:loop_preserves:3:1",
+      includeExternalSupport: true,
+    });
+
+    expect(first.requestHash).toBe(second.requestHash);
+    expect(first.dependencyGraphHash).toBe(second.dependencyGraphHash);
+    expect(first.graph.nodeCount).toBeGreaterThan(0);
+    expect(first.graph.edgeCount).toBeGreaterThan(0);
+    expect(first.declaration?.declarationId).toBe("lean:Verity/Loop:loop_preserves:3:1");
+    expect(first.declaration?.supportingDeclarations).toContain("lean:Verity/Core:core_safe:8:1");
+    expect(first.diagnostics).toEqual([]);
+  });
+
+  it("reports machine-checkable diagnostics for unknown dependency declaration ids", async () => {
+    const response = await buildProofDependencyGraphView({
+      proofId: LEAN_FIXTURE_PROOF_ID,
+      declarationId: "unknown.declaration",
+    });
+
+    expect(response.declaration).toBeUndefined();
+    expect(response.diagnostics).toEqual([
+      {
+        code: "declaration_not_found",
+        severity: "error",
+        message: "Declaration 'unknown.declaration' is not present in dependency graph.",
+        details: { declarationId: "unknown.declaration" },
+      },
+    ]);
   });
 });

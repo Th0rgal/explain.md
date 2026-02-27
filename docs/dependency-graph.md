@@ -31,6 +31,26 @@ This module adds a deterministic, provenance-first dependency graph for Lean dec
 - `getSupportingDeclarations` returns transitive prerequisites in deterministic post-order.
 - Cycles are tolerated; queries terminate with visitation-state guards.
 
+## Web API projection
+The Next.js web app exposes deterministic graph reads through:
+
+- `GET /api/proofs/dependency-graph`
+
+Supported query parameters:
+
+- `proofId` (required)
+- standard config knobs (`abstractionLevel`, `complexityLevel`, `maxChildrenPerParent`, `audienceLevel`, `language`, `termIntroductionBudget`) for hash-stable request context
+- `declarationId` (optional): include direct deps/dependents/support closure + SCC membership for one declaration
+- `includeExternalSupport` (optional boolean, default `true`): include/exclude `external` nodes from support closure
+
+Response includes:
+
+- `dependencyGraphHash`: canonical graph hash
+- graph totals (`nodeCount`, `edgeCount`, `indexedNodeCount`, `externalNodeCount`)
+- SCC counts + `cyclicSccs`
+- optional per-declaration query block
+- machine-checkable diagnostics (for example `declaration_not_found`)
+
 ## External dependencies
 - By default (`includeExternalNodes=true`), unknown dependency IDs are represented as `external` nodes.
 - If disabled, missing dependencies are still recorded in diagnostics but omitted from graph nodes/edges.

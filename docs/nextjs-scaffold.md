@@ -10,6 +10,7 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - `GET /api/proofs/root`
   - `GET /api/proofs/nodes/:nodeId/children`
   - `GET /api/proofs/nodes/:nodeId/path`
+  - `GET /api/proofs/dependency-graph`
   - `POST /api/proofs/view`
   - `POST /api/proofs/diff`
   - `GET /api/proofs/leaves/:leafId`
@@ -37,6 +38,7 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - `viewHash` / `diffHash` / `detailHash`
 - Leaf detail panel is backed by provenance path plus persisted verification history.
 - Node/root/path query routes use canonical tree-storage snapshots, enabling stable root/children/ancestry reads for progressive expansion UIs.
+- Dependency graph route exposes deterministic SCC/reachability data and per-declaration support closures for browser-side provenance checks.
 - Parent nodes include policy diagnostics in tree query payloads so browser views can audit complexity/prerequisite/term-budget compliance.
 - Shared config query parsing is centralized in `apps/web/lib/config-input.ts` for route consistency.
 - The Lean fixture uses a deterministic summary provider (`temperature=0` behavior with fixed evidence-only synthesis), so parent statements remain child-entailed and reproducible.

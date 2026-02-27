@@ -172,6 +172,38 @@ export interface NodePathResponse {
   };
 }
 
+export interface DependencyGraphResponse {
+  proofId: string;
+  configHash: string;
+  requestHash: string;
+  dependencyGraphHash: string;
+  graph: {
+    schemaVersion: string;
+    nodeCount: number;
+    edgeCount: number;
+    indexedNodeCount: number;
+    externalNodeCount: number;
+    missingDependencyRefs: Array<{ declarationId: string; dependencyId: string }>;
+    sccCount: number;
+    cyclicSccCount: number;
+    cyclicSccs: string[][];
+  };
+  declaration?: {
+    declarationId: string;
+    directDependencies: string[];
+    directDependents: string[];
+    supportingDeclarations: string[];
+    stronglyConnectedComponent: string[];
+    inCycle: boolean;
+  };
+  diagnostics: Array<{
+    code: "declaration_not_found";
+    severity: "error";
+    message: string;
+    details: Record<string, unknown>;
+  }>;
+}
+
 export interface LeafDetailResponse {
   ok: boolean;
   proofId: string;
@@ -310,6 +342,24 @@ export async function fetchNodeChildren(
 export async function fetchNodePath(proofId: string, nodeId: string, config: ProofConfigInput): Promise<NodePathResponse> {
   const params = toConfigSearchParams(proofId, config);
   return requestJson<NodePathResponse>(`/api/proofs/nodes/${encodeURIComponent(nodeId)}/path?${params.toString()}`);
+}
+
+export async function fetchDependencyGraph(
+  proofId: string,
+  config: ProofConfigInput,
+  options: {
+    declarationId?: string;
+    includeExternalSupport?: boolean;
+  } = {},
+): Promise<DependencyGraphResponse> {
+  const params = toConfigSearchParams(proofId, config);
+  if (options.declarationId !== undefined) {
+    params.set("declarationId", options.declarationId);
+  }
+  if (options.includeExternalSupport !== undefined) {
+    params.set("includeExternalSupport", String(options.includeExternalSupport));
+  }
+  return requestJson<DependencyGraphResponse>(`/api/proofs/dependency-graph?${params.toString()}`);
 }
 
 export async function verifyLeaf(proofId: string, leafId: string, autoRun = true): Promise<VerifyLeafResponse> {
