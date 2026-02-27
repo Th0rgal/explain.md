@@ -1,6 +1,6 @@
 import type { ExplanationConfigInput } from "../../../../../../src/config-contract";
 import { jsonError, jsonSuccess, normalizeInteger, normalizeOptionalInteger, normalizeString, normalizeStringArray } from "../../../../lib/http-contract";
-import { buildSeedProjection, SEED_PROOF_ID } from "../../../../lib/proof-service";
+import { buildProofProjection, SEED_PROOF_ID } from "../../../../lib/proof-service";
 
 interface ProjectionBody {
   proofId?: string;
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     const proofId = normalizeString(body.proofId, SEED_PROOF_ID);
     const config = normalizeConfigInput(body.config);
 
-    const response = buildSeedProjection({
+    const response = await buildProofProjection({
       proofId,
       config,
       expandedNodeIds: normalizeStringArray(body.expandedNodeIds),

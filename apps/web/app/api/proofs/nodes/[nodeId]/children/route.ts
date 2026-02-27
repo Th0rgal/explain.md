@@ -5,14 +5,14 @@ import {
   normalizeOptionalInteger,
   normalizeString,
 } from "../../../../../../lib/http-contract";
-import { buildSeedNodeChildrenView, SEED_PROOF_ID } from "../../../../../../lib/proof-service";
+import { buildProofNodeChildrenView, SEED_PROOF_ID } from "../../../../../../lib/proof-service";
 
 export async function GET(request: Request, context: { params: { nodeId: string } }) {
   try {
     const url = new URL(request.url);
     const proofId = normalizeString(url.searchParams.get("proofId"), SEED_PROOF_ID);
 
-    const response = buildSeedNodeChildrenView({
+    const response = await buildProofNodeChildrenView({
       proofId,
       nodeId: normalizeString(context.params.nodeId, ""),
       config: readConfigFromSearchParams(url.searchParams),

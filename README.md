@@ -21,6 +21,7 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #18: deterministic faithfulness/simplicity evaluation harness with per-parent/per-depth quality metrics, threshold gating, and canonical report hashing.
 - Issue #15 (backend contract): deterministic progressive-disclosure projection and config-aware explanation diff contract for root-first UI rendering.
 - Issue #14: Next.js App Router scaffold with deterministic seeded-proof API adapters, frontend client layer, and accessible loading/error shell.
+- Issue #3 follow-up: web proof service now exposes a deterministic Lean-ingested Verity fixture (`lean-verity-fixture`) through the same root/children/path/diff/leaf contracts as seed data.
 - Issue #13: deterministic tree storage/query contract with versioned snapshot schema, root/children/ancestry/leaf-provenance reads, and canonical import/export hashing.
 
 ## Local checks

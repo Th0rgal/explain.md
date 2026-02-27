@@ -28,7 +28,9 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 - Verification requests emit deterministic hashes (`requestHash`, `queuedJobHash`, `finalJobHash`) and deterministic sequential job IDs (`job-000001`, ...).
 
 ## Determinism and provenance
-- Seed dataset is fixed (`seed-verity`) and uses core canonical models from `src/`.
+- Two deterministic datasets are exposed through one contract:
+  - `seed-verity` (seed tree)
+  - `lean-verity-fixture` (built from `tests/fixtures/lean-project/Verity/*.lean` through `ingestLeanSources -> mapLeanIngestionToTheoremLeaves -> buildRecursiveExplanationTree`)
 - Responses include stable hashes:
   - `configHash`
   - `requestHash`
@@ -37,6 +39,7 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 - Node/root/path query routes use canonical tree-storage snapshots, enabling stable root/children/ancestry reads for progressive expansion UIs.
 - Parent nodes include policy diagnostics in tree query payloads so browser views can audit complexity/prerequisite/term-budget compliance.
 - Shared config query parsing is centralized in `apps/web/lib/config-input.ts` for route consistency.
+- The Lean fixture uses a deterministic summary provider (`temperature=0` behavior with fixed evidence-only synthesis), so parent statements remain child-entailed and reproducible.
 - Reproducibility contract for each queued job is derived from the selected theorem leaf:
   - source revision (`EXPLAIN_MD_SOURCE_REVISION` or Vercel commit SHA fallback)
   - Lean command contract (`lake env lean <file>`)

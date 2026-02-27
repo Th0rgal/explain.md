@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildProofDiff,
+  buildProofNodeChildrenView,
+  buildProofNodePathView,
+  buildProofRootView,
   buildSeedDiff,
   buildSeedLeafDetail,
   buildSeedNodeChildrenView,
   buildSeedNodePathView,
   buildSeedProjection,
   buildSeedRootView,
+  LEAN_FIXTURE_PROOF_ID,
+  listProofs,
   listSeedProofs,
   SEED_PROOF_ID,
 } from "../lib/proof-service";
@@ -101,5 +107,67 @@ describe("proof service", () => {
     expect(path.path.ok).toBe(true);
     expect(path.path.path[0]?.id).toBe("p2_root");
     expect(path.path.path[path.path.path.length - 1]?.id).toBe("Verity.ContractSpec.init_sound");
+  });
+
+  it("lists both seed and Lean fixture proofs in catalog", async () => {
+    const catalog = await listProofs();
+    expect(catalog.map((entry) => entry.proofId)).toContain(SEED_PROOF_ID);
+    expect(catalog.map((entry) => entry.proofId)).toContain(LEAN_FIXTURE_PROOF_ID);
+  });
+
+  it("serves deterministic root/children/path queries for Lean-ingested fixture proof", async () => {
+    const root = await buildProofRootView(LEAN_FIXTURE_PROOF_ID, {
+      abstractionLevel: 3,
+      complexityLevel: 3,
+      maxChildrenPerParent: 3,
+    });
+    expect(root.root.node?.id).toBeTruthy();
+    expect(root.snapshotHash).toHaveLength(64);
+
+    const rootNode = root.root.node;
+    expect(rootNode).toBeDefined();
+
+    const children = await buildProofNodeChildrenView({
+      proofId: LEAN_FIXTURE_PROOF_ID,
+      nodeId: rootNode?.id ?? "",
+      limit: 2,
+      offset: 0,
+    });
+    if (rootNode?.kind === "parent") {
+      expect(children.children.parent.id).toBe(rootNode.id);
+      expect(children.children.totalChildren).toBeGreaterThanOrEqual(children.children.children.length);
+    } else {
+      expect(children.children.totalChildren).toBe(0);
+    }
+
+    const targetNodeId = children.children.children[0]?.id ?? (rootNode?.id ?? "");
+    const path = await buildProofNodePathView({
+      proofId: LEAN_FIXTURE_PROOF_ID,
+      nodeId: targetNodeId,
+    });
+    expect(path.path.nodeId).toBe(targetNodeId);
+    if (path.path.ok) {
+      expect(path.path.path[0]?.id).toBe(rootNode?.id);
+      expect(path.path.path[path.path.path.length - 1]?.id).toBe(targetNodeId);
+    } else {
+      expect(path.path.diagnostics.some((diagnostic) => diagnostic.severity === "error")).toBe(true);
+    }
+  });
+
+  it("computes diff deterministically for Lean-ingested fixture proof", async () => {
+    const first = await buildProofDiff({
+      proofId: LEAN_FIXTURE_PROOF_ID,
+      baselineConfig: { complexityLevel: 2, abstractionLevel: 2 },
+      candidateConfig: { complexityLevel: 4, abstractionLevel: 4 },
+    });
+    const second = await buildProofDiff({
+      proofId: LEAN_FIXTURE_PROOF_ID,
+      baselineConfig: { complexityLevel: 2, abstractionLevel: 2 },
+      candidateConfig: { complexityLevel: 4, abstractionLevel: 4 },
+    });
+
+    expect(first.requestHash).toBe(second.requestHash);
+    expect(first.diffHash).toBe(second.diffHash);
+    expect(first.report.summary.total).toBeGreaterThanOrEqual(0);
   });
 });

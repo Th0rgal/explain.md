@@ -1,6 +1,12 @@
 import { ProofExplorer } from "../../components/proof-explorer";
-import { SEED_PROOF_ID } from "../../lib/proof-service";
+import { isSupportedProofId, SEED_PROOF_ID } from "../../lib/proof-service";
 
-export default function ProofExplorerPage() {
-  return <ProofExplorer proofId={SEED_PROOF_ID} />;
+interface ProofExplorerPageProps {
+  searchParams?: Record<string, string | string[] | undefined>;
+}
+
+export default function ProofExplorerPage(props: ProofExplorerPageProps) {
+  const requested = props.searchParams?.proofId;
+  const proofId = typeof requested === "string" && isSupportedProofId(requested) ? requested : SEED_PROOF_ID;
+  return <ProofExplorer proofId={proofId} />;
 }

@@ -1,6 +1,6 @@
 import type { ExplanationConfigInput } from "../../../../../../src/config-contract";
 import { jsonError, jsonSuccess, normalizeInteger, normalizeOptionalInteger, normalizeString } from "../../../../lib/http-contract";
-import { buildSeedDiff, SEED_PROOF_ID } from "../../../../lib/proof-service";
+import { buildProofDiff, SEED_PROOF_ID } from "../../../../lib/proof-service";
 
 interface DiffBody {
   proofId?: string;
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as DiffBody;
     const proofId = normalizeString(body.proofId, SEED_PROOF_ID);
-    const response = buildSeedDiff({
+    const response = await buildProofDiff({
       proofId,
       baselineConfig: normalizeConfigInput(body.baselineConfig),
       candidateConfig: normalizeConfigInput(body.candidateConfig),

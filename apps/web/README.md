@@ -3,7 +3,7 @@
 This Next.js app provides a deterministic frontend scaffold for explain.md.
 
 ## Scope
-- App Router shell with seeded proof explorer entrypoint.
+- App Router shell with deterministic proof explorer entrypoint.
 - API routes backed by core provenance contracts:
   - `GET /api/proofs/seed`
   - `GET /api/proofs/root`
@@ -17,6 +17,9 @@ This Next.js app provides a deterministic frontend scaffold for explain.md.
   - `GET /api/verification/jobs/:jobId`
 - Client API layer in `lib/api-client.ts`.
 - Loading and error boundaries (`app/loading.tsx`, `app/error.tsx`).
+- Proof datasets:
+  - `seed-verity` (hand-authored scaffold seed)
+  - `lean-verity-fixture` (parsed from `tests/fixtures/lean-project` via deterministic Lean ingestion + tree build)
 
 ## State Management
 This scaffold uses local React state + deterministic API payloads as the baseline state strategy.
@@ -28,6 +31,7 @@ The tree panel uses incremental root/children/path queries:
 - Keep leaf-detail and diff panels wired to provenance-aware contracts (`/api/proofs/leaves/:leafId`, `/api/proofs/diff`).
 - Surface per-parent policy diagnostics (pre/post compliance + metrics) directly in tree rows.
 - Use shared config parser (`lib/config-input.ts`) across query routes to keep config semantics consistent.
+- Proof switching is supported through `/proofs?proofId=<id>` with validation against supported IDs.
 
 ## Verification integration
 - Leaf panel can trigger server-side verification and render status/log diagnostics.
