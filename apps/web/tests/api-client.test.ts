@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  fetchCacheReport,
   fetchConfigProfiles,
   fetchDiff,
   fetchDependencyGraph,
@@ -404,6 +405,55 @@ describe("api client", () => {
     expect(requestUrl).toContain("maxPolicyViolationRate=0");
     expect(requestUrl).toContain("minEvidenceCoverageMean=1");
     expect(requestUrl).toContain("minVocabularyContinuityMean=1");
+  });
+
+  it("encodes cache report query contract deterministically", async () => {
+    const fetchMock = vi.fn(async (_input: string) =>
+      buildMockResponse({
+        ok: true,
+        data: {
+          proofId: "lean-verity-fixture",
+          configHash: "a".repeat(64),
+          requestHash: "b".repeat(64),
+          cache: {
+            layer: "persistent",
+            status: "hit",
+            cacheKey: "lean-verity-fixture:key",
+            sourceFingerprint: "fingerprint",
+            snapshotHash: "c".repeat(64),
+            cacheEntryHash: "d".repeat(64),
+            diagnostics: [],
+          },
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchCacheReport("lean-verity-fixture", {
+      abstractionLevel: 2,
+      complexityLevel: 4,
+      maxChildrenPerParent: 3,
+      audienceLevel: "expert",
+      language: "en",
+      readingLevelTarget: "undergraduate",
+      complexityBandWidth: 2,
+      termIntroductionBudget: 1,
+      proofDetailMode: "formal",
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const requestUrl = String(fetchMock.mock.calls[0]?.[0]);
+    expect(requestUrl).toContain("/api/proofs/cache-report?");
+    expect(requestUrl).toContain("proofId=lean-verity-fixture");
+    expect(requestUrl).toContain("abstractionLevel=2");
+    expect(requestUrl).toContain("complexityLevel=4");
+    expect(requestUrl).toContain("maxChildrenPerParent=3");
+    expect(requestUrl).toContain("audienceLevel=expert");
+    expect(requestUrl).toContain("language=en");
+    expect(requestUrl).toContain("readingLevelTarget=undergraduate");
+    expect(requestUrl).toContain("complexityBandWidth=2");
+    expect(requestUrl).toContain("termIntroductionBudget=1");
+    expect(requestUrl).toContain("proofDetailMode=formal");
   });
 
   it("encodes config profile list query parameters", async () => {

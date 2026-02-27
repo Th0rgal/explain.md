@@ -27,6 +27,7 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #14: Next.js App Router scaffold with deterministic seeded-proof API adapters, frontend client layer, and accessible loading/error shell.
 - Issue #3 follow-up: web proof service now exposes a deterministic Lean-ingested Verity fixture (`lean-verity-fixture`) through the same root/children/path/diff/leaf contracts as seed data.
 - Issue #4 follow-up: web proof service now exposes deterministic dependency graph query views (SCC/cycle totals + per-declaration support closure) via `GET /api/proofs/dependency-graph`.
+- Issue #12: Lean fixture web proof datasets now support deterministic persistent cache reuse/invalidation (source-fingerprint + config-hash keyed) with auditable cache telemetry via `GET /api/proofs/cache-report`.
 - Issue #13: deterministic tree storage/query contract with versioned snapshot schema, root/children/ancestry/leaf-provenance reads, and canonical import/export hashing.
 
 ## Local checks
@@ -66,6 +67,7 @@ EXPLAIN_MD_LIVE_RPC_API_KEY=... npm run test:live:summary
 - [Evaluation harness](docs/evaluation-harness.md)
 - [Pedagogical policy engine](docs/pedagogical-policy.md)
 - [Policy report API](docs/policy-report-api.md)
+- [Proof cache report API](docs/proof-cache-api.md)
 - [Config profile API](docs/config-profile-api.md)
 - [Browser-triggered verification flow](docs/verification-flow.md)
 - [Verification HTTP API service](docs/verification-api.md)

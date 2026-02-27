@@ -12,6 +12,7 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - `GET /api/proofs/nodes/:nodeId/path`
   - `GET /api/proofs/dependency-graph`
   - `GET /api/proofs/policy-report`
+  - `GET /api/proofs/cache-report`
   - `GET /api/proofs/config-profiles`
   - `POST /api/proofs/config-profiles`
   - `DELETE /api/proofs/config-profiles/:profileId`
@@ -45,12 +46,14 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 - Dependency graph route exposes deterministic SCC/reachability data and per-declaration support closures for browser-side provenance checks.
 - Parent nodes include policy diagnostics in tree query payloads so browser views can audit complexity/prerequisite/term-budget compliance.
 - Policy report route exposes deterministic quality metrics/threshold outcomes using the evaluation harness, with optional threshold overrides for pedagogy calibration.
+- Cache report route exposes deterministic cache-reuse diagnostics (`status`, `cacheKey`, `sourceFingerprint`, `snapshotHash`, `cacheEntryHash`) for reproducible incremental recompute auditing.
 - Shared config parsing is centralized in `apps/web/lib/config-input.ts` for route consistency across both query and POST contracts.
 - Shared config query parsing now covers the full pedagogy knob surface used by generation and hashing:
   - `abstractionLevel`, `complexityLevel`, `maxChildrenPerParent`
   - `audienceLevel`, `language`, `readingLevelTarget`
   - `complexityBandWidth`, `termIntroductionBudget`, `proofDetailMode`
 - Config profiles are persisted/queryable through deterministic API contracts with canonical storage keys, profile `configHash`, and response-level `requestHash` + `ledgerHash`.
+- Lean fixture datasets are persisted under `.explain-md/web-proof-cache` (override with `EXPLAIN_MD_WEB_PROOF_CACHE_DIR`) and invalidated by source fingerprint + config hash.
 - The Lean fixture uses a deterministic summary provider (`temperature=0` behavior with fixed evidence-only synthesis), so parent statements remain child-entailed and reproducible.
 - Reproducibility contract for each queued job is derived from the selected theorem leaf:
   - source revision (`EXPLAIN_MD_SOURCE_REVISION` or Vercel commit SHA fallback)

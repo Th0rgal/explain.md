@@ -1,5 +1,9 @@
+import { promises as fs } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  buildProofCacheReportView,
   buildProofDependencyGraphView,
   buildProofDiff,
   buildProofNodeChildrenView,
@@ -12,6 +16,7 @@ import {
   buildSeedNodePathView,
   buildSeedProjection,
   buildSeedRootView,
+  clearProofDatasetCacheForTests,
   LEAN_FIXTURE_PROOF_ID,
   listProofs,
   listSeedProofs,
@@ -236,5 +241,41 @@ describe("proof service", () => {
     expect(response.report.thresholds.maxComplexitySpreadMean).toBe(0);
     expect(typeof response.report.thresholdPass).toBe("boolean");
     expect(response.report.thresholdFailures.every((failure) => typeof failure.code === "string")).toBe(true);
+  });
+
+  it("reuses persistent Lean fixture cache deterministically for unchanged inputs", async () => {
+    const previousCacheDir = process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR;
+    const tempCacheDir = await fs.mkdtemp(path.join(os.tmpdir(), "explain-md-proof-cache-"));
+    process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR = tempCacheDir;
+
+    try {
+      clearProofDatasetCacheForTests();
+      const first = await buildProofCacheReportView({
+        proofId: LEAN_FIXTURE_PROOF_ID,
+      });
+      expect(first.cache.layer).toBe("persistent");
+      expect(first.cache.status).toBe("miss");
+      expect(first.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_miss")).toBe(true);
+      expect(first.cache.snapshotHash).toHaveLength(64);
+
+      clearProofDatasetCacheForTests();
+      const second = await buildProofCacheReportView({
+        proofId: LEAN_FIXTURE_PROOF_ID,
+      });
+      expect(second.cache.layer).toBe("persistent");
+      expect(second.cache.status).toBe("hit");
+      expect(second.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_hit")).toBe(true);
+      expect(second.cache.sourceFingerprint).toBe(first.cache.sourceFingerprint);
+      expect(second.cache.snapshotHash).toBe(first.cache.snapshotHash);
+      expect(second.cache.cacheEntryHash).toBe(first.cache.cacheEntryHash);
+    } finally {
+      clearProofDatasetCacheForTests();
+      if (previousCacheDir === undefined) {
+        delete process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR;
+      } else {
+        process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR = previousCacheDir;
+      }
+      await fs.rm(tempCacheDir, { recursive: true, force: true });
+    }
   });
 });

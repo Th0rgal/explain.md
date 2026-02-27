@@ -35,6 +35,8 @@ import {
   computeTreeStorageSnapshotHash,
   createTreeQueryApi,
   exportTreeStorageSnapshot,
+  importTreeStorageSnapshot,
+  type TreeStorageSnapshot,
 } from "../../../dist/tree-storage";
 import { computeConfigHash } from "../../../dist/config-contract";
 import type { VerificationJob } from "../../../dist/verification-flow";
@@ -47,6 +49,8 @@ const LEAN_FIXTURE_PROJECT_ROOT = path.resolve(process.cwd(), "tests", "fixtures
 const LEAN_FIXTURE_PATHS = ["Verity/Core.lean", "Verity/Loop.lean"];
 const LEAN_FIXTURE_SOURCE_BASE_URL =
   "https://github.com/Th0rgal/explain.md/blob/main/tests/fixtures/lean-project";
+const PROOF_DATASET_CACHE_SCHEMA_VERSION = "1.0.0";
+const DEFAULT_PROOF_DATASET_CACHE_DIR = path.resolve(process.cwd(), ".explain-md", "web-proof-cache");
 
 const SUPPORTED_PROOF_IDS = [SEED_PROOF_ID, LEAN_FIXTURE_PROOF_ID] as const;
 
@@ -74,6 +78,45 @@ interface ProofDataset {
 interface ResolvedDataset {
   dataset: ProofDataset;
   queryApi: ReturnType<typeof createTreeQueryApi>;
+  cache: ProofDatasetCacheMetadata;
+}
+
+type ProofDatasetCacheStatus = "hit" | "miss";
+type ProofDatasetCacheLayer = "persistent" | "ephemeral";
+
+export interface ProofDatasetCacheDiagnostic {
+  code:
+    | "cache_hit"
+    | "cache_miss"
+    | "cache_write_failed"
+    | "cache_read_failed"
+    | "cache_entry_invalid"
+    | "cache_dependency_hash_mismatch"
+    | "cache_snapshot_hash_mismatch";
+  message: string;
+  details?: Record<string, unknown>;
+}
+
+export interface ProofDatasetCacheMetadata {
+  layer: ProofDatasetCacheLayer;
+  status: ProofDatasetCacheStatus;
+  cacheKey: string;
+  sourceFingerprint: string;
+  cachePath?: string;
+  snapshotHash: string;
+  cacheEntryHash: string;
+  diagnostics: ProofDatasetCacheDiagnostic[];
+}
+
+interface ProofDatasetCacheEntry {
+  schemaVersion: string;
+  proofId: string;
+  configHash: string;
+  sourceFingerprint: string;
+  ingestionHash: string;
+  dependencyGraphHash: string;
+  snapshotHash: string;
+  snapshot: TreeStorageSnapshot;
 }
 
 export interface ProjectionRequest {
@@ -121,6 +164,11 @@ export interface PolicyReportRequest {
   proofId: string;
   config?: ExplanationConfigInput;
   thresholds?: Partial<TreeQualityThresholds>;
+}
+
+export interface ProofCacheReportRequest {
+  proofId: string;
+  config?: ExplanationConfigInput;
 }
 
 export interface ProofCatalogEntry {
@@ -173,6 +221,13 @@ export interface PolicyReportView {
   requestHash: string;
   reportHash: string;
   report: ReturnType<typeof evaluateExplanationTreeQuality>;
+}
+
+export interface ProofCacheReportView {
+  proofId: string;
+  configHash: string;
+  requestHash: string;
+  cache: ProofDatasetCacheMetadata;
 }
 
 export function getSupportedProofIds(): string[] {
@@ -582,6 +637,20 @@ export async function buildProofPolicyReportView(request: PolicyReportRequest): 
   };
 }
 
+export async function buildProofCacheReportView(request: ProofCacheReportRequest): Promise<ProofCacheReportView> {
+  const resolved = await loadProofDataset(request.proofId, request.config);
+  return {
+    proofId: request.proofId,
+    configHash: resolved.dataset.configHash,
+    requestHash: computeCanonicalRequestHash({
+      proofId: request.proofId,
+      configHash: resolved.dataset.configHash,
+      query: "cache-report",
+    }),
+    cache: resolved.cache,
+  };
+}
+
 export function buildSeedNodePathView(request: NodePathRequest) {
   const dataset = loadSeedDataset(request.proofId, request.config);
   const api = createSeedTreeQueryApi(dataset);
@@ -605,6 +674,10 @@ export function buildSeedNodePathView(request: NodePathRequest) {
 export async function findProofLeaf(proofId: string, leafId: string): Promise<TheoremLeafRecord | undefined> {
   const { dataset } = await loadProofDataset(proofId, {});
   return dataset.leaves.find((leaf) => leaf.id === leafId);
+}
+
+export function clearProofDatasetCacheForTests(): void {
+  datasetCache.clear();
 }
 
 async function loadProofDataset(proofId: string, configInput: ExplanationConfigInput = {}): Promise<ResolvedDataset> {
@@ -659,6 +732,24 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
         dependencyGraphHash,
       },
       queryApi: createTreeQueryApi(snapshot),
+      cache: {
+        layer: "ephemeral",
+        status: "miss",
+        cacheKey: `${seed.proofId}:${seed.configHash}`,
+        sourceFingerprint: "seed",
+        snapshotHash: computeTreeStorageSnapshotHash(snapshot),
+        cacheEntryHash: computeCanonicalRequestHash({
+          proofId: seed.proofId,
+          configHash: seed.configHash,
+          snapshotHash: computeTreeStorageSnapshotHash(snapshot),
+        }),
+        diagnostics: [
+          {
+            code: "cache_miss",
+            message: "Seed dataset is rebuilt deterministically per request (ephemeral cache only).",
+          },
+        ],
+      },
     };
   }
 
@@ -668,11 +759,113 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
       const absolutePath = path.join(fixtureProjectRoot, relativePath);
       const content = await fs.readFile(absolutePath, "utf8");
       return {
+        relativePath,
         filePath: absolutePath,
         content,
       };
     }),
   );
+  const sourceFingerprint = computeSourceFingerprint(sources);
+  const cachePath = buildProofDatasetCachePath(proofId, configHash);
+  const cacheKey = `${proofId}:${configHash}:${sourceFingerprint}`;
+  const cached = await readProofDatasetCacheEntry(cachePath);
+  const cacheDiagnostics: ProofDatasetCacheDiagnostic[] = [];
+
+  if (cached.entry) {
+    if (cached.entry.sourceFingerprint === sourceFingerprint) {
+      const imported = importTreeStorageSnapshot(cached.entry.snapshot);
+      const hasImportErrors = imported.diagnostics.some((diagnostic) => diagnostic.severity === "error");
+      if (!hasImportErrors && imported.tree) {
+        const dependencyGraph = buildDeclarationDependencyGraph(
+          imported.leaves.map((leaf) => ({ id: leaf.id, dependencyIds: leaf.dependencyIds })),
+        );
+        const dependencyGraphHash = computeDependencyGraphHash(dependencyGraph);
+        const snapshotHash = computeTreeStorageSnapshotHash(cached.entry.snapshot);
+
+        if (dependencyGraphHash === cached.entry.dependencyGraphHash && snapshotHash === cached.entry.snapshotHash) {
+          cacheDiagnostics.push({
+            code: "cache_hit",
+            message: "Loaded deterministic Lean fixture dataset from persistent cache.",
+            details: {
+              cachePath,
+              cacheEntryHash: cached.cacheEntryHash,
+            },
+          });
+          return {
+            dataset: {
+              proofId,
+              title: `Lean Verity fixture (${imported.leaves.length} declarations, ingestion=${cached.entry.ingestionHash.slice(0, 8)}, depgraph=${dependencyGraphHash.slice(0, 8)})`,
+              config,
+              configHash,
+              tree: imported.tree,
+              leaves: imported.leaves,
+              dependencyGraph,
+              dependencyGraphHash,
+            },
+            queryApi: createTreeQueryApi(cached.entry.snapshot),
+            cache: {
+              layer: "persistent",
+              status: "hit",
+              cacheKey,
+              sourceFingerprint,
+              cachePath,
+              snapshotHash: cached.entry.snapshotHash,
+              cacheEntryHash: cached.cacheEntryHash,
+              diagnostics: cacheDiagnostics,
+            },
+          };
+        }
+
+        cacheDiagnostics.push({
+          code: dependencyGraphHash !== cached.entry.dependencyGraphHash ? "cache_dependency_hash_mismatch" : "cache_snapshot_hash_mismatch",
+          message:
+            dependencyGraphHash !== cached.entry.dependencyGraphHash
+              ? "Cached dependency graph hash mismatch detected; rebuilding dataset."
+              : "Cached snapshot hash mismatch detected; rebuilding dataset.",
+          details: {
+            cachePath,
+            expectedDependencyGraphHash: cached.entry.dependencyGraphHash,
+            actualDependencyGraphHash: dependencyGraphHash,
+            expectedSnapshotHash: cached.entry.snapshotHash,
+            actualSnapshotHash: snapshotHash,
+          },
+        });
+      } else {
+        cacheDiagnostics.push({
+          code: "cache_entry_invalid",
+          message: "Cached snapshot failed validation; rebuilding dataset.",
+          details: {
+            cachePath,
+            diagnostics: imported.diagnostics,
+          },
+        });
+      }
+    } else {
+      cacheDiagnostics.push({
+        code: "cache_miss",
+        message: "Cached dataset source fingerprint mismatch; rebuilding dataset.",
+        details: {
+          cachePath,
+          expectedSourceFingerprint: cached.entry.sourceFingerprint,
+          actualSourceFingerprint: sourceFingerprint,
+        },
+      });
+    }
+  } else {
+    if (cached.readError) {
+      cacheDiagnostics.push({
+        code: "cache_read_failed",
+        message: "Persistent cache read failed; rebuilding dataset.",
+        details: { cachePath, error: cached.readError },
+      });
+    } else {
+      cacheDiagnostics.push({
+        code: "cache_miss",
+        message: "No persisted cache entry found for requested proof/config.",
+        details: { cachePath },
+      });
+    }
+  }
 
   const ingestion = ingestLeanSources(fixtureProjectRoot, sources, {
     sourceBaseUrl: LEAN_FIXTURE_SOURCE_BASE_URL,
@@ -699,6 +892,25 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
     leaves: theoremLeaves,
     config,
   });
+  const snapshotHash = computeTreeStorageSnapshotHash(snapshot);
+  const cacheEntry: ProofDatasetCacheEntry = {
+    schemaVersion: PROOF_DATASET_CACHE_SCHEMA_VERSION,
+    proofId,
+    configHash,
+    sourceFingerprint,
+    ingestionHash,
+    dependencyGraphHash,
+    snapshotHash,
+    snapshot,
+  };
+  const cacheWriteError = await writeProofDatasetCacheEntry(cachePath, cacheEntry);
+  if (cacheWriteError) {
+    cacheDiagnostics.push({
+      code: "cache_write_failed",
+      message: "Failed writing persistent cache entry; continuing with rebuilt dataset.",
+      details: { cachePath, error: cacheWriteError },
+    });
+  }
 
   const dataset: ProofDataset = {
     proofId,
@@ -714,6 +926,16 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
   return {
     dataset,
     queryApi: createTreeQueryApi(snapshot),
+    cache: {
+      layer: "persistent",
+      status: "miss",
+      cacheKey,
+      sourceFingerprint,
+      cachePath,
+      snapshotHash,
+      cacheEntryHash: computeProofDatasetCacheEntryHash(cacheEntry),
+      diagnostics: cacheDiagnostics,
+    },
   };
 }
 
@@ -737,6 +959,109 @@ async function resolveLeanFixtureProjectRoot(): Promise<string> {
   throw new Error(
     `Lean fixture project root not found. Tried: ${candidates.join(", ")}.`,
   );
+}
+
+function buildProofDatasetCachePath(proofId: string, configHash: string): string {
+  const safeProofId = proofId.replace(/[^a-zA-Z0-9._-]/g, "_");
+  return path.join(resolveProofDatasetCacheDir(), safeProofId, `${configHash}.json`);
+}
+
+function resolveProofDatasetCacheDir(): string {
+  return path.resolve(process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR ?? DEFAULT_PROOF_DATASET_CACHE_DIR);
+}
+
+async function readProofDatasetCacheEntry(
+  cachePath: string,
+): Promise<{ entry?: ProofDatasetCacheEntry; cacheEntryHash: string; readError?: string }> {
+  let raw: string;
+  try {
+    raw = await fs.readFile(cachePath, "utf8");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("ENOENT")) {
+      return {
+        cacheEntryHash: computeCanonicalRequestHash({ cachePath, status: "missing" }),
+      };
+    }
+    return {
+      cacheEntryHash: computeCanonicalRequestHash({ cachePath, status: "read_error", message }),
+      readError: message,
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<ProofDatasetCacheEntry>;
+    if (
+      parsed.schemaVersion !== PROOF_DATASET_CACHE_SCHEMA_VERSION ||
+      typeof parsed.proofId !== "string" ||
+      typeof parsed.configHash !== "string" ||
+      typeof parsed.sourceFingerprint !== "string" ||
+      typeof parsed.ingestionHash !== "string" ||
+      typeof parsed.dependencyGraphHash !== "string" ||
+      typeof parsed.snapshotHash !== "string" ||
+      !parsed.snapshot
+    ) {
+      return {
+        cacheEntryHash: computeCanonicalRequestHash({ cachePath, status: "invalid_entry" }),
+        readError: "Cache entry schema validation failed.",
+      };
+    }
+
+    const entry: ProofDatasetCacheEntry = {
+      schemaVersion: parsed.schemaVersion,
+      proofId: parsed.proofId,
+      configHash: parsed.configHash,
+      sourceFingerprint: parsed.sourceFingerprint,
+      ingestionHash: parsed.ingestionHash,
+      dependencyGraphHash: parsed.dependencyGraphHash,
+      snapshotHash: parsed.snapshotHash,
+      snapshot: parsed.snapshot as TreeStorageSnapshot,
+    };
+
+    return {
+      entry,
+      cacheEntryHash: computeProofDatasetCacheEntryHash(entry),
+    };
+  } catch (error) {
+    return {
+      cacheEntryHash: computeCanonicalRequestHash({ cachePath, status: "parse_error" }),
+      readError: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+async function writeProofDatasetCacheEntry(cachePath: string, entry: ProofDatasetCacheEntry): Promise<string | undefined> {
+  try {
+    await fs.mkdir(path.dirname(cachePath), { recursive: true });
+    await fs.writeFile(cachePath, `${JSON.stringify(entry, null, 2)}\n`, "utf8");
+    return undefined;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
+function computeProofDatasetCacheEntryHash(entry: ProofDatasetCacheEntry): string {
+  return computeCanonicalRequestHash({
+    schemaVersion: entry.schemaVersion,
+    proofId: entry.proofId,
+    configHash: entry.configHash,
+    sourceFingerprint: entry.sourceFingerprint,
+    ingestionHash: entry.ingestionHash,
+    dependencyGraphHash: entry.dependencyGraphHash,
+    snapshotHash: entry.snapshotHash,
+    snapshot: entry.snapshot,
+  });
+}
+
+function computeSourceFingerprint(sources: Array<{ relativePath: string; filePath: string; content: string }>): string {
+  return computeCanonicalRequestHash({
+    files: sources
+      .map((source) => ({
+        relativePath: source.relativePath,
+        contentHash: createHash("sha256").update(source.content).digest("hex"),
+      }))
+      .sort((left, right) => left.relativePath.localeCompare(right.relativePath)),
+  });
 }
 
 function createDeterministicSummaryProvider(): ProviderClient {

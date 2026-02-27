@@ -278,6 +278,33 @@ export interface PolicyReportResponse {
   };
 }
 
+export interface CacheReportResponse {
+  proofId: string;
+  configHash: string;
+  requestHash: string;
+  cache: {
+    layer: "persistent" | "ephemeral";
+    status: "hit" | "miss";
+    cacheKey: string;
+    sourceFingerprint: string;
+    cachePath?: string;
+    snapshotHash: string;
+    cacheEntryHash: string;
+    diagnostics: Array<{
+      code:
+        | "cache_hit"
+        | "cache_miss"
+        | "cache_write_failed"
+        | "cache_read_failed"
+        | "cache_entry_invalid"
+        | "cache_dependency_hash_mismatch"
+        | "cache_snapshot_hash_mismatch";
+      message: string;
+      details?: Record<string, unknown>;
+    }>;
+  };
+}
+
 export interface LeafDetailResponse {
   ok: boolean;
   proofId: string;
@@ -489,6 +516,11 @@ export async function fetchPolicyReport(
     }
   }
   return requestJson<PolicyReportResponse>(`/api/proofs/policy-report?${params.toString()}`);
+}
+
+export async function fetchCacheReport(proofId: string, config: ProofConfigInput): Promise<CacheReportResponse> {
+  const params = toConfigSearchParams(proofId, config);
+  return requestJson<CacheReportResponse>(`/api/proofs/cache-report?${params.toString()}`);
 }
 
 export async function verifyLeaf(proofId: string, leafId: string, autoRun = true): Promise<VerifyLeafResponse> {
