@@ -94,6 +94,38 @@ async function assertBaseline(baselinePath: string, report: Awaited<ReturnType<t
   if (baseline.evaluation?.strictRegression?.thresholdPass !== report.evaluation.strictRegression.thresholdPass) {
     throw new Error("Observability SLO benchmark strict regression threshold pass/fail expectation mismatched baseline artifact.");
   }
+
+  const baselineProfiles = Array.isArray((baseline as { profileReports?: unknown }).profileReports)
+    ? ((baseline as { profileReports?: Array<{ profileId?: string; requestHash?: string; outcomeHash?: string }> }).profileReports ?? [])
+    : [];
+  const reportProfiles = report.profileReports;
+
+  if (baselineProfiles.length !== reportProfiles.length) {
+    throw new Error(
+      `Observability SLO benchmark profile count mismatch. expected=${baselineProfiles.length} actual=${reportProfiles.length}`,
+    );
+  }
+
+  for (let index = 0; index < baselineProfiles.length; index += 1) {
+    const expectedProfile = baselineProfiles[index];
+    const actualProfile = reportProfiles[index];
+
+    if ((expectedProfile?.profileId ?? "") !== actualProfile.profileId) {
+      throw new Error(
+        `Observability SLO benchmark profileId mismatch at index ${String(index)}. expected=${expectedProfile?.profileId ?? "missing"} actual=${actualProfile.profileId}`,
+      );
+    }
+    if ((expectedProfile?.requestHash ?? "") !== actualProfile.requestHash) {
+      throw new Error(
+        `Observability SLO benchmark profile requestHash mismatch for ${actualProfile.profileId}. expected=${expectedProfile?.requestHash ?? "missing"} actual=${actualProfile.requestHash}`,
+      );
+    }
+    if ((expectedProfile?.outcomeHash ?? "") !== actualProfile.outcomeHash) {
+      throw new Error(
+        `Observability SLO benchmark profile outcomeHash mismatch for ${actualProfile.profileId}. expected=${expectedProfile?.outcomeHash ?? "missing"} actual=${actualProfile.outcomeHash}`,
+      );
+    }
+  }
 }
 
 main().catch((error) => {

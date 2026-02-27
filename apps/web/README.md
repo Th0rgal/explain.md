@@ -71,6 +71,10 @@ The tree panel uses incremental root/children/path queries:
 - Run deterministic cache benchmark evidence generation with `npm run benchmark:cache` (writes `docs/benchmarks/proof-cache-benchmark.json` from repo root).
 - Run deterministic assistive-tech interaction benchmark evidence with `npm run benchmark:tree-a11y` (writes `docs/benchmarks/tree-a11y-evaluation.json` from repo root).
 - Run deterministic observability SLO benchmark evidence with `npm run benchmark:observability-slo` (writes `docs/benchmarks/observability-slo-benchmark.json` from repo root).
+  - Default benchmark profiles are deterministic and include both datasets:
+    - `seed-verity`
+    - `lean-verity-fixture`
+  - Artifact includes aggregate hashes plus per-profile evidence in `parameters.profiles`, `profileReports`, and `evaluation.byProfile`.
 - CI enforces observability SLO benchmark determinism with `npm run web:eval:observability-slo:ci` (compares against `docs/benchmarks/observability-slo-benchmark.json` and writes `.explain-md/observability-slo-benchmark-report.json`).
 - Root CI release gate composes quality + web benchmark evidence with `npm run eval:release-gate:ci` (writes `.explain-md/release-gate-report.json`).
 - Use shared config parser (`lib/config-input.ts`) across query routes to keep config semantics consistent.

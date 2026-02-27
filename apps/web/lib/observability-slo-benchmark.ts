@@ -17,6 +17,7 @@ import {
   clearProofDatasetCacheForTests,
   clearProofQueryObservabilityMetricsForTests,
   exportProofQueryObservabilityMetrics,
+  LEAN_FIXTURE_PROOF_ID,
   SEED_PROOF_ID,
 } from "./proof-service";
 import {
@@ -37,6 +38,26 @@ import {
 const SCHEMA_VERSION = "1.0.0";
 const DEFAULT_GENERATED_AT = "2026-02-27T00:00:00.000Z";
 const DEFAULT_PROOF_LEAF_ID = "Verity.ContractSpec.init_sound";
+const DEFAULT_LEAN_FIXTURE_LEAF_ID = "lean:Verity/Loop:loop_preserves:3:1";
+
+interface BenchmarkProfileDefinition {
+  profileId: string;
+  proofId: string;
+  leafId: string;
+}
+
+const DEFAULT_PROFILE_DEFINITIONS: BenchmarkProfileDefinition[] = [
+  {
+    profileId: "seed-verity",
+    proofId: SEED_PROOF_ID,
+    leafId: DEFAULT_PROOF_LEAF_ID,
+  },
+  {
+    profileId: "lean-verity-fixture",
+    proofId: LEAN_FIXTURE_PROOF_ID,
+    leafId: DEFAULT_LEAN_FIXTURE_LEAF_ID,
+  },
+];
 
 export interface ObservabilitySloBenchmarkOptions {
   proofId?: string;
@@ -48,17 +69,62 @@ export interface ObservabilitySloBenchmarkOptions {
 export interface ObservabilitySloBenchmarkReport {
   schemaVersion: string;
   generatedAt: string;
-  proofId: string;
-  leafId: string;
-  configHash: string;
   requestHash: string;
   outcomeHash: string;
   parameters: {
+    profiles: Array<{
+      profileId: string;
+      proofId: string;
+      leafId: string;
+      configHash: string;
+    }>;
     proofQueries: string[];
     verificationQueries: string[];
     baselineThresholds: ObservabilitySloThresholds;
     strictThresholds: ObservabilitySloThresholds;
   };
+  profileReports: BenchmarkProfileReport[];
+  snapshots: {
+    proof: {
+      snapshotHash: string;
+      requestCount: number;
+      uniqueRequestCount: number;
+      uniqueTraceCount: number;
+      cacheHitRate: number;
+    };
+    verification: {
+      snapshotHash: string;
+      requestCount: number;
+      failureCount: number;
+      parentTraceProvidedRate: number;
+      maxP95LatencyMs: number;
+      maxMeanLatencyMs: number;
+    };
+  };
+  evaluation: {
+    baseline: BenchmarkScenario;
+    strictRegression: BenchmarkScenario;
+    byProfile: Array<{
+      profileId: string;
+      baseline: BenchmarkScenario;
+      strictRegression: BenchmarkScenario;
+    }>;
+  };
+}
+
+interface BenchmarkScenario {
+  thresholdPass: boolean;
+  thresholdFailureCodes: string[];
+  reportSnapshotHash: string;
+}
+
+interface BenchmarkProfileReport {
+  profileId: string;
+  proofId: string;
+  leafId: string;
+  configHash: string;
+  requestHash: string;
+  outcomeHash: string;
   snapshots: {
     proof: {
       snapshotHash: string;
@@ -82,22 +148,14 @@ export interface ObservabilitySloBenchmarkReport {
   };
 }
 
-interface BenchmarkScenario {
-  thresholdPass: boolean;
-  thresholdFailureCodes: string[];
-  reportSnapshotHash: string;
-}
-
 export async function runObservabilitySloBenchmark(
   options: ObservabilitySloBenchmarkOptions = {},
 ): Promise<ObservabilitySloBenchmarkReport> {
-  const proofId = normalizeString(options.proofId) ?? SEED_PROOF_ID;
-  const leafId = normalizeString(options.leafId) ?? DEFAULT_PROOF_LEAF_ID;
   const config = normalizeConfig(options.config ?? {});
-  const configHash = computeConfigHash(config);
   const generatedAt = normalizeString(options.generatedAt) ?? DEFAULT_GENERATED_AT;
   const baselineThresholds = buildBaselineThresholds();
   const strictThresholds = buildStrictThresholds();
+  const profiles = resolveProfiles(options, config);
   const proofQueries = [
     "view",
     "diff",
@@ -113,9 +171,12 @@ export async function runObservabilitySloBenchmark(
 
   const requestHash = computeHash({
     schemaVersion: SCHEMA_VERSION,
-    proofId,
-    leafId,
-    configHash,
+    profiles: profiles.map((profile) => ({
+      profileId: profile.profileId,
+      proofId: profile.proofId,
+      leafId: profile.leafId,
+      configHash: profile.configHash,
+    })),
     generatedAt,
     proofQueries,
     verificationQueries,
@@ -123,13 +184,120 @@ export async function runObservabilitySloBenchmark(
     strictThresholds,
   });
 
+  const profileReports: BenchmarkProfileReport[] = [];
+  for (const profile of profiles) {
+    profileReports.push(
+      await runBenchmarkProfile({
+        profile,
+        generatedAt,
+        baselineThresholds,
+        strictThresholds,
+      }),
+    );
+  }
+
+  const aggregateBaseline = aggregateScenario(
+    profileReports.map((profile) => ({
+      profileId: profile.profileId,
+      scenario: profile.evaluation.baseline,
+    })),
+  );
+  const aggregateStrict = aggregateScenario(
+    profileReports.map((profile) => ({
+      profileId: profile.profileId,
+      scenario: profile.evaluation.strictRegression,
+    })),
+  );
+
+  const aggregateProof = {
+    snapshotHash: computeHash(profileReports.map((profile) => profile.snapshots.proof.snapshotHash)),
+    requestCount: sum(profileReports.map((profile) => profile.snapshots.proof.requestCount)),
+    uniqueRequestCount: sum(profileReports.map((profile) => profile.snapshots.proof.uniqueRequestCount)),
+    uniqueTraceCount: sum(profileReports.map((profile) => profile.snapshots.proof.uniqueTraceCount)),
+    cacheHitRate:
+      profileReports.length === 0 ? 0 : sum(profileReports.map((profile) => profile.snapshots.proof.cacheHitRate)) / profileReports.length,
+  };
+  const aggregateVerification = {
+    snapshotHash: computeHash(profileReports.map((profile) => profile.snapshots.verification.snapshotHash)),
+    requestCount: sum(profileReports.map((profile) => profile.snapshots.verification.requestCount)),
+    failureCount: sum(profileReports.map((profile) => profile.snapshots.verification.failureCount)),
+    parentTraceProvidedRate:
+      profileReports.length === 0
+        ? 0
+        : sum(profileReports.map((profile) => profile.snapshots.verification.parentTraceProvidedRate)) / profileReports.length,
+    maxP95LatencyMs: Math.max(...profileReports.map((profile) => profile.snapshots.verification.maxP95LatencyMs), 0),
+    maxMeanLatencyMs: Math.max(...profileReports.map((profile) => profile.snapshots.verification.maxMeanLatencyMs), 0),
+  };
+
+  const outcomeHash = computeHash({
+    schemaVersion: SCHEMA_VERSION,
+    profileOutcomes: profileReports.map((profile) => ({
+      profileId: profile.profileId,
+      outcomeHash: profile.outcomeHash,
+      baselinePass: profile.evaluation.baseline.thresholdPass,
+      strictPass: profile.evaluation.strictRegression.thresholdPass,
+    })),
+    aggregateBaselinePass: aggregateBaseline.thresholdPass,
+    aggregateStrictPass: aggregateStrict.thresholdPass,
+    aggregateStrictFailureCodes: aggregateStrict.thresholdFailureCodes,
+  });
+
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    generatedAt,
+    requestHash,
+    outcomeHash,
+    parameters: {
+      profiles: profiles.map((profile) => ({
+        profileId: profile.profileId,
+        proofId: profile.proofId,
+        leafId: profile.leafId,
+        configHash: profile.configHash,
+      })),
+      proofQueries,
+      verificationQueries,
+      baselineThresholds,
+      strictThresholds,
+    },
+    profileReports,
+    snapshots: {
+      proof: aggregateProof,
+      verification: aggregateVerification,
+    },
+    evaluation: {
+      baseline: aggregateBaseline,
+      strictRegression: aggregateStrict,
+      byProfile: profileReports.map((profile) => ({
+        profileId: profile.profileId,
+        baseline: profile.evaluation.baseline,
+        strictRegression: profile.evaluation.strictRegression,
+      })),
+    },
+  };
+}
+
+function toScenario(report: ObservabilitySloReport): BenchmarkScenario {
+  return {
+    thresholdPass: report.thresholdPass,
+    thresholdFailureCodes: report.thresholdFailures.map((failure) => failure.code),
+    reportSnapshotHash: report.snapshotHash,
+  };
+}
+
+async function runBenchmarkProfile(options: {
+  profile: BenchmarkProfileDefinition & { config: ReturnType<typeof normalizeConfig>; configHash: string };
+  generatedAt: string;
+  baselineThresholds: ObservabilitySloThresholds;
+  strictThresholds: ObservabilitySloThresholds;
+}): Promise<BenchmarkProfileReport> {
+  const { profile, generatedAt, baselineThresholds, strictThresholds } = options;
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), `explain-md-slo-benchmark-${profile.profileId}-`));
+  const ledgerPath = path.join(tempDir, "verification-ledger.json");
+
   clearProofDatasetCacheForTests();
   clearProofQueryObservabilityMetricsForTests();
   clearVerificationObservabilityMetricsForTests();
   resetVerificationServiceForTests();
-
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "explain-md-slo-benchmark-"));
-  const ledgerPath = path.join(tempDir, "verification-ledger.json");
 
   try {
     configureVerificationServiceForTests({
@@ -143,52 +311,52 @@ export async function runObservabilitySloBenchmark(
     });
 
     await buildProofProjection({
-      proofId,
-      config,
+      proofId: profile.proofId,
+      config: profile.config,
       expandedNodeIds: ["p2_root"],
       maxChildrenPerExpandedNode: 3,
     });
     await buildProofDiff({
-      proofId,
-      baselineConfig: config,
-      candidateConfig: config,
+      proofId: profile.proofId,
+      baselineConfig: profile.config,
+      candidateConfig: profile.config,
     });
-    await buildProofLeafDetail({ proofId, leafId, config });
-    const root = await buildProofRootView(proofId, config);
+    await buildProofLeafDetail({ proofId: profile.proofId, leafId: profile.leafId, config: profile.config });
+    const root = await buildProofRootView(profile.proofId, profile.config);
     const rootNodeId = root.root.node?.id ?? "";
     await buildProofNodeChildrenView({
-      proofId,
+      proofId: profile.proofId,
       nodeId: rootNodeId,
-      config,
+      config: profile.config,
       offset: 0,
       limit: 3,
     });
     await buildProofNodePathView({
-      proofId,
-      nodeId: leafId,
-      config,
+      proofId: profile.proofId,
+      nodeId: profile.leafId,
+      config: profile.config,
     });
     await buildProofDependencyGraphView({
-      proofId,
-      config,
+      proofId: profile.proofId,
+      config: profile.config,
       includeExternalSupport: true,
     });
     await buildProofPolicyReportView({
-      proofId,
-      config,
+      proofId: profile.proofId,
+      config: profile.config,
     });
     await buildProofCacheReportView({
-      proofId,
-      config,
+      proofId: profile.proofId,
+      config: profile.config,
     });
 
     const verify = await verifyLeafProof({
-      proofId,
-      leafId,
+      proofId: profile.proofId,
+      leafId: profile.leafId,
       autoRun: true,
       parentTraceId: "trace-parent-benchmark",
     });
-    await listLeafVerificationJobs(proofId, leafId);
+    await listLeafVerificationJobs(profile.proofId, profile.leafId);
     await getVerificationJobById(verify.finalJob.jobId, {
       parentTraceId: "trace-parent-benchmark",
     });
@@ -209,8 +377,19 @@ export async function runObservabilitySloBenchmark(
       generatedAt,
     });
 
+    const requestHash = computeHash({
+      schemaVersion: SCHEMA_VERSION,
+      profileId: profile.profileId,
+      proofId: profile.proofId,
+      leafId: profile.leafId,
+      configHash: profile.configHash,
+      generatedAt,
+      baselineThresholds,
+      strictThresholds,
+    });
     const outcomeHash = computeHash({
       schemaVersion: SCHEMA_VERSION,
+      profileId: profile.profileId,
       proofSnapshotHash: proofMetrics.snapshotHash,
       verificationSnapshotHash: verificationMetrics.snapshotHash,
       baselineSnapshotHash: baselineReport.snapshotHash,
@@ -221,19 +400,12 @@ export async function runObservabilitySloBenchmark(
     });
 
     return {
-      schemaVersion: SCHEMA_VERSION,
-      generatedAt,
-      proofId,
-      leafId,
-      configHash,
+      profileId: profile.profileId,
+      proofId: profile.proofId,
+      leafId: profile.leafId,
+      configHash: profile.configHash,
       requestHash,
       outcomeHash,
-      parameters: {
-        proofQueries,
-        verificationQueries,
-        baselineThresholds,
-        strictThresholds,
-      },
       snapshots: {
         proof: {
           snapshotHash: proofMetrics.snapshotHash,
@@ -265,11 +437,53 @@ export async function runObservabilitySloBenchmark(
   }
 }
 
-function toScenario(report: ObservabilitySloReport): BenchmarkScenario {
+function resolveProfiles(
+  options: ObservabilitySloBenchmarkOptions,
+  config: ReturnType<typeof normalizeConfig>,
+): Array<BenchmarkProfileDefinition & { config: ReturnType<typeof normalizeConfig>; configHash: string }> {
+  const customProofId = normalizeString(options.proofId);
+  const customLeafId = normalizeString(options.leafId);
+
+  if (customProofId || customLeafId) {
+    return [
+      {
+        profileId: "custom",
+        proofId: customProofId ?? SEED_PROOF_ID,
+        leafId: customLeafId ?? DEFAULT_PROOF_LEAF_ID,
+        config,
+        configHash: computeConfigHash(config),
+      },
+    ];
+  }
+
+  return DEFAULT_PROFILE_DEFINITIONS.map((profile) => ({
+    profileId: profile.profileId,
+    proofId: profile.proofId,
+    leafId: profile.leafId,
+    config,
+    configHash: computeConfigHash(config),
+  }));
+}
+
+function aggregateScenario(
+  scenarios: Array<{ profileId: string; scenario: BenchmarkScenario }>,
+): BenchmarkScenario {
+  const thresholdPass = scenarios.every((entry) => entry.scenario.thresholdPass);
+  const thresholdFailureCodes = scenarios
+    .flatMap((entry) => entry.scenario.thresholdFailureCodes.map((code) => `${entry.profileId}:${code}`))
+    .sort((left, right) => left.localeCompare(right));
+  const reportSnapshotHash = computeHash(
+    scenarios.map((entry) => ({
+      profileId: entry.profileId,
+      thresholdPass: entry.scenario.thresholdPass,
+      reportSnapshotHash: entry.scenario.reportSnapshotHash,
+    })),
+  );
+
   return {
-    thresholdPass: report.thresholdPass,
-    thresholdFailureCodes: report.thresholdFailures.map((failure) => failure.code),
-    reportSnapshotHash: report.snapshotHash,
+    thresholdPass,
+    thresholdFailureCodes,
+    reportSnapshotHash,
   };
 }
 
@@ -319,6 +533,10 @@ function buildDeterministicNowMs(values: number[]): () => number {
     index += 1;
     return value ?? (values[values.length - 1] ?? 0);
   };
+}
+
+function sum(values: number[]): number {
+  return values.reduce((accumulator, value) => accumulator + value, 0);
 }
 
 function normalizeString(value: string | undefined): string | undefined {

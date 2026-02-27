@@ -1,12 +1,23 @@
 {
   "schemaVersion": "1.0.0",
   "generatedAt": "2026-02-27T00:00:00.000Z",
-  "proofId": "seed-verity",
-  "leafId": "Verity.ContractSpec.init_sound",
-  "configHash": "a75632c3c71bea58a13445a49951b87763ebd9e868fb4f51ac128e6c783e8af7",
-  "requestHash": "169feb9988d3f23a1b7be79a4e3abc4098831e4de47ff5e84b213fb3135d6ff9",
-  "outcomeHash": "93b393d2a626e200f6d69dcbfbf7be762268c79350c71d605df4952096df10d0",
+  "requestHash": "a7a27fa946485374821ed242f20e2d95033db19c84b4d16101af7ed0a3944924",
+  "outcomeHash": "87750a703ad786ff56464ab7d66e8897994b30fc01701157fc7c64d24820552e",
   "parameters": {
+    "profiles": [
+      {
+        "profileId": "seed-verity",
+        "proofId": "seed-verity",
+        "leafId": "Verity.ContractSpec.init_sound",
+        "configHash": "a75632c3c71bea58a13445a49951b87763ebd9e868fb4f51ac128e6c783e8af7"
+      },
+      {
+        "profileId": "lean-verity-fixture",
+        "proofId": "lean-verity-fixture",
+        "leafId": "lean:Verity/Loop:loop_preserves:3:1",
+        "configHash": "a75632c3c71bea58a13445a49951b87763ebd9e868fb4f51ac128e6c783e8af7"
+      }
+    ],
     "proofQueries": [
       "view",
       "diff",
@@ -44,17 +55,106 @@
       "minVerificationParentTraceRate": 0.9
     }
   },
+  "profileReports": [
+    {
+      "profileId": "seed-verity",
+      "proofId": "seed-verity",
+      "leafId": "Verity.ContractSpec.init_sound",
+      "configHash": "a75632c3c71bea58a13445a49951b87763ebd9e868fb4f51ac128e6c783e8af7",
+      "requestHash": "e0a87ac89a9b231e899dbe25d5592772ac36e15cd9d2d9fd14a1a492df95959d",
+      "outcomeHash": "e215fa695fb0bb25ef8cdfa65c96d2f2f8ef5a18b4fda7f25f41996322067681",
+      "snapshots": {
+        "proof": {
+          "snapshotHash": "62b0a6c20db7c8cc394be67ac3fe9cc1d383321b74d993968e70753ab8cb3d6a",
+          "requestCount": 9,
+          "uniqueRequestCount": 9,
+          "uniqueTraceCount": 9,
+          "cacheHitRate": 0
+        },
+        "verification": {
+          "snapshotHash": "0af26ffbc50e5f2ea8c10745e5ce4bc931529a266a1057bd866f250da2559e61",
+          "requestCount": 3,
+          "failureCount": 0,
+          "parentTraceProvidedRate": 0.6666666666666666,
+          "maxP95LatencyMs": 12,
+          "maxMeanLatencyMs": 12
+        }
+      },
+      "evaluation": {
+        "baseline": {
+          "thresholdPass": true,
+          "thresholdFailureCodes": [],
+          "reportSnapshotHash": "5e0cf01746fa5fb89cc983714a193dc039a2eaa886341d5de54010d6bf39fa87"
+        },
+        "strictRegression": {
+          "thresholdPass": false,
+          "thresholdFailureCodes": [
+            "proof_request_count_below_min",
+            "verification_request_count_below_min",
+            "proof_cache_hit_rate_below_min",
+            "verification_p95_latency_above_max",
+            "verification_mean_latency_above_max",
+            "verification_parent_trace_rate_below_min"
+          ],
+          "reportSnapshotHash": "10913bc0616e347a3430c5a3913be7ee0e71814517658a55b063dd6b576ca823"
+        }
+      }
+    },
+    {
+      "profileId": "lean-verity-fixture",
+      "proofId": "lean-verity-fixture",
+      "leafId": "lean:Verity/Loop:loop_preserves:3:1",
+      "configHash": "a75632c3c71bea58a13445a49951b87763ebd9e868fb4f51ac128e6c783e8af7",
+      "requestHash": "75967121e194fb8dd108181c27ff03324d7d50fbb9658a1a325368ad18e07b72",
+      "outcomeHash": "d7e9a9ae55e54b162e1c9bdfc8f1da3a6304946cdcb37d707d1dd691a4b2adc9",
+      "snapshots": {
+        "proof": {
+          "snapshotHash": "0f605b3f803e81fcdeeceae94c8afbe228f06b93ca2c8cf04f780a00d5be5807",
+          "requestCount": 9,
+          "uniqueRequestCount": 9,
+          "uniqueTraceCount": 9,
+          "cacheHitRate": 1
+        },
+        "verification": {
+          "snapshotHash": "0af26ffbc50e5f2ea8c10745e5ce4bc931529a266a1057bd866f250da2559e61",
+          "requestCount": 3,
+          "failureCount": 0,
+          "parentTraceProvidedRate": 0.6666666666666666,
+          "maxP95LatencyMs": 12,
+          "maxMeanLatencyMs": 12
+        }
+      },
+      "evaluation": {
+        "baseline": {
+          "thresholdPass": true,
+          "thresholdFailureCodes": [],
+          "reportSnapshotHash": "c2c992c2e3ffa23f5d4b310998699ae4ea5f0c9ff12c794388f44aa11bc527ce"
+        },
+        "strictRegression": {
+          "thresholdPass": false,
+          "thresholdFailureCodes": [
+            "proof_request_count_below_min",
+            "verification_request_count_below_min",
+            "verification_p95_latency_above_max",
+            "verification_mean_latency_above_max",
+            "verification_parent_trace_rate_below_min"
+          ],
+          "reportSnapshotHash": "ffdac6ce9347156aa174ef011f5a253541f57393ff61d28d79f52ca83122a6b4"
+        }
+      }
+    }
+  ],
   "snapshots": {
     "proof": {
-      "snapshotHash": "62b0a6c20db7c8cc394be67ac3fe9cc1d383321b74d993968e70753ab8cb3d6a",
-      "requestCount": 9,
-      "uniqueRequestCount": 9,
-      "uniqueTraceCount": 9,
-      "cacheHitRate": 0
+      "snapshotHash": "35f22ee841333035ae9a9d5479ee3a1b9ddcc7c1f76b58e099df607662297b4b",
+      "requestCount": 18,
+      "uniqueRequestCount": 18,
+      "uniqueTraceCount": 18,
+      "cacheHitRate": 0.5
     },
     "verification": {
-      "snapshotHash": "0af26ffbc50e5f2ea8c10745e5ce4bc931529a266a1057bd866f250da2559e61",
-      "requestCount": 3,
+      "snapshotHash": "723fe8856a8dd9cf0a8c989f50ff85defb863a19130c49e590fb2fc96147b136",
+      "requestCount": 6,
       "failureCount": 0,
       "parentTraceProvidedRate": 0.6666666666666666,
       "maxP95LatencyMs": 12,
@@ -65,19 +165,65 @@
     "baseline": {
       "thresholdPass": true,
       "thresholdFailureCodes": [],
-      "reportSnapshotHash": "5e0cf01746fa5fb89cc983714a193dc039a2eaa886341d5de54010d6bf39fa87"
+      "reportSnapshotHash": "088ac6b748ad1d90c95190df409a36f8a4672fe709e7a89b4e9f40e713d4a637"
     },
     "strictRegression": {
       "thresholdPass": false,
       "thresholdFailureCodes": [
-        "proof_request_count_below_min",
-        "verification_request_count_below_min",
-        "proof_cache_hit_rate_below_min",
-        "verification_p95_latency_above_max",
-        "verification_mean_latency_above_max",
-        "verification_parent_trace_rate_below_min"
+        "lean-verity-fixture:proof_request_count_below_min",
+        "lean-verity-fixture:verification_mean_latency_above_max",
+        "lean-verity-fixture:verification_p95_latency_above_max",
+        "lean-verity-fixture:verification_parent_trace_rate_below_min",
+        "lean-verity-fixture:verification_request_count_below_min",
+        "seed-verity:proof_cache_hit_rate_below_min",
+        "seed-verity:proof_request_count_below_min",
+        "seed-verity:verification_mean_latency_above_max",
+        "seed-verity:verification_p95_latency_above_max",
+        "seed-verity:verification_parent_trace_rate_below_min",
+        "seed-verity:verification_request_count_below_min"
       ],
-      "reportSnapshotHash": "10913bc0616e347a3430c5a3913be7ee0e71814517658a55b063dd6b576ca823"
-    }
+      "reportSnapshotHash": "a17a8060524cbcdeef4ab356ad8497af8c12c44dae970deb83736b42deb1e5cd"
+    },
+    "byProfile": [
+      {
+        "profileId": "seed-verity",
+        "baseline": {
+          "thresholdPass": true,
+          "thresholdFailureCodes": [],
+          "reportSnapshotHash": "5e0cf01746fa5fb89cc983714a193dc039a2eaa886341d5de54010d6bf39fa87"
+        },
+        "strictRegression": {
+          "thresholdPass": false,
+          "thresholdFailureCodes": [
+            "proof_request_count_below_min",
+            "verification_request_count_below_min",
+            "proof_cache_hit_rate_below_min",
+            "verification_p95_latency_above_max",
+            "verification_mean_latency_above_max",
+            "verification_parent_trace_rate_below_min"
+          ],
+          "reportSnapshotHash": "10913bc0616e347a3430c5a3913be7ee0e71814517658a55b063dd6b576ca823"
+        }
+      },
+      {
+        "profileId": "lean-verity-fixture",
+        "baseline": {
+          "thresholdPass": true,
+          "thresholdFailureCodes": [],
+          "reportSnapshotHash": "c2c992c2e3ffa23f5d4b310998699ae4ea5f0c9ff12c794388f44aa11bc527ce"
+        },
+        "strictRegression": {
+          "thresholdPass": false,
+          "thresholdFailureCodes": [
+            "proof_request_count_below_min",
+            "verification_request_count_below_min",
+            "verification_p95_latency_above_max",
+            "verification_mean_latency_above_max",
+            "verification_parent_trace_rate_below_min"
+          ],
+          "reportSnapshotHash": "ffdac6ce9347156aa174ef011f5a253541f57393ff61d28d79f52ca83122a6b4"
+        }
+      }
+    ]
   }
 }
