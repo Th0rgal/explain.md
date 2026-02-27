@@ -516,7 +516,12 @@ describe("proof service", () => {
       );
       expect(additionDiagnostic?.details?.recoveryMode).toBe("insertion");
       expect((additionDiagnostic?.details?.addedLeafCount as number) > 0).toBe(true);
+      expect((additionDiagnostic?.details?.insertionFrontierCount as number) > 0).toBe(true);
+      expect((additionDiagnostic?.details?.insertionMergeParentCount as number) > 0).toBe(true);
       expect((additionDiagnostic?.details?.insertedParentCount as number) > 0).toBe(true);
+      expect((additionDiagnostic?.details?.insertionScheduledAttachmentCount as number) > 0).toBe(true);
+      expect((additionDiagnostic?.details?.insertionRecomputedAncestorCount as number) >= 0).toBe(true);
+      expect(additionDiagnostic?.details?.insertionStrategy).toBe("edge_connector_ancestor_recompute");
       expect((additionDiagnostic?.details?.reusableParentSummaryCount as number) >= 0).toBe(true);
       expect((additionDiagnostic?.details?.reusedParentSummaryCount as number) >= 0).toBe(true);
       expect(
