@@ -44,6 +44,12 @@ import {
   buildExplanationDiffPanelView,
   resolveExplanationDiffPanelSettings,
 } from "../lib/explanation-diff-view";
+import {
+  buildVerificationReplayArtifact,
+  buildVerificationReplayArtifactFilename,
+  renderVerificationReplayArtifactJson,
+  triggerReplayArtifactDownload,
+} from "../lib/verification-replay-artifact";
 
 export const DEFAULT_CONFIG: ProofConfigInput = {
   abstractionLevel: 3,
@@ -107,6 +113,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
   const [selectedVerificationJobId, setSelectedVerificationJobId] = useState<string | null>(null);
   const [selectedVerificationJob, setSelectedVerificationJob] = useState<VerificationJobResponse | null>(null);
   const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [replayExportError, setReplayExportError] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -262,6 +269,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
       setSelectedVerificationJobId(null);
       setSelectedVerificationJob(null);
       setVerificationError(null);
+      setReplayExportError(null);
       return;
     }
 
@@ -309,6 +317,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
   useEffect(() => {
     if (!selectedVerificationJobId) {
       setSelectedVerificationJob(null);
+      setReplayExportError(null);
       return;
     }
 
@@ -319,6 +328,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
         const result = await fetchVerificationJob(jobId);
         if (!cancelled) {
           setSelectedVerificationJob(result);
+          setReplayExportError(null);
         }
       } catch (jobError) {
         if (!cancelled) {
@@ -702,6 +712,26 @@ export function ProofExplorer(props: ProofExplorerProps) {
       });
     } finally {
       setIsVerifying(false);
+    }
+  }
+
+  function exportSelectedVerificationReplay(): void {
+    if (!selectedLeafId || !selectedVerificationJob) {
+      return;
+    }
+    try {
+      const artifact = buildVerificationReplayArtifact(props.proofId, selectedLeafId, selectedVerificationJob);
+      const filename = buildVerificationReplayArtifactFilename(
+        props.proofId,
+        selectedLeafId,
+        selectedVerificationJob.job.jobId,
+        selectedVerificationJob.jobReplay.reproducibilityHash,
+      );
+      const content = renderVerificationReplayArtifactJson(artifact);
+      triggerReplayArtifactDownload(filename, content);
+      setReplayExportError(null);
+    } catch (errorValue) {
+      setReplayExportError(errorValue instanceof Error ? errorValue.message : String(errorValue));
     }
   }
 
@@ -1447,6 +1477,14 @@ export function ProofExplorer(props: ProofExplorerProps) {
                 <p className="meta">Exit code: {selectedVerificationJob.job.result?.exitCode ?? "none"}</p>
                 <p className="meta">Duration: {selectedVerificationJob.job.result?.durationMs ?? "none"}ms</p>
                 <p className="meta">Replay command: {selectedVerificationJob.jobReplay.replayCommand}</p>
+                <button type="button" onClick={exportSelectedVerificationReplay}>
+                  Export replay artifact
+                </button>
+                {replayExportError ? (
+                  <p role="alert" className="meta">
+                    Replay export error: {replayExportError}
+                  </p>
+                ) : null}
                 <ul>
                   {selectedVerificationJob.job.logs.slice(0, 6).map((logLine) => (
                     <li key={`${selectedVerificationJob.job.jobId}:${logLine.index}`}>

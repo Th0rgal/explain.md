@@ -119,6 +119,10 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - `jobHash` (full canonical job hash, includes lifecycle/result fields)
   - `reproducibilityHash` (canonical reproducibility-contract hash)
   - `replayCommand` (deterministic shell command string for local replay)
+- Proof Explorer leaf panel provides deterministic replay-artifact export:
+  - JSON payload includes `requestHash`, canonicalized verification job data, and replay descriptors
+  - payload canonicalization is deterministic (sorted reproducibility `env` keys and sorted log indices)
+  - file naming is deterministic and hash-tagged for provenance handoff (`verification-replay-<proof>-<leaf>-<job>-<hash12>.json`)
 
 ## State management
 - Baseline strategy: local React state (`useState`) with deterministic API payloads.
