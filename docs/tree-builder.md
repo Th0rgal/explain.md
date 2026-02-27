@@ -17,6 +17,7 @@ Issue: #9
 - Parent IDs are deterministic hashes of `(depth, groupIndex, childIds)`.
 - Parent generation runs in deterministic request order.
 - Grouping diagnostics are preserved per depth for auditability.
+- Repartition diagnostics are preserved per depth with reason codes and violation codes.
 - Policy diagnostics are attached per parent (`preSummary`, `postSummary`, `retriesUsed`).
 
 ## Tree validity checks
@@ -40,7 +41,9 @@ Issue: #9
   - vocabulary continuity ratio must satisfy deterministic audience/detail floor
 - Rewrite loop:
   - the builder retries once with a stricter deterministic system prompt
-  - if still non-compliant, the builder fails with `TreePolicyError` and machine-readable diagnostics
+  - if still non-compliant, the builder deterministically repartitions the failing sibling group (bounded rounds)
+  - repartition happens in-place (FIFO) with stable contiguous splits of ordered children
+  - if repartition budget is exhausted, the builder fails with `TreePolicyError` and machine-readable diagnostics
 
 ## Degenerate and boundary cases
 - One leaf: returns that leaf as root with depth `0`.
@@ -61,3 +64,15 @@ Request shape:
 Output includes:
 - `rootId`, `leafIds`, `nodes`, `configHash`, `groupPlan`, `groupingDiagnostics`, `maxDepth`
 - `policyDiagnosticsByParent`
+
+Each `groupingDiagnostics` entry includes:
+- `orderedNodeIds`
+- `complexitySpreadByGroup`
+- `warnings`
+- `repartitionEvents[]` with:
+  - `reason`: `pre_summary_policy | post_summary_policy`
+  - `originalGroupIndex`
+  - `repartitionRound`
+  - `inputNodeIds`
+  - `outputGroups`
+  - `violationCodes`

@@ -19,7 +19,8 @@ This module enforces deterministic pedagogy constraints around parent generation
 ## Integration with tree building
 - Tree construction runs pre-summary policy before each parent summary call.
 - Parent summary generation retries once with a stricter deterministic system prompt if policy fails.
-- If both attempts fail, the builder throws `TreePolicyError` with machine-readable diagnostics.
+- If both attempts fail, the builder deterministically repartitions the failing sibling group (bounded rounds, stable order-preserving splits) and retries group synthesis.
+- If repartition budget is exhausted, the builder throws `TreePolicyError` with machine-readable diagnostics.
 - Successful parent nodes persist diagnostics (`preSummary`, `postSummary`, `retriesUsed`) for UI/evaluation.
 
 ## Why this matters

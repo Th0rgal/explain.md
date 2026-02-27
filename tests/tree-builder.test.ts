@@ -191,6 +191,51 @@ describe("tree builder", () => {
     expect(validation.ok).toBe(true);
   });
 
+  test("deterministically repartitions failing groups and completes tree build", async () => {
+    const config = normalizeConfig({ maxChildrenPerParent: 5, complexityBandWidth: 2 });
+    const provider = repartitionFriendlyProvider();
+
+    const tree = await buildRecursiveExplanationTree(provider, {
+      config,
+      leaves: [
+        { id: "l1", statement: "Lemma one." },
+        { id: "l2", statement: "Lemma two." },
+        { id: "l3", statement: "Lemma three." },
+        { id: "l4", statement: "Lemma four." },
+        { id: "l5", statement: "Lemma five." },
+      ],
+    });
+
+    const firstLayer = tree.groupingDiagnostics.find((layer) => layer.depth === 1);
+    expect(firstLayer).toBeDefined();
+    expect(firstLayer?.repartitionEvents.length).toBeGreaterThan(0);
+    expect(firstLayer?.repartitionEvents[0]?.reason).toBe("post_summary_policy");
+
+    const validation = validateExplanationTree(tree, config.maxChildrenPerParent);
+    expect(validation.ok).toBe(true);
+  });
+
+  test("fails fast with machine-readable diagnostics after bounded repartition rounds", async () => {
+    const config = normalizeConfig({ maxChildrenPerParent: 5, complexityBandWidth: 2 });
+
+    const thrown = await captureError(() =>
+      buildRecursiveExplanationTree(nonCompliantEvidenceProvider(), {
+        config,
+        leaves: [
+          { id: "l1", statement: "Invariant holds at initialization." },
+          { id: "l2", statement: "Invariant is preserved by transition." },
+          { id: "l3", statement: "Transition relation is deterministic." },
+          { id: "l4", statement: "Safety follows from invariants." },
+          { id: "l5", statement: "Liveness follows from progress." },
+        ],
+      }),
+    );
+
+    expect(thrown).toBeInstanceOf(TreePolicyError);
+    const diagnostics = (thrown as TreePolicyError).diagnostics;
+    expect(diagnostics.postSummary.violations.map((violation) => violation.code)).toContain("evidence_coverage");
+  });
+
   test("rejects invalid maxChildrenPerParent before tree loop", async () => {
     const badConfig = { ...normalizeConfig({}), maxChildrenPerParent: 0 };
     await expect(
@@ -254,6 +299,36 @@ function nonCompliantEvidenceProvider(): ProviderClient {
       finishReason: "stop",
       raw: {},
     }),
+    stream: async function* () {
+      return;
+    },
+  };
+}
+
+function repartitionFriendlyProvider(): ProviderClient {
+  return {
+    generate: async (request) => {
+      const childIds = extractChildIds(request);
+      const compliantRefs = childIds.length <= 2 ? childIds : childIds.slice(0, childIds.length - 1);
+      const whyTrue =
+        childIds.length <= 2
+          ? `${childIds.join(", ")} jointly entail the parent claim.`
+          : `${childIds.join(", ")} support this claim.`;
+      return {
+        text: JSON.stringify({
+          parent_statement: `Parent(${childIds.join("+")})`,
+          why_true_from_children: whyTrue,
+          new_terms_introduced: [],
+          complexity_score: 3,
+          abstraction_score: 3,
+          evidence_refs: compliantRefs,
+          confidence: 0.9,
+        }),
+        model: "mock",
+        finishReason: "stop",
+        raw: {},
+      };
+    },
     stream: async function* () {
       return;
     },
