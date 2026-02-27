@@ -16,6 +16,7 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #25 follow-up: prerequisite-order policy now evaluates deterministic grouping order (not lexical IDs) and waives cyclic in-group edges, fixing real Verity SCC compatibility.
 - Issue #25 follow-up: tree builder now reorders each group by local prerequisites and uses a safe depth guard with explicit no-progress failure diagnostics for large Lean corpora.
 - Issue #25 follow-up: web proof service now exposes deterministic pedagogy policy reports (threshold-calibrated quality metrics + canonical report hashing) via `GET /api/proofs/policy-report`.
+- Issue #23 follow-up: web config/query contracts now expose advanced pedagogy knobs (`readingLevelTarget`, `complexityBandWidth`, `proofDetailMode`) with strict deterministic parsing across routes and explorer controls.
 - Issue #17: browser-triggered verification workflow core with deterministic queue/status lifecycle, reproducibility contracts, and canonical ledger persistence.
 - Issue #17 follow-up: browser-callable verification HTTP API with deterministic route payloads, persisted ledger-backed job querying, and command-runner integration.
 - Issue #16: deterministic leaf-detail/provenance contract for theorem inspection, source linking/share references, and verification-job binding for browser panels.

@@ -64,6 +64,19 @@ export function normalizeString(input: unknown, fallback: string): string {
   return value;
 }
 
+export function normalizeEnum<T extends string>(
+  input: unknown,
+  fallback: T,
+  allowed: readonly T[],
+  fieldName: string,
+): T {
+  const value = normalizeString(input, fallback);
+  if (!allowed.includes(value as T)) {
+    throw new Error(`Expected ${fieldName} to be one of: ${allowed.join(", ")}.`);
+  }
+  return value as T;
+}
+
 export function normalizeStringArray(input: unknown): string[] {
   if (!Array.isArray(input)) {
     return [];

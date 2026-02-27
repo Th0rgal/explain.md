@@ -4,7 +4,10 @@ export interface ProofConfigInput {
   maxChildrenPerParent?: number;
   audienceLevel?: "novice" | "intermediate" | "expert";
   language?: string;
+  readingLevelTarget?: "elementary" | "middle_school" | "high_school" | "undergraduate" | "graduate";
+  complexityBandWidth?: number;
   termIntroductionBudget?: number;
+  proofDetailMode?: "minimal" | "balanced" | "formal";
 }
 
 interface ApiSuccess<T> {
@@ -498,8 +501,17 @@ function toConfigSearchParams(proofId: string, config: ProofConfigInput): URLSea
   if (config.language) {
     params.set("language", config.language);
   }
+  if (config.readingLevelTarget) {
+    params.set("readingLevelTarget", config.readingLevelTarget);
+  }
+  if (config.complexityBandWidth !== undefined) {
+    params.set("complexityBandWidth", String(config.complexityBandWidth));
+  }
   if (config.termIntroductionBudget !== undefined) {
     params.set("termIntroductionBudget", String(config.termIntroductionBudget));
+  }
+  if (config.proofDetailMode) {
+    params.set("proofDetailMode", config.proofDetailMode);
   }
   return params;
 }

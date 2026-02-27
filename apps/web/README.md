@@ -36,6 +36,10 @@ The tree panel uses incremental root/children/path queries:
 - Query deterministic pedagogy calibration metrics + threshold gates with `/api/proofs/policy-report`.
   - Optional threshold overrides: `maxUnsupportedParentRate`, `maxPrerequisiteViolationRate`, `maxPolicyViolationRate`, `maxTermJumpRate`, `maxComplexitySpreadMean`, `minEvidenceCoverageMean`, `minVocabularyContinuityMean`.
 - Use shared config parser (`lib/config-input.ts`) across query routes to keep config semantics consistent.
+- Query/config contracts now expose the full pedagogy controls used by tree generation:
+  - `abstractionLevel`, `complexityLevel`, `maxChildrenPerParent`
+  - `audienceLevel`, `language`, `readingLevelTarget`
+  - `complexityBandWidth`, `termIntroductionBudget`, `proofDetailMode`
 - Proof switching is supported through `/proofs?proofId=<id>` with validation against supported IDs.
 
 ## Verification integration

@@ -9,7 +9,10 @@ describe("config input", () => {
       maxChildrenPerParent: "6",
       audienceLevel: "expert",
       language: "fr",
+      readingLevelTarget: "graduate",
+      complexityBandWidth: "2",
       termIntroductionBudget: "3",
+      proofDetailMode: "formal",
     });
 
     expect(readConfigFromSearchParams(params)).toEqual({
@@ -18,7 +21,18 @@ describe("config input", () => {
       maxChildrenPerParent: 6,
       audienceLevel: "expert",
       language: "fr",
+      readingLevelTarget: "graduate",
+      complexityBandWidth: 2,
       termIntroductionBudget: 3,
+      proofDetailMode: "formal",
     });
+  });
+
+  it("rejects invalid enum values with deterministic errors", () => {
+    const params = new URLSearchParams({
+      proofDetailMode: "verbose",
+    });
+
+    expect(() => readConfigFromSearchParams(params)).toThrow("Expected proofDetailMode to be one of: minimal, balanced, formal.");
   });
 });

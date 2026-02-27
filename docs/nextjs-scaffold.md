@@ -43,6 +43,10 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 - Parent nodes include policy diagnostics in tree query payloads so browser views can audit complexity/prerequisite/term-budget compliance.
 - Policy report route exposes deterministic quality metrics/threshold outcomes using the evaluation harness, with optional threshold overrides for pedagogy calibration.
 - Shared config query parsing is centralized in `apps/web/lib/config-input.ts` for route consistency.
+- Shared config query parsing now covers the full pedagogy knob surface used by generation and hashing:
+  - `abstractionLevel`, `complexityLevel`, `maxChildrenPerParent`
+  - `audienceLevel`, `language`, `readingLevelTarget`
+  - `complexityBandWidth`, `termIntroductionBudget`, `proofDetailMode`
 - The Lean fixture uses a deterministic summary provider (`temperature=0` behavior with fixed evidence-only synthesis), so parent statements remain child-entailed and reproducible.
 - Reproducibility contract for each queued job is derived from the selected theorem leaf:
   - source revision (`EXPLAIN_MD_SOURCE_REVISION` or Vercel commit SHA fallback)

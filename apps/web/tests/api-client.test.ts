@@ -46,7 +46,10 @@ describe("api client", () => {
       maxChildrenPerParent: 6,
       audienceLevel: "expert",
       language: "en",
+      readingLevelTarget: "undergraduate",
+      complexityBandWidth: 2,
       termIntroductionBudget: 1,
+      proofDetailMode: "formal",
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -58,7 +61,10 @@ describe("api client", () => {
     expect(requestUrl).toContain("maxChildrenPerParent=6");
     expect(requestUrl).toContain("audienceLevel=expert");
     expect(requestUrl).toContain("language=en");
+    expect(requestUrl).toContain("readingLevelTarget=undergraduate");
+    expect(requestUrl).toContain("complexityBandWidth=2");
     expect(requestUrl).toContain("termIntroductionBudget=1");
+    expect(requestUrl).toContain("proofDetailMode=formal");
   });
 
   it("encodes node id and pagination for children queries", async () => {

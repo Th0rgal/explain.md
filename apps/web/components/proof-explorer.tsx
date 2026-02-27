@@ -29,7 +29,10 @@ const DEFAULT_CONFIG: ProofConfigInput = {
   maxChildrenPerParent: 3,
   audienceLevel: "intermediate",
   language: "en",
+  readingLevelTarget: "high_school",
+  complexityBandWidth: 1,
   termIntroductionBudget: 2,
+  proofDetailMode: "balanced",
 };
 
 interface ProofExplorerProps {
@@ -453,6 +456,59 @@ export function ProofExplorer(props: ProofExplorerProps) {
             <option value="intermediate">Intermediate</option>
             <option value="expert">Expert</option>
           </select>
+        </label>
+        <label>
+          Reading level
+          <select
+            value={config.readingLevelTarget}
+            onChange={(event) =>
+              updateConfig(
+                "readingLevelTarget",
+                event.target.value as "elementary" | "middle_school" | "high_school" | "undergraduate" | "graduate",
+              )
+            }
+          >
+            <option value="elementary">Elementary</option>
+            <option value="middle_school">Middle school</option>
+            <option value="high_school">High school</option>
+            <option value="undergraduate">Undergraduate</option>
+            <option value="graduate">Graduate</option>
+          </select>
+        </label>
+        <label>
+          Proof detail
+          <select
+            value={config.proofDetailMode}
+            onChange={(event) => updateConfig("proofDetailMode", event.target.value as "minimal" | "balanced" | "formal")}
+          >
+            <option value="minimal">Minimal</option>
+            <option value="balanced">Balanced</option>
+            <option value="formal">Formal</option>
+          </select>
+        </label>
+        <label>
+          Complexity band
+          <input
+            type="number"
+            min={0}
+            max={3}
+            value={config.complexityBandWidth}
+            onChange={(event) => updateConfig("complexityBandWidth", Number(event.target.value))}
+          />
+        </label>
+        <label>
+          Term budget
+          <input
+            type="number"
+            min={0}
+            max={8}
+            value={config.termIntroductionBudget}
+            onChange={(event) => updateConfig("termIntroductionBudget", Number(event.target.value))}
+          />
+        </label>
+        <label>
+          Language
+          <input type="text" value={config.language} onChange={(event) => updateConfig("language", event.target.value)} />
         </label>
       </section>
 

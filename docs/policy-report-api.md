@@ -16,7 +16,10 @@ Shared config knobs (same parser as other proof query routes):
 - `maxChildrenPerParent`
 - `audienceLevel`
 - `language`
+- `readingLevelTarget`
+- `complexityBandWidth`
 - `termIntroductionBudget`
+- `proofDetailMode`
 
 Optional threshold overrides (`[0,1]`):
 - `maxUnsupportedParentRate`
