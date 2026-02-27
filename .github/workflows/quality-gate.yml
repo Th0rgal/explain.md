@@ -45,6 +45,9 @@ jobs:
       - name: Run web build
         run: npm run web:build
 
+      - name: Run deterministic tree accessibility benchmark baseline check
+        run: npm run web:eval:tree-a11y:ci
+
       - name: Validate research dossier evidence map
         run: npm run eval:research-dossier
 
@@ -59,6 +62,7 @@ jobs:
           path: |
             .explain-md/quality-gate-report-*.json
             .explain-md/quality-gate-baseline-check.json
+            .explain-md/tree-a11y-evaluation-report.json
             .explain-md/observability-slo-benchmark-report.json
             .explain-md/research-dossier-report.json
             .explain-md/release-gate-report.json

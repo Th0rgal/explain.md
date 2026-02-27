@@ -40,6 +40,7 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #19 follow-up: deterministic prompt-boundary hardening for parent-summary generation with child-ID safety validation, untrusted-text sanitization, secret/injection redaction, auditable boundary markers, and fail-closed output rejection (`secret_leak` / `prompt_injection`).
 - Issue #24: research dossier with machine-checkable issue-to-evidence mapping for inductive tree design decisions, pedagogy controls, and evaluation strategy.
 - Issue #24 follow-up: research dossier decisions now include pinned artifact-hash evidence checks plus pinned command-replay outcome hashes, fail-closed in CI via `eval:research-dossier`.
+- Issue #15 follow-up: deterministic tree accessibility benchmark is now fail-closed in CI via baseline hash checks (`web:eval:tree-a11y:ci`).
 
 ## Local checks
 ```bash
@@ -63,6 +64,7 @@ npm run web:typecheck
 npm run web:test
 npm run web:build
 npm run web:bench:cache
+npm run web:eval:tree-a11y:ci
 ```
 
 ## Live provider check

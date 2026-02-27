@@ -10,6 +10,14 @@ npm run web:bench:tree-a11y
 This writes:
 - `docs/benchmarks/tree-a11y-evaluation.json`
 
+CI baseline check:
+```bash
+npm run web:eval:tree-a11y:ci
+```
+
+This replays the benchmark, fails closed on baseline drift (`requestHash`/`outcomeHash`), and writes:
+- `.explain-md/tree-a11y-evaluation-report.json`
+
 ## What It Verifies
 - Deterministic keyboard transcript across a fixed tree fixture and key sequence.
 - Expand/collapse/active transitions via pure `resolveTreeKeyboardIntent` planning.
