@@ -91,6 +91,7 @@ interface TreeStorageDiagnostic {
 export interface ProofQueryObservability {
   requestId: string;
   traceId: string;
+  query: "view" | "diff" | "leaf-detail" | "root" | "children" | "path" | "dependency-graph" | "policy-report" | "cache-report";
   spans: Array<{
     spanId: string;
     name: "dataset_load" | "query_compute" | "response_materialization";
@@ -104,6 +105,30 @@ export interface ProofQueryObservability {
     nodeCount: number;
     maxDepth: number;
   };
+}
+
+export interface ProofQueryObservabilityMetricsResponse {
+  schemaVersion: "1.0.0";
+  requestCount: number;
+  uniqueRequestCount: number;
+  uniqueTraceCount: number;
+  cache: {
+    hitCount: number;
+    missCount: number;
+    hitRate: number;
+  };
+  queries: Array<{
+    query: "view" | "diff" | "leaf-detail" | "root" | "children" | "path" | "dependency-graph" | "policy-report" | "cache-report";
+    requestCount: number;
+    cacheHitCount: number;
+    cacheMissCount: number;
+    meanLeafCount: number;
+    meanParentCount: number;
+    meanNodeCount: number;
+    maxDepth: number;
+  }>;
+  generatedAt: string;
+  snapshotHash: string;
 }
 
 export interface ProjectionResponse {
@@ -690,6 +715,10 @@ export async function fetchVerificationJob(
 
 export async function fetchVerificationObservabilityMetrics(): Promise<VerificationObservabilityMetricsResponse> {
   return requestJson<VerificationObservabilityMetricsResponse>("/api/observability/verification-metrics");
+}
+
+export async function fetchProofQueryObservabilityMetrics(): Promise<ProofQueryObservabilityMetricsResponse> {
+  return requestJson<ProofQueryObservabilityMetricsResponse>("/api/observability/proof-query-metrics");
 }
 
 export async function fetchConfigProfiles(projectId: string, userId: string): Promise<ConfigProfilesResponse> {

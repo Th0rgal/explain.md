@@ -56,6 +56,7 @@ const LEAN_FIXTURE_SOURCE_BASE_URL =
   "https://github.com/Th0rgal/explain.md/blob/main/tests/fixtures/lean-project";
 const PROOF_DATASET_CACHE_SCHEMA_VERSION = "1.0.0";
 const DEFAULT_PROOF_DATASET_CACHE_DIR = path.resolve(process.cwd(), ".explain-md", "web-proof-cache");
+const PROOF_QUERY_OBSERVABILITY_SAMPLE_WINDOW = 1024;
 
 const SUPPORTED_PROOF_IDS = [SEED_PROOF_ID, LEAN_FIXTURE_PROOF_ID] as const;
 
@@ -88,6 +89,30 @@ interface ResolvedDataset {
 
 type ProofDatasetCacheStatus = "hit" | "miss";
 type ProofDatasetCacheLayer = "persistent" | "ephemeral";
+export type ProofObservabilityQuery =
+  | "view"
+  | "diff"
+  | "leaf-detail"
+  | "root"
+  | "children"
+  | "path"
+  | "dependency-graph"
+  | "policy-report"
+  | "cache-report";
+
+interface ProofQueryObservabilityEvent {
+  query: ProofObservabilityQuery;
+  traceId: string;
+  requestId: string;
+  cacheLayer: ProofDatasetCacheLayer;
+  cacheStatus: ProofDatasetCacheStatus;
+  leafCount: number;
+  parentCount: number;
+  nodeCount: number;
+  maxDepth: number;
+}
+
+const proofQueryObservabilityEvents: ProofQueryObservabilityEvent[] = [];
 
 export interface ProofDatasetCacheDiagnostic {
   code:
@@ -266,6 +291,7 @@ export interface ProofCacheReportView {
 export interface ProofQueryObservability {
   requestId: string;
   traceId: string;
+  query: ProofObservabilityQuery;
   spans: Array<{
     spanId: string;
     name: "dataset_load" | "query_compute" | "response_materialization";
@@ -279,6 +305,30 @@ export interface ProofQueryObservability {
     nodeCount: number;
     maxDepth: number;
   };
+}
+
+export interface ProofQueryObservabilityMetricsSnapshot {
+  schemaVersion: "1.0.0";
+  requestCount: number;
+  uniqueRequestCount: number;
+  uniqueTraceCount: number;
+  cache: {
+    hitCount: number;
+    missCount: number;
+    hitRate: number;
+  };
+  queries: Array<{
+    query: ProofObservabilityQuery;
+    requestCount: number;
+    cacheHitCount: number;
+    cacheMissCount: number;
+    meanLeafCount: number;
+    meanParentCount: number;
+    meanNodeCount: number;
+    maxDepth: number;
+  }>;
+  generatedAt: string;
+  snapshotHash: string;
 }
 
 export function getSupportedProofIds(): string[] {
@@ -4229,7 +4279,7 @@ function buildProofQueryObservability(input: {
   proofId: string;
   configHash: string;
   requestHash: string;
-  query: string;
+  query: ProofObservabilityQuery;
   tree: ExplanationTree;
   cache: ProofDatasetCacheMetadata;
   extraMetrics?: Record<string, boolean | number | string>;
@@ -4270,12 +4320,94 @@ function buildProofQueryObservability(input: {
       configHash: input.configHash,
     },
   }));
+  recordProofQueryObservabilityEvent({
+    query: input.query,
+    traceId,
+    requestId: input.requestHash,
+    cacheLayer: input.cache.layer,
+    cacheStatus: input.cache.status,
+    leafCount: metrics.leafCount,
+    parentCount: metrics.parentCount,
+    nodeCount: metrics.nodeCount,
+    maxDepth: metrics.maxDepth,
+  });
   return {
     requestId: input.requestHash,
     traceId,
+    query: input.query,
     spans,
     metrics,
   };
+}
+
+export function exportProofQueryObservabilityMetrics(): ProofQueryObservabilityMetricsSnapshot {
+  const generatedAt = new Date().toISOString();
+  const requestCount = proofQueryObservabilityEvents.length;
+  const uniqueRequestCount = new Set(proofQueryObservabilityEvents.map((event) => event.requestId)).size;
+  const uniqueTraceCount = new Set(proofQueryObservabilityEvents.map((event) => event.traceId)).size;
+  const hitCount = proofQueryObservabilityEvents.filter((event) => event.cacheStatus === "hit").length;
+  const missCount = requestCount - hitCount;
+  const queryOrder: ProofObservabilityQuery[] = [
+    "view",
+    "diff",
+    "leaf-detail",
+    "root",
+    "children",
+    "path",
+    "dependency-graph",
+    "policy-report",
+    "cache-report",
+  ];
+  const queries = queryOrder.map((query) => {
+    const events = proofQueryObservabilityEvents.filter((event) => event.query === query);
+    const requestCountForQuery = events.length;
+    const cacheHitCount = events.filter((event) => event.cacheStatus === "hit").length;
+    const cacheMissCount = requestCountForQuery - cacheHitCount;
+    const meanLeafCount = requestCountForQuery === 0 ? 0 : sum(events.map((event) => event.leafCount)) / requestCountForQuery;
+    const meanParentCount = requestCountForQuery === 0 ? 0 : sum(events.map((event) => event.parentCount)) / requestCountForQuery;
+    const meanNodeCount = requestCountForQuery === 0 ? 0 : sum(events.map((event) => event.nodeCount)) / requestCountForQuery;
+    const maxDepth = requestCountForQuery === 0 ? 0 : Math.max(...events.map((event) => event.maxDepth));
+    return {
+      query,
+      requestCount: requestCountForQuery,
+      cacheHitCount,
+      cacheMissCount,
+      meanLeafCount,
+      meanParentCount,
+      meanNodeCount,
+      maxDepth,
+    };
+  });
+
+  const snapshotWithoutHash = {
+    schemaVersion: "1.0.0" as const,
+    requestCount,
+    uniqueRequestCount,
+    uniqueTraceCount,
+    cache: {
+      hitCount,
+      missCount,
+      hitRate: requestCount === 0 ? 0 : hitCount / requestCount,
+    },
+    queries,
+    generatedAt,
+  };
+
+  return {
+    ...snapshotWithoutHash,
+    snapshotHash: computeCanonicalRequestHash(snapshotWithoutHash),
+  };
+}
+
+export function clearProofQueryObservabilityMetricsForTests(): void {
+  proofQueryObservabilityEvents.length = 0;
+}
+
+function recordProofQueryObservabilityEvent(event: ProofQueryObservabilityEvent): void {
+  proofQueryObservabilityEvents.push(event);
+  if (proofQueryObservabilityEvents.length > PROOF_QUERY_OBSERVABILITY_SAMPLE_WINDOW) {
+    proofQueryObservabilityEvents.splice(0, proofQueryObservabilityEvents.length - PROOF_QUERY_OBSERVABILITY_SAMPLE_WINDOW);
+  }
 }
 
 function computeCanonicalRequestHash(input: Record<string, unknown>): string {
@@ -4295,6 +4427,10 @@ function stableReplacer(_key: string, value: unknown): unknown {
       accumulator[key] = record[key];
       return accumulator;
     }, {});
+}
+
+function sum(values: number[]): number {
+  return values.reduce((accumulator, value) => accumulator + value, 0);
 }
 
 function sampleVerificationJobs(proofId: string, leafId: string): VerificationJob[] {

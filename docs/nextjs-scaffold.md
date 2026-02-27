@@ -30,6 +30,7 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - `GET /api/proofs/leaves/:leafId/verification-jobs`
   - `GET /api/verification/jobs/:jobId`
   - `GET /api/observability/verification-metrics`
+  - `GET /api/observability/proof-query-metrics`
 - Verification state is persisted in a canonical ledger at `.explain-md/web-verification-ledger.json`.
 - Leaf detail uses persisted verification jobs from the ledger, so panel metadata is queryable and stable across reloads.
 - Verification requests emit deterministic hashes (`requestHash`, `queuedJobHash`, `finalJobHash`) and deterministic sequential job IDs (`job-000001`, ...).
@@ -53,9 +54,13 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - `viewHash` / `diffHash` / `detailHash`
 - Core proof query responses also include deterministic observability blocks for tracing and dashboards:
   - `requestId` (`requestHash`)
+  - `query` (`view | diff | leaf-detail | root | children | path | dependency-graph | policy-report | cache-report`)
   - `traceId`
   - fixed span set: `dataset_load`, `query_compute`, `response_materialization`
   - metrics: `cacheLayer`, `cacheStatus`, `leafCount`, `parentCount`, `nodeCount`, `maxDepth`
+- Core proof-query observability now has a deterministic aggregate export contract:
+  - `GET /api/observability/proof-query-metrics`
+  - rolling-window request/correlation/cache aggregates with per-query mean tree sizes and canonical `snapshotHash`
 - Leaf detail panel is backed by provenance path plus persisted verification history.
 - Node/root/path query routes use canonical tree-storage snapshots, enabling stable root/children/ancestry reads for progressive expansion UIs.
 - Dependency graph route exposes deterministic SCC/reachability data and per-declaration support closures for browser-side provenance checks.

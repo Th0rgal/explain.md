@@ -16,7 +16,9 @@ import {
   buildSeedNodePathView,
   buildSeedProjection,
   buildSeedRootView,
+  clearProofQueryObservabilityMetricsForTests,
   clearProofDatasetCacheForTests,
+  exportProofQueryObservabilityMetrics,
   LEAN_FIXTURE_PROOF_ID,
   listProofs,
   listSeedProofs,
@@ -90,6 +92,7 @@ describe("proof service", () => {
   });
 
   it("returns deterministic root/children/path query views", () => {
+    clearProofQueryObservabilityMetricsForTests();
     const root = buildSeedRootView(SEED_PROOF_ID, {
       abstractionLevel: 3,
       complexityLevel: 3,
@@ -124,6 +127,44 @@ describe("proof service", () => {
     expect(path.path.path[0]?.id).toBe("p2_root");
     expect(path.path.path[path.path.path.length - 1]?.id).toBe("Verity.ContractSpec.init_sound");
     expect(path.observability.traceId).toHaveLength(64);
+  });
+
+  it("exports deterministic aggregate proof-query observability metrics", () => {
+    clearProofQueryObservabilityMetricsForTests();
+
+    buildSeedProjection({
+      proofId: SEED_PROOF_ID,
+      config: {
+        abstractionLevel: 4,
+        complexityLevel: 2,
+      },
+    });
+    buildSeedRootView(SEED_PROOF_ID, {
+      abstractionLevel: 4,
+      complexityLevel: 2,
+    });
+    buildSeedNodeChildrenView({
+      proofId: SEED_PROOF_ID,
+      nodeId: "p2_root",
+      limit: 2,
+      offset: 0,
+    });
+
+    const first = exportProofQueryObservabilityMetrics();
+    const second = exportProofQueryObservabilityMetrics();
+    expect(first.schemaVersion).toBe("1.0.0");
+    expect(first.requestCount).toBe(3);
+    expect(first.uniqueRequestCount).toBe(3);
+    expect(first.uniqueTraceCount).toBe(3);
+    expect(first.cache.hitCount).toBe(0);
+    expect(first.cache.missCount).toBe(3);
+    expect(first.cache.hitRate).toBe(0);
+    expect(first.queries.find((entry) => entry.query === "view")?.requestCount).toBe(1);
+    expect(first.queries.find((entry) => entry.query === "root")?.requestCount).toBe(1);
+    expect(first.queries.find((entry) => entry.query === "children")?.requestCount).toBe(1);
+    expect(first.queries.find((entry) => entry.query === "diff")?.requestCount).toBe(0);
+    expect(first.snapshotHash).toHaveLength(64);
+    expect(second.snapshotHash).toHaveLength(64);
   });
 
   it("lists both seed and Lean fixture proofs in catalog", async () => {

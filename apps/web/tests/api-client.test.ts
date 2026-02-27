@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   fetchCacheReport,
   fetchConfigProfiles,
+  fetchProofQueryObservabilityMetrics,
   fetchVerificationObservabilityMetrics,
   fetchDiff,
   fetchDependencyGraph,
@@ -330,6 +331,34 @@ describe("api client", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith("/api/observability/verification-metrics", undefined);
+  });
+
+  it("fetches proof-query observability metrics export endpoint", async () => {
+    const fetchMock = vi.fn(async () =>
+      buildMockResponse({
+        ok: true,
+        data: {
+          schemaVersion: "1.0.0",
+          requestCount: 4,
+          uniqueRequestCount: 4,
+          uniqueTraceCount: 4,
+          cache: {
+            hitCount: 1,
+            missCount: 3,
+            hitRate: 0.25,
+          },
+          queries: [],
+          generatedAt: "2026-02-27T00:00:00.000Z",
+          snapshotHash: "e".repeat(64),
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchProofQueryObservabilityMetrics();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith("/api/observability/proof-query-metrics", undefined);
   });
 
   it("encodes dependency graph query contract deterministically", async () => {
