@@ -264,11 +264,19 @@ export function validateParentSummary(
 
   const childIds = new Set(children.map((child) => child.id));
   const invalidRefs = evidenceRefs.filter((ref) => !childIds.has(ref));
+  const missingEvidenceRefs = [...childIds].filter((childId) => !evidenceRefs.includes(childId));
   if (invalidRefs.length > 0 || evidenceRefs.length === 0) {
     violations.push({
       code: "evidence_refs",
       message: "evidence_refs must be non-empty and only include provided child IDs.",
       details: { invalidRefs },
+    });
+  }
+  if (config.entailmentMode === "strict" && missingEvidenceRefs.length > 0) {
+    violations.push({
+      code: "evidence_refs",
+      message: "strict entailment mode requires evidence_refs to cover every child ID.",
+      details: { missingEvidenceRefs },
     });
   }
 
@@ -279,6 +287,16 @@ export function validateParentSummary(
       details: {
         introduced: newTermsIntroduced.length,
         budget: config.termIntroductionBudget,
+      },
+    });
+  }
+  if (config.entailmentMode === "strict" && newTermsIntroduced.length > 0) {
+    violations.push({
+      code: "term_budget",
+      message: "strict entailment mode requires zero new_terms_introduced.",
+      details: {
+        introduced: newTermsIntroduced.length,
+        budget: 0,
       },
     });
   }
@@ -294,15 +312,23 @@ export function validateParentSummary(
   }
 
   const supportCoverageFloor = computeSupportCoverageFloor(config);
-  const coverage = computeParentTokenCoverage(summary.parent_statement, children, newTermsIntroduced);
+  const coverageInput =
+    config.entailmentMode === "strict"
+      ? `${summary.parent_statement} ${summary.why_true_from_children}`.trim()
+      : summary.parent_statement;
+  const coverage = computeParentTokenCoverage(coverageInput, children, newTermsIntroduced);
   if (coverage.total >= MIN_PARENT_TOKENS_FOR_COVERAGE_CHECK && coverage.ratio < supportCoverageFloor) {
     violations.push({
       code: "unsupported_terms",
-      message: "parent_statement has low evidence-term coverage and may introduce unsupported claims.",
+      message:
+        config.entailmentMode === "strict"
+          ? "strict entailment mode requires full evidence-term coverage across parent statement and entailment rationale."
+          : "parent_statement has low evidence-term coverage and may introduce unsupported claims.",
       details: {
         coverageRatio: coverage.ratio,
         minimumRequired: supportCoverageFloor,
         entailmentMode: config.entailmentMode,
+        scope: config.entailmentMode === "strict" ? "parent_statement_and_why_true_from_children" : "parent_statement",
         unsupported: coverage.unsupported,
       },
     });

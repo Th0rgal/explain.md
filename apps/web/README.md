@@ -104,6 +104,10 @@ The tree panel uses incremental root/children/path queries:
   - unsupported tags fallback to `en`
 - Proof Explorer language control is an explicit toggle (`English`, `French`) mapped to the same route-level config contract.
 - Proof Explorer controls expose an explicit `entailmentMode` selector (`calibrated` vs `strict`) and propagate it through root/tree/policy queries.
+  - Strict mode semantics are fail-closed and deterministic:
+    - parent `evidenceRefs` must cover all grouped children
+    - `newTermsIntroduced` must be empty even if `termIntroductionBudget > 0`
+    - unsupported-term checks include both parent statement and entailment rationale
 - Large trees use deterministic render-window planning to bound DOM row count while preserving root-first ordering.
   - Window diagnostics are surfaced as `data-tree-*` attributes on the tree panel (`mode`, `total`, `rendered`, `hiddenAbove`, `hiddenBelow`).
   - Paging controls (`Show previous rows` / `Show next rows`) shift the window deterministically without mutating proof data.

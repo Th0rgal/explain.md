@@ -159,6 +159,81 @@ describe("summary pipeline", () => {
     expect(unsupported?.details?.minimumRequired).toBe(1);
   });
 
+  test("strict entailment mode rejects introduced terms even when configured budget is non-zero", async () => {
+    const config = normalizeConfig({ entailmentMode: "strict", termIntroductionBudget: 2 });
+    const provider = mockProvider({
+      parent_statement: "Storage bounds remain stable.",
+      why_true_from_children: "c1 proves this stability claim.",
+      new_terms_introduced: ["stability"],
+      complexity_score: 3,
+      abstraction_score: 3,
+      evidence_refs: ["c1"],
+      confidence: 0.7,
+    });
+
+    const thrown = await captureError(() =>
+      generateParentSummary(provider, {
+        config,
+        children: [{ id: "c1", statement: "Storage bounds remain stable." }],
+      }),
+    );
+    expect(thrown).toBeInstanceOf(SummaryValidationError);
+    const termBudget = (thrown as SummaryValidationError).diagnostics.violations.find((v) => v.code === "term_budget");
+    expect(termBudget).toBeTruthy();
+    expect(termBudget?.message).toContain("strict entailment mode requires zero");
+  });
+
+  test("strict entailment mode requires full child evidence coverage", async () => {
+    const config = normalizeConfig({ entailmentMode: "strict" });
+    const provider = mockProvider({
+      parent_statement: "Bounds remain stable across initialization and updates.",
+      why_true_from_children: "c1 and c2 jointly imply this.",
+      new_terms_introduced: [],
+      complexity_score: 3,
+      abstraction_score: 3,
+      evidence_refs: ["c1"],
+      confidence: 0.7,
+    });
+
+    const thrown = await captureError(() =>
+      generateParentSummary(provider, {
+        config,
+        children: [
+          { id: "c1", statement: "Initialization establishes bounds." },
+          { id: "c2", statement: "Updates preserve bounds." },
+        ],
+      }),
+    );
+    expect(thrown).toBeInstanceOf(SummaryValidationError);
+    const evidenceRefs = (thrown as SummaryValidationError).diagnostics.violations.filter((v) => v.code === "evidence_refs");
+    expect(evidenceRefs.length).toBeGreaterThan(0);
+    expect(JSON.stringify(evidenceRefs)).toContain("missingEvidenceRefs");
+  });
+
+  test("strict entailment mode checks unsupported terms in why_true_from_children", async () => {
+    const config = normalizeConfig({ entailmentMode: "strict" });
+    const provider = mockProvider({
+      parent_statement: "Storage bounds are preserved.",
+      why_true_from_children: "c1 establishes this via extrapolation.",
+      new_terms_introduced: [],
+      complexity_score: 3,
+      abstraction_score: 3,
+      evidence_refs: ["c1"],
+      confidence: 0.7,
+    });
+
+    const thrown = await captureError(() =>
+      generateParentSummary(provider, {
+        config,
+        children: [{ id: "c1", statement: "Storage bounds are preserved." }],
+      }),
+    );
+    expect(thrown).toBeInstanceOf(SummaryValidationError);
+    const unsupported = (thrown as SummaryValidationError).diagnostics.violations.find((v) => v.code === "unsupported_terms");
+    expect(unsupported).toBeTruthy();
+    expect(unsupported?.details?.scope).toBe("parent_statement_and_why_true_from_children");
+  });
+
   test("extracts JSON from fenced block", async () => {
     const config = normalizeConfig({});
     const provider = {
