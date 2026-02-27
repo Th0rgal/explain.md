@@ -232,6 +232,48 @@ describe("summary pipeline", () => {
     expect(userPrompt).toContain("sanitization_redacted_secrets=2");
   });
 
+  test("rejects secret-like token leakage in raw model output before JSON parsing", async () => {
+    const config = normalizeConfig({});
+    const provider = {
+      generate: async () => ({
+        text:
+          "api_key=sk-12345678901234567890123456789012345\n" +
+          JSON.stringify(validSummary(["c1"])),
+        model: "test",
+        finishReason: "stop",
+        raw: {},
+      }),
+      stream: async function* () {
+        return;
+      },
+    } satisfies ProviderClient;
+
+    const thrown = await captureError(() =>
+      generateParentSummary(provider, {
+        config,
+        children: [{ id: "c1", statement: "Storage bounds are preserved." }],
+      }),
+    );
+    expect(thrown).toBeInstanceOf(SummaryValidationError);
+    expect((thrown as SummaryValidationError).diagnostics.violations.map((v) => v.code)).toContain("secret_leak");
+  });
+
+  test("validateParentSummary flags secret-like token leakage in summary fields", () => {
+    const diagnostics = validateParentSummary(
+      {
+        ...validSummary(["c1"]),
+        parent_statement: "Storage bounds remain valid under sk-12345678901234567890123456789012345.",
+      },
+      [{ id: "c1", statement: "Storage bounds are preserved." }],
+      normalizeConfig({}),
+    );
+
+    expect(diagnostics.ok).toBe(false);
+    const secretViolation = diagnostics.violations.find((v) => v.code === "secret_leak");
+    expect(secretViolation).toBeTruthy();
+    expect(secretViolation?.details?.location).toBe("parsed_summary");
+  });
+
   test("normalizeChildren rejects unsafe child ids", async () => {
     const config = normalizeConfig({});
 

@@ -20,8 +20,13 @@ Issue #19 hardening for summary generation focuses on deterministic prompt-bound
   - explicit rules that child payload is data, not instructions
   - explicit `UNTRUSTED_CHILDREN_JSON_BEGIN/END` markers
   - deterministic sanitization counters emitted into prompt metadata
+- Output leak critic:
+  - raw provider output is scanned for secret-like token patterns before JSON parsing
+  - parsed summary fields are scanned again during schema/critic validation
+  - any detection fails with machine-readable `secret_leak` diagnostics
 
 ## Test Coverage
 - Adversarial child content with instruction-like text and secret-like tokens is redacted in prompt payload.
 - Unsafe child IDs are rejected with deterministic errors.
 - Prompt contract includes untrusted boundary markers for auditability.
+- Secret-like leakage from model output is rejected deterministically.

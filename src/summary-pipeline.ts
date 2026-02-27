@@ -19,7 +19,7 @@ export interface ParentSummary {
 }
 
 export interface CriticViolation {
-  code: "schema" | "evidence_refs" | "complexity_band" | "term_budget" | "unsupported_terms";
+  code: "schema" | "evidence_refs" | "complexity_band" | "term_budget" | "unsupported_terms" | "secret_leak";
   message: string;
   details?: Record<string, unknown>;
 }
@@ -110,6 +110,27 @@ export async function generateParentSummary(
     temperature: 0,
     maxOutputTokens: request.config.modelProvider.maxOutputTokens,
   });
+
+  const rawOutputSecretScan = scanTextForSecretLeaks(generated.text);
+  if (rawOutputSecretScan.redactedSecrets > 0) {
+    throw new SummaryValidationError(
+      "Generated parent summary leaked secret-like content in raw output.",
+      {
+        ok: false,
+        violations: [
+          {
+            code: "secret_leak",
+            message: "Generated output contains secret-like token patterns.",
+            details: {
+              location: "raw_output",
+              redactedSecrets: rawOutputSecretScan.redactedSecrets,
+            },
+          },
+        ],
+      },
+      generated.text,
+    );
+  }
 
   const parsed = parseSummaryJson(generated.text);
   const diagnostics = validateParentSummary(parsed, normalizedChildren, request.config);
@@ -283,6 +304,19 @@ export function validateParentSummary(
         minimumRequired: supportCoverageFloor,
         entailmentMode: config.entailmentMode,
         unsupported: coverage.unsupported,
+      },
+    });
+  }
+
+  const summarySecretScan = scanSummaryForSecretLeaks(summary);
+  if (summarySecretScan.redactedSecrets > 0) {
+    violations.push({
+      code: "secret_leak",
+      message: "Summary fields contain secret-like token patterns.",
+      details: {
+        location: "parsed_summary",
+        redactedSecrets: summarySecretScan.redactedSecrets,
+        fields: summarySecretScan.fields,
       },
     });
   }
@@ -468,6 +502,34 @@ function sanitizeTrustedSystemPrompt(systemPrompt: string | undefined): string |
     return undefined;
   }
   return sanitizeUntrustedPromptText(systemPrompt).value;
+}
+
+function scanSummaryForSecretLeaks(summary: ParentSummary): {
+  redactedSecrets: number;
+  fields: string[];
+} {
+  const newTerms = Array.isArray(summary.new_terms_introduced) ? summary.new_terms_introduced : [];
+  const fieldCounts: Array<{ field: string; count: number }> = [
+    { field: "parent_statement", count: scanTextForSecretLeaks(summary.parent_statement).redactedSecrets },
+    { field: "why_true_from_children", count: scanTextForSecretLeaks(summary.why_true_from_children).redactedSecrets },
+    {
+      field: "new_terms_introduced",
+      count: newTerms.reduce(
+        (accumulator, term) => accumulator + scanTextForSecretLeaks(term).redactedSecrets,
+        0,
+      ),
+    },
+  ];
+
+  return {
+    redactedSecrets: fieldCounts.reduce((accumulator, item) => accumulator + item.count, 0),
+    fields: fieldCounts.filter((item) => item.count > 0).map((item) => item.field),
+  };
+}
+
+function scanTextForSecretLeaks(value: string): { redactedSecrets: number } {
+  const sanitized = sanitizeUntrustedPromptText(value);
+  return { redactedSecrets: sanitized.redactedSecrets };
 }
 
 function sanitizeUntrustedPromptText(value: string): { value: string; strippedControlChars: number; redactedSecrets: number } {
