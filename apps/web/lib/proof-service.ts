@@ -87,6 +87,8 @@ type ProofDatasetCacheLayer = "persistent" | "ephemeral";
 export interface ProofDatasetCacheDiagnostic {
   code:
     | "cache_hit"
+    | "cache_semantic_hit"
+    | "cache_incremental_rebuild"
     | "cache_miss"
     | "cache_write_failed"
     | "cache_read_failed"
@@ -770,6 +772,14 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
   const cacheKey = `${proofId}:${configHash}:${sourceFingerprint}`;
   const cached = await readProofDatasetCacheEntry(cachePath);
   const cacheDiagnostics: ProofDatasetCacheDiagnostic[] = [];
+  let rebuiltIngestion:
+    | {
+        ingestionHash: string;
+        theoremLeaves: TheoremLeafRecord[];
+        dependencyGraph: DependencyGraph;
+        dependencyGraphHash: string;
+      }
+    | undefined;
 
   if (cached.entry) {
     if (cached.entry.sourceFingerprint === sourceFingerprint) {
@@ -843,11 +853,90 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
     } else {
       cacheDiagnostics.push({
         code: "cache_miss",
-        message: "Cached dataset source fingerprint mismatch; rebuilding dataset.",
+        message: "Cached dataset source fingerprint mismatch; evaluating theorem-level deltas.",
         details: {
           cachePath,
           expectedSourceFingerprint: cached.entry.sourceFingerprint,
           actualSourceFingerprint: sourceFingerprint,
+        },
+      });
+
+      rebuiltIngestion = ingestFixtureTreeInputs(fixtureProjectRoot, sources);
+      const delta = computeTheoremLeafDelta(cached.entry.snapshot.leafRecords, rebuiltIngestion.theoremLeaves);
+      if (delta.changedLeafCount === 0 && rebuiltIngestion.dependencyGraphHash === cached.entry.dependencyGraphHash) {
+        const imported = importTreeStorageSnapshot(cached.entry.snapshot);
+        const hasImportErrors = imported.diagnostics.some((diagnostic) => diagnostic.severity === "error");
+        const snapshotHash = computeTreeStorageSnapshotHash(cached.entry.snapshot);
+        if (!hasImportErrors && imported.tree && snapshotHash === cached.entry.snapshotHash) {
+          const rebasedSnapshot = exportTreeStorageSnapshot(imported.tree, {
+            proofId,
+            leaves: rebuiltIngestion.theoremLeaves,
+            config,
+          });
+          const rebasedEntry: ProofDatasetCacheEntry = {
+            ...cached.entry,
+            sourceFingerprint,
+            ingestionHash: rebuiltIngestion.ingestionHash,
+            dependencyGraphHash: rebuiltIngestion.dependencyGraphHash,
+            snapshot: rebasedSnapshot,
+            snapshotHash: computeTreeStorageSnapshotHash(rebasedSnapshot),
+          };
+          const cacheWriteError = await writeProofDatasetCacheEntry(cachePath, rebasedEntry);
+          if (cacheWriteError) {
+            cacheDiagnostics.push({
+              code: "cache_write_failed",
+              message: "Failed rebasing persistent cache entry after theorem-level semantic hit.",
+              details: { cachePath, error: cacheWriteError },
+            });
+          }
+          cacheDiagnostics.push({
+            code: "cache_semantic_hit",
+            message:
+              "Reused cached snapshot after source fingerprint mismatch because theorem-level canonical leaves were unchanged.",
+            details: {
+              cachePath,
+              previousSourceFingerprint: cached.entry.sourceFingerprint,
+              sourceFingerprint,
+              unchangedLeafCount: delta.unchangedLeafCount,
+            },
+          });
+
+          return {
+            dataset: {
+              proofId,
+              title: `Lean Verity fixture (${rebuiltIngestion.theoremLeaves.length} declarations, ingestion=${rebuiltIngestion.ingestionHash.slice(0, 8)}, depgraph=${rebuiltIngestion.dependencyGraphHash.slice(0, 8)})`,
+              config,
+              configHash,
+              tree: imported.tree,
+              leaves: rebuiltIngestion.theoremLeaves,
+              dependencyGraph: rebuiltIngestion.dependencyGraph,
+              dependencyGraphHash: rebuiltIngestion.dependencyGraphHash,
+            },
+            queryApi: createTreeQueryApi(rebasedSnapshot),
+            cache: {
+              layer: "persistent",
+              status: "hit",
+              cacheKey,
+              sourceFingerprint,
+              cachePath,
+              snapshotHash: rebasedEntry.snapshotHash,
+              cacheEntryHash: computeProofDatasetCacheEntryHash(rebasedEntry),
+              diagnostics: cacheDiagnostics,
+            },
+          };
+        }
+      }
+
+      cacheDiagnostics.push({
+        code: "cache_incremental_rebuild",
+        message: "Detected theorem-level delta; rebuilding explanation tree from updated leaves.",
+        details: {
+          cachePath,
+          changedLeafCount: delta.changedLeafCount,
+          addedLeafCount: delta.addedLeafCount,
+          removedLeafCount: delta.removedLeafCount,
+          unchangedLeafCount: delta.unchangedLeafCount,
+          changedLeafIds: delta.changedLeafIds.slice(0, 16),
         },
       });
     }
@@ -867,15 +956,11 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
     }
   }
 
-  const ingestion = ingestLeanSources(fixtureProjectRoot, sources, {
-    sourceBaseUrl: LEAN_FIXTURE_SOURCE_BASE_URL,
-  });
-  const ingestionHash = computeLeanIngestionHash(ingestion);
-  const theoremLeaves = mapLeanIngestionToTheoremLeaves(ingestion);
-  const dependencyGraph = buildDeclarationDependencyGraph(
-    theoremLeaves.map((leaf) => ({ id: leaf.id, dependencyIds: leaf.dependencyIds })),
-  );
-  const dependencyGraphHash = computeDependencyGraphHash(dependencyGraph);
+  const rebuilt = rebuiltIngestion ?? ingestFixtureTreeInputs(fixtureProjectRoot, sources);
+  const ingestionHash = rebuilt.ingestionHash;
+  const theoremLeaves = rebuilt.theoremLeaves;
+  const dependencyGraph = rebuilt.dependencyGraph;
+  const dependencyGraphHash = rebuilt.dependencyGraphHash;
 
   const tree = await buildRecursiveExplanationTree(createDeterministicSummaryProvider(), {
     leaves: mapTheoremLeavesToTreeLeaves(theoremLeaves),
@@ -1063,6 +1148,92 @@ function computeSourceFingerprint(sources: Array<{ relativePath: string; filePat
         contentHash: createHash("sha256").update(source.content).digest("hex"),
       }))
       .sort((left, right) => left.relativePath.localeCompare(right.relativePath)),
+  });
+}
+
+function ingestFixtureTreeInputs(
+  fixtureProjectRoot: string,
+  sources: Array<{ relativePath: string; filePath: string; content: string }>,
+): {
+  ingestionHash: string;
+  theoremLeaves: TheoremLeafRecord[];
+  dependencyGraph: DependencyGraph;
+  dependencyGraphHash: string;
+} {
+  const ingestion = ingestLeanSources(fixtureProjectRoot, sources, {
+    sourceBaseUrl: LEAN_FIXTURE_SOURCE_BASE_URL,
+  });
+  const theoremLeaves = mapLeanIngestionToTheoremLeaves(ingestion);
+  const dependencyGraph = buildDeclarationDependencyGraph(
+    theoremLeaves.map((leaf) => ({ id: leaf.id, dependencyIds: leaf.dependencyIds })),
+  );
+
+  return {
+    ingestionHash: computeLeanIngestionHash(ingestion),
+    theoremLeaves,
+    dependencyGraph,
+    dependencyGraphHash: computeDependencyGraphHash(dependencyGraph),
+  };
+}
+
+function computeTheoremLeafDelta(
+  previousLeaves: TheoremLeafRecord[],
+  nextLeaves: TheoremLeafRecord[],
+): {
+  changedLeafCount: number;
+  unchangedLeafCount: number;
+  addedLeafCount: number;
+  removedLeafCount: number;
+  changedLeafIds: string[];
+} {
+  const previousById = new Map(previousLeaves.map((leaf) => [leaf.id, computeTheoremLeafSemanticHash(leaf)]));
+  const nextById = new Map(nextLeaves.map((leaf) => [leaf.id, computeTheoremLeafSemanticHash(leaf)]));
+  const changedLeafIds = new Set<string>();
+  let unchangedLeafCount = 0;
+  let addedLeafCount = 0;
+  let removedLeafCount = 0;
+
+  for (const [leafId, nextHash] of nextById) {
+    const previousHash = previousById.get(leafId);
+    if (previousHash === undefined) {
+      addedLeafCount += 1;
+      changedLeafIds.add(leafId);
+      continue;
+    }
+    if (previousHash === nextHash) {
+      unchangedLeafCount += 1;
+    } else {
+      changedLeafIds.add(leafId);
+    }
+  }
+
+  for (const leafId of previousById.keys()) {
+    if (!nextById.has(leafId)) {
+      removedLeafCount += 1;
+      changedLeafIds.add(leafId);
+    }
+  }
+
+  return {
+    changedLeafCount: changedLeafIds.size,
+    unchangedLeafCount,
+    addedLeafCount,
+    removedLeafCount,
+    changedLeafIds: Array.from(changedLeafIds).sort((left, right) => left.localeCompare(right)),
+  };
+}
+
+function computeTheoremLeafSemanticHash(leaf: TheoremLeafRecord): string {
+  return computeCanonicalRequestHash({
+    id: leaf.id,
+    declarationId: leaf.declarationId,
+    modulePath: leaf.modulePath,
+    declarationName: leaf.declarationName,
+    theoremKind: leaf.theoremKind,
+    statementText: leaf.statementText,
+    prettyStatement: leaf.prettyStatement,
+    tags: leaf.tags,
+    dependencyIds: leaf.dependencyIds,
   });
 }
 

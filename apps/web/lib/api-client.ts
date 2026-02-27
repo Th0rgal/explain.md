@@ -293,6 +293,8 @@ export interface CacheReportResponse {
     diagnostics: Array<{
       code:
         | "cache_hit"
+        | "cache_semantic_hit"
+        | "cache_incremental_rebuild"
         | "cache_miss"
         | "cache_write_failed"
         | "cache_read_failed"

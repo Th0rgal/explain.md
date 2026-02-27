@@ -1,18 +1,18 @@
 {
   "schemaVersion": "1.0.0",
-  "generatedAt": "2026-02-27T10:11:56.901Z",
+  "generatedAt": "2026-02-27T10:32:36.167Z",
   "proofId": "lean-verity-fixture",
   "configHash": "1b1e2b9ff73897b141a9f88c8d23a3b884495340813865fd955fa8fc3eaa4da2",
   "requestHash": "e6f53e14545f9579927084e1924992e7294f331551f9b89f4e93dc25669d6696",
-  "outcomeHash": "ec2b03224d76766cd0843374222e86b81bb998cfb852163c698c5a91341537a3",
+  "outcomeHash": "8c0e86920ad3b8955f1ccd0c8b1d2cba9bd8e19e87554844981e45a992acc4b8",
   "parameters": {
     "coldIterations": 3,
     "warmIterations": 3,
     "mutationTargetPath": "Verity/Core.lean"
   },
   "paths": {
-    "fixtureProjectRootHash": "3141e6d7973b11835552d95f82f26c9650f6eda5d724222ee48693f5286f3682",
-    "cacheDirHash": "5a4bfd6d6e97d0a0354b242bd562187a5404306404b4755615beb98ec13c0b39"
+    "fixtureProjectRootHash": "a9c68205d0f2ed503df015812328d0d78085e2201f475f135892a3fcb212559c",
+    "cacheDirHash": "bd8ba25b12884c023a95163dfa293b201ba2886d13e7e1c501bb22baf9fb47ed"
   },
   "scenarios": {
     "coldNoPersistentCache": {
@@ -22,10 +22,10 @@
         "miss",
         "miss"
       ],
-      "meanMs": 11.696,
-      "medianMs": 6.987,
-      "minMs": 3.911,
-      "maxMs": 24.189
+      "meanMs": 12.169,
+      "medianMs": 7.939,
+      "minMs": 3.877,
+      "maxMs": 24.691
     },
     "warmPersistentCache": {
       "iterations": 3,
@@ -34,20 +34,30 @@
         "hit",
         "hit"
       ],
-      "meanMs": 1.374,
-      "medianMs": 1.313,
-      "minMs": 1.09,
-      "maxMs": 1.719
+      "meanMs": 1.641,
+      "medianMs": 1.485,
+      "minMs": 1.439,
+      "maxMs": 1.999
+    },
+    "semanticNoop": {
+      "beforeChangeStatus": "hit",
+      "afterChangeStatus": "hit",
+      "afterChangeDiagnostics": [
+        "cache_miss",
+        "cache_semantic_hit"
+      ],
+      "afterChangeSnapshotHash": "7a452c77177ec47e9c602b9068cb0f5223386278de9ba674d2822bdb132b4ec4"
     },
     "invalidation": {
       "beforeChangeStatus": "hit",
       "afterChangeStatus": "miss",
       "afterChangeDiagnostics": [
+        "cache_incremental_rebuild",
         "cache_miss"
       ],
-      "afterChangeSnapshotHash": "7a452c77177ec47e9c602b9068cb0f5223386278de9ba674d2822bdb132b4ec4",
+      "afterChangeSnapshotHash": "6d82a245190ac7ac68063a9f778311c7ef4b62480843fc31410a5328efdff595",
       "recoveryStatus": "hit",
-      "recoverySnapshotHash": "7a452c77177ec47e9c602b9068cb0f5223386278de9ba674d2822bdb132b4ec4"
+      "recoverySnapshotHash": "6d82a245190ac7ac68063a9f778311c7ef4b62480843fc31410a5328efdff595"
     }
   }
 }

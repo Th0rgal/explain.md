@@ -278,4 +278,72 @@ describe("proof service", () => {
       await fs.rm(tempCacheDir, { recursive: true, force: true });
     }
   });
+
+  it("reuses cached snapshot on source fingerprint mismatch when theorem leaves are unchanged", async () => {
+    const previousCacheDir = process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR;
+    const previousFixtureRoot = process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT;
+    const tempCacheDir = await fs.mkdtemp(path.join(os.tmpdir(), "explain-md-proof-cache-"));
+    const sourceFixtureRoot = await resolveFixtureRootForTest();
+    const tempFixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), "explain-md-proof-fixture-"));
+    const sourceCorePath = path.join(sourceFixtureRoot, "Verity", "Core.lean");
+    const tempCorePath = path.join(tempFixtureRoot, "Verity", "Core.lean");
+    process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR = tempCacheDir;
+    process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT = tempFixtureRoot;
+
+    try {
+      await fs.cp(sourceFixtureRoot, tempFixtureRoot, { recursive: true });
+
+      clearProofDatasetCacheForTests();
+      const first = await buildProofCacheReportView({
+        proofId: LEAN_FIXTURE_PROOF_ID,
+      });
+      expect(first.cache.status).toBe("miss");
+
+      const originalCore = await fs.readFile(sourceCorePath, "utf8");
+      await fs.writeFile(tempCorePath, `${originalCore.trimEnd()}\n-- test semantic noop mutation\n`, "utf8");
+
+      clearProofDatasetCacheForTests();
+      const second = await buildProofCacheReportView({
+        proofId: LEAN_FIXTURE_PROOF_ID,
+      });
+
+      expect(second.cache.status).toBe("hit");
+      expect(second.cache.sourceFingerprint).not.toBe(first.cache.sourceFingerprint);
+      expect(second.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_semantic_hit")).toBe(true);
+      expect(second.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_incremental_rebuild")).toBe(false);
+    } finally {
+      clearProofDatasetCacheForTests();
+      if (previousCacheDir === undefined) {
+        delete process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR;
+      } else {
+        process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR = previousCacheDir;
+      }
+      if (previousFixtureRoot === undefined) {
+        delete process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT;
+      } else {
+        process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT = previousFixtureRoot;
+      }
+      await fs.rm(tempCacheDir, { recursive: true, force: true });
+      await fs.rm(tempFixtureRoot, { recursive: true, force: true });
+    }
+  });
 });
+
+async function resolveFixtureRootForTest(): Promise<string> {
+  const candidates = [
+    path.resolve(process.cwd(), "tests", "fixtures", "lean-project"),
+    path.resolve(process.cwd(), "..", "tests", "fixtures", "lean-project"),
+    path.resolve(process.cwd(), "..", "..", "tests", "fixtures", "lean-project"),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      await fs.access(path.join(candidate, "Verity", "Core.lean"));
+      return candidate;
+    } catch {
+      // Continue probing.
+    }
+  }
+
+  throw new Error(`Unable to resolve fixture root for tests. Tried: ${candidates.join(", ")}`);
+}

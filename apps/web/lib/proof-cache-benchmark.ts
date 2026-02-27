@@ -8,7 +8,9 @@ import { LEAN_FIXTURE_PROOF_ID, buildProofCacheReportView, clearProofDatasetCach
 
 const BENCHMARK_SCHEMA_VERSION = "1.0.0";
 const MUTATION_TARGET_RELATIVE_PATH = "Verity/Core.lean";
-const MUTATION_COMMENT = "-- explain-md benchmark mutation";
+const NOOP_MUTATION_COMMENT = "-- explain-md benchmark noop mutation";
+const INCREMENTAL_REBUILD_MUTATION_FROM = "theorem core_safe (n : Nat) : inc n = Nat.succ n := by";
+const INCREMENTAL_REBUILD_MUTATION_TO = "theorem core_safe (n : Nat) : inc n = Nat.succ (Nat.succ n) := by";
 
 export interface ProofCacheBenchmarkOptions {
   proofId?: string;
@@ -44,6 +46,12 @@ export interface ProofCacheBenchmarkReport {
   scenarios: {
     coldNoPersistentCache: ScenarioSummary;
     warmPersistentCache: ScenarioSummary;
+    semanticNoop: {
+      beforeChangeStatus: "hit" | "miss";
+      afterChangeStatus: "hit" | "miss";
+      afterChangeDiagnostics: string[];
+      afterChangeSnapshotHash: string;
+    };
     invalidation: {
       beforeChangeStatus: "hit" | "miss";
       afterChangeStatus: "hit" | "miss";
@@ -110,10 +118,21 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
     }
 
     clearProofDatasetCacheForTests();
-    const beforeChange = await buildProofCacheReportView({ proofId, config: normalizedConfig });
+    const beforeNoop = await buildProofCacheReportView({ proofId, config: normalizedConfig });
     const mutationPath = path.join(fixtureProjectRoot, MUTATION_TARGET_RELATIVE_PATH);
     const originalContent = await fs.readFile(mutationPath, "utf8");
-    await fs.writeFile(mutationPath, `${originalContent.trimEnd()}\n${MUTATION_COMMENT}\n`, "utf8");
+    await fs.writeFile(mutationPath, `${originalContent.trimEnd()}\n${NOOP_MUTATION_COMMENT}\n`, "utf8");
+
+    clearProofDatasetCacheForTests();
+    const afterNoop = await buildProofCacheReportView({ proofId, config: normalizedConfig });
+    await fs.writeFile(mutationPath, originalContent, "utf8");
+
+    clearProofDatasetCacheForTests();
+    const beforeChange = await buildProofCacheReportView({ proofId, config: normalizedConfig });
+    const mutationAppliedContent = originalContent.includes(INCREMENTAL_REBUILD_MUTATION_FROM)
+      ? originalContent.replace(INCREMENTAL_REBUILD_MUTATION_FROM, INCREMENTAL_REBUILD_MUTATION_TO)
+      : `${originalContent.trimEnd()}\n${INCREMENTAL_REBUILD_MUTATION_TO}\n`;
+    await fs.writeFile(mutationPath, mutationAppliedContent, "utf8");
 
     clearProofDatasetCacheForTests();
     const afterChange = await buildProofCacheReportView({ proofId, config: normalizedConfig });
@@ -123,6 +142,12 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
 
     const coldSummary = summarizeScenario(coldSamples);
     const warmSummary = summarizeScenario(warmSamples);
+    const semanticNoop = {
+      beforeChangeStatus: beforeNoop.cache.status,
+      afterChangeStatus: afterNoop.cache.status,
+      afterChangeDiagnostics: afterNoop.cache.diagnostics.map((diagnostic) => diagnostic.code).sort(),
+      afterChangeSnapshotHash: afterNoop.cache.snapshotHash,
+    };
     const invalidation = {
       beforeChangeStatus: beforeChange.cache.status,
       afterChangeStatus: afterChange.cache.status,
@@ -145,6 +170,8 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
       coldStatuses: coldSummary.statuses,
       warmStatuses: warmSummary.statuses,
       invalidation: {
+        semanticNoopStatus: semanticNoop.afterChangeStatus,
+        semanticNoopDiagnostics: semanticNoop.afterChangeDiagnostics,
         beforeChangeStatus: invalidation.beforeChangeStatus,
         afterChangeStatus: invalidation.afterChangeStatus,
         afterChangeDiagnostics: invalidation.afterChangeDiagnostics,
@@ -172,6 +199,7 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
       scenarios: {
         coldNoPersistentCache: coldSummary,
         warmPersistentCache: warmSummary,
+        semanticNoop,
         invalidation,
       },
     };

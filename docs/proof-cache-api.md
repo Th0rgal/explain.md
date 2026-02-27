@@ -42,7 +42,10 @@ Deterministic cache-reuse diagnostics for proof dataset generation.
 
 ## Determinism + invalidation
 - Persistent cache path is deterministic by `proofId` and `configHash`.
-- Reuse requires a matching `sourceFingerprint` (computed from Lean fixture file paths + content hashes).
+- `sourceFingerprint` is computed from Lean fixture file paths + content hashes.
+- On `sourceFingerprint` mismatch, theorem-level canonical leaf deltas are computed:
+  - empty delta: cached snapshot is reused (`cache_semantic_hit`) and cache entry is rebased to the new fingerprint;
+  - non-empty delta: deterministic rebuild runs with `cache_incremental_rebuild` diagnostics.
 - Cache entry integrity is checked by snapshot/dependency hash validation before reuse.
 - On mismatch or invalid entry, the dataset is rebuilt deterministically and cache is overwritten.
 

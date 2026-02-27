@@ -13,13 +13,15 @@ By default this writes:
 ## What It Measures
 - Cold path (`coldNoPersistentCache`): persistent cache removed before each iteration.
 - Warm path (`warmPersistentCache`): persistent cache prewarmed, in-memory cache cleared between iterations.
-- Invalidation path (`invalidation`): mutates `Verity/Core.lean` in a temporary fixture copy, then verifies miss-then-hit recovery.
+- Semantic noop path (`semanticNoop`): applies a source-only comment mutation and verifies theorem-delta-aware cache reuse (`cache_semantic_hit`).
+- Invalidation path (`invalidation`): applies a theorem-level mutation and verifies deterministic miss-then-hit recovery.
 
 ## Determinism and Auditability
 - Report includes:
   - `requestHash`: canonical hash of benchmark inputs (`proofId`, `configHash`, iteration counts).
   - `outcomeHash`: canonical hash of machine-checkable outcomes:
     - cold/warm hit-miss status vectors
+    - semantic noop status transition + diagnostics
     - invalidation status transitions and diagnostic codes
 - Timing fields are informative but not included in `outcomeHash`, so run-to-run performance jitter does not break reproducibility checks.
 
