@@ -16,6 +16,7 @@ Issue #18 introduces deterministic quality scoring for generated explanation tre
   - SHA-256 hash of canonical report bytes.
 - `listQualityBenchmarkPresets()`, `resolveQualityBenchmarkPreset(name)`
   - Deterministic benchmark corpus presets for repeatable CI runs.
+  - Presets can include deterministic `configOverrides` (for example `entailmentMode: "strict"`).
 - `computeQualityBenchmarkPresetHash(preset)`
   - SHA-256 hash of canonical preset bytes for audit trails.
 
@@ -110,6 +111,12 @@ Frozen real-Verity snapshot preset (counter example + AST + proofs):
 npm run eval:quality -- --preset=fixture-verity-counter-snapshot --out=.explain-md/quality-gate-report-counter-snapshot.json
 ```
 
+Strict-entailment variant of the same frozen snapshot:
+
+```bash
+npm run eval:quality -- --preset=fixture-verity-counter-snapshot-strict --out=.explain-md/quality-gate-report-counter-snapshot-strict.json
+```
+
 Optional threshold overrides:
 
 ```bash
@@ -155,7 +162,7 @@ To intentionally refresh baseline expectations after a reviewed benchmark change
 
 ```bash
 node scripts/eval-quality-baseline.mjs \
-  --reports=.explain-md/quality-gate-report-pressure.json,.explain-md/quality-gate-report-broad.json,.explain-md/quality-gate-report-counter-snapshot.json \
+  --reports=.explain-md/quality-gate-report-pressure.json,.explain-md/quality-gate-report-broad.json,.explain-md/quality-gate-report-counter-snapshot.json,.explain-md/quality-gate-report-counter-snapshot-strict.json \
   --baseline=docs/benchmarks/quality-gate-baseline.json \
   --write-baseline
 ```

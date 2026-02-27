@@ -185,6 +185,7 @@ async function main() {
     complexityBandWidth: 2,
     termIntroductionBudget: 0,
     proofDetailMode: "formal",
+    ...(preset?.configOverrides ?? {}),
   });
 
   const started = Date.now();

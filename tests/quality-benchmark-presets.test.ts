@@ -23,6 +23,7 @@ describe("quality-benchmark-presets", () => {
       "fixture-verity-broad",
       "fixture-verity-core",
       "fixture-verity-counter-snapshot",
+      "fixture-verity-counter-snapshot-strict",
       "fixture-verity-loop",
       "fixture-verity-pressure",
     ]);
@@ -50,7 +51,18 @@ describe("quality-benchmark-presets", () => {
     expect(resolveQualityBenchmarkPreset("fixture-verity-counter-snapshot")).toMatchObject({
       projectRoot: "tests/fixtures/lean-verity-counter-snapshot",
       includePaths: ["Verity"],
+      configOverrides: {},
       thresholdOverrides: {},
+    });
+    expect(resolveQualityBenchmarkPreset("fixture-verity-counter-snapshot-strict")).toMatchObject({
+      projectRoot: "tests/fixtures/lean-verity-counter-snapshot",
+      includePaths: ["Verity"],
+      configOverrides: {
+        entailmentMode: "strict",
+      },
+      thresholdOverrides: {
+        maxUnsupportedParentRate: 1,
+      },
     });
     expect(resolveQualityBenchmarkPreset("unknown-preset")).toBeUndefined();
   });
