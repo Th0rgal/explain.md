@@ -107,6 +107,22 @@ export interface TreeQualityMetrics {
   supportCoverageFloor: number;
 }
 
+export interface RepartitionDepthMetrics {
+  depth: number;
+  eventCount: number;
+  preSummaryEventCount: number;
+  postSummaryEventCount: number;
+  maxRound: number;
+}
+
+export interface RepartitionMetrics {
+  eventCount: number;
+  preSummaryEventCount: number;
+  postSummaryEventCount: number;
+  maxRound: number;
+  depthMetrics: RepartitionDepthMetrics[];
+}
+
 export interface EvaluateTreeQualityOptions {
   thresholds?: Partial<TreeQualityThresholds>;
 }
@@ -121,6 +137,7 @@ export interface TreeQualityReport {
   thresholdFailures: TreeQualityThresholdFailure[];
   parentSamples: ParentQualitySample[];
   depthMetrics: DepthQualityMetrics[];
+  repartitionMetrics: RepartitionMetrics;
 }
 
 export function evaluateExplanationTreeQuality(
@@ -134,6 +151,7 @@ export function evaluateExplanationTreeQuality(
   const depthMetrics = buildDepthMetrics(parentSamples, supportCoverageFloor);
   const metrics = aggregateMetrics(parentSamples, supportCoverageFloor);
   const thresholdFailures = evaluateThresholds(metrics, thresholds);
+  const repartitionMetrics = collectRepartitionMetrics(tree);
 
   return {
     rootId: tree.rootId,
@@ -145,6 +163,7 @@ export function evaluateExplanationTreeQuality(
     thresholdFailures,
     parentSamples,
     depthMetrics,
+    repartitionMetrics,
   };
 }
 
@@ -170,6 +189,55 @@ function canonicalizeReport(report: TreeQualityReport): TreeQualityReport {
     thresholdFailures: report.thresholdFailures
       .slice()
       .sort((left, right) => left.code.localeCompare(right.code) || left.message.localeCompare(right.message)),
+    repartitionMetrics: {
+      ...report.repartitionMetrics,
+      depthMetrics: report.repartitionMetrics.depthMetrics.slice().sort((left, right) => left.depth - right.depth),
+    },
+  };
+}
+
+function collectRepartitionMetrics(tree: ExplanationTree): RepartitionMetrics {
+  const byDepth = new Map<number, RepartitionDepthMetrics>();
+  let eventCount = 0;
+  let preSummaryEventCount = 0;
+  let postSummaryEventCount = 0;
+  let maxRound = 0;
+
+  for (const layer of tree.groupingDiagnostics) {
+    const events = layer.repartitionEvents ?? [];
+    for (const event of events) {
+      eventCount += 1;
+      if (event.reason === "pre_summary_policy") {
+        preSummaryEventCount += 1;
+      } else {
+        postSummaryEventCount += 1;
+      }
+      maxRound = Math.max(maxRound, event.round);
+
+      const current = byDepth.get(event.depth) ?? {
+        depth: event.depth,
+        eventCount: 0,
+        preSummaryEventCount: 0,
+        postSummaryEventCount: 0,
+        maxRound: 0,
+      };
+      current.eventCount += 1;
+      if (event.reason === "pre_summary_policy") {
+        current.preSummaryEventCount += 1;
+      } else {
+        current.postSummaryEventCount += 1;
+      }
+      current.maxRound = Math.max(current.maxRound, event.round);
+      byDepth.set(event.depth, current);
+    }
+  }
+
+  return {
+    eventCount,
+    preSummaryEventCount,
+    postSummaryEventCount,
+    maxRound,
+    depthMetrics: Array.from(byDepth.values()).sort((left, right) => left.depth - right.depth),
   };
 }
 

@@ -32,6 +32,10 @@ Issue #18 introduces deterministic quality scoring for generated explanation tre
   - Mean ratio of introduced terms to meaningful parent tokens.
 
 Reports also include per-parent samples and per-depth aggregates.
+Reports now also include `repartitionMetrics` to audit how often bounded repartition loops were needed:
+- total event count
+- split by `pre_summary_policy` and `post_summary_policy`
+- per-depth counts and max retry round
 
 ## Threshold gating
 The evaluator computes a threshold verdict (`thresholdPass`) with machine-readable failures:
@@ -80,6 +84,8 @@ Exit codes:
 - `0`: tree validates and thresholds pass.
 - `2`: tree validity or threshold gate failed.
 - `1`: runtime error.
+
+CLI JSON output includes `repartitionMetrics` so CI and benchmark artifacts can audit rewrite/repartition-loop pressure without re-running tree construction.
 
 ## Verity benchmark examples
 - Loop/arithmetic/conditional-heavy subset:

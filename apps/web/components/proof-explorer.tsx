@@ -741,6 +741,20 @@ export function ProofExplorer(props: ProofExplorerProps) {
           Parent count: {policyReport?.report.metrics.parentCount ?? 0} | violation rate:{" "}
           {policyReport?.report.metrics.policyViolationRate ?? 0}
         </p>
+        <p className="meta">
+          Repartition events: {policyReport?.report.repartitionMetrics.eventCount ?? 0} (pre=
+          {policyReport?.report.repartitionMetrics.preSummaryEventCount ?? 0}, post=
+          {policyReport?.report.repartitionMetrics.postSummaryEventCount ?? 0}, max round=
+          {policyReport?.report.repartitionMetrics.maxRound ?? 0})
+        </p>
+        <ul>
+          {(policyReport?.report.repartitionMetrics.depthMetrics ?? []).slice(0, 6).map((entry) => (
+            <li key={`repartition-depth-${entry.depth}`}>
+              depth {entry.depth}: {entry.eventCount} events (pre {entry.preSummaryEventCount}, post{" "}
+              {entry.postSummaryEventCount}), max round {entry.maxRound}
+            </li>
+          ))}
+        </ul>
         <ul>
           {(policyReport?.report.thresholdFailures ?? []).slice(0, 6).map((failure) => (
             <li key={failure.code}>

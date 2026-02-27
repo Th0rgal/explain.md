@@ -228,6 +228,8 @@ describe("proof service", () => {
     expect(first.reportHash).toBe(second.reportHash);
     expect(first.report.metrics.parentCount).toBeGreaterThan(0);
     expect(first.report.thresholdPass).toBe(true);
+    expect(first.report.repartitionMetrics.eventCount).toBeGreaterThanOrEqual(0);
+    expect(first.report.repartitionMetrics.depthMetrics.every((entry) => entry.depth >= 1)).toBe(true);
   });
 
   it("applies threshold overrides with machine-checkable threshold outcomes", async () => {

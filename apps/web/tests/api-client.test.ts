@@ -379,6 +379,21 @@ describe("api client", () => {
             thresholdFailures: [],
             parentSamples: [],
             depthMetrics: [],
+            repartitionMetrics: {
+              eventCount: 1,
+              preSummaryEventCount: 0,
+              postSummaryEventCount: 1,
+              maxRound: 1,
+              depthMetrics: [
+                {
+                  depth: 2,
+                  eventCount: 1,
+                  preSummaryEventCount: 0,
+                  postSummaryEventCount: 1,
+                  maxRound: 1,
+                },
+              ],
+            },
           },
         },
       }),

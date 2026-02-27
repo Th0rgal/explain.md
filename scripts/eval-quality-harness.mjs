@@ -150,6 +150,7 @@ async function main() {
     thresholdFailureCount: report.thresholdFailures.length,
     qualityReportHash: computeTreeQualityReportHash(report),
     metrics: report.metrics,
+    repartitionMetrics: report.repartitionMetrics,
     thresholds: report.thresholds,
     elapsedMs,
   };

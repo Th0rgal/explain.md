@@ -28,6 +28,17 @@ function buildFixtureTree(): ExplanationTree {
         orderedNodeIds: ["leaf:a", "leaf:b"],
         complexitySpreadByGroup: [0],
         warnings: [],
+        repartitionEvents: [
+          {
+            depth: 1,
+            groupIndex: 0,
+            round: 1,
+            reason: "post_summary_policy",
+            inputNodeIds: ["leaf:a", "leaf:b"],
+            outputGroups: [["leaf:a"], ["leaf:b"]],
+            violationCodes: ["evidence_coverage"],
+          },
+        ],
       },
     ],
     policyDiagnosticsByParent: {
@@ -178,6 +189,24 @@ describe("evaluation-harness", () => {
     expect(report.thresholdFailures.map((failure) => failure.code)).toContain("policy_violation_rate");
     expect(report.thresholdFailures.map((failure) => failure.code)).toContain("complexity_spread_mean");
     expect(report.thresholdFailures.map((failure) => failure.code)).toContain("evidence_coverage_mean");
+  });
+
+  it("includes deterministic repartition metrics in quality reports", () => {
+    const config = normalizeConfig();
+    const report = evaluateExplanationTreeQuality(buildFixtureTree(), config);
+    expect(report.repartitionMetrics.eventCount).toBe(1);
+    expect(report.repartitionMetrics.preSummaryEventCount).toBe(0);
+    expect(report.repartitionMetrics.postSummaryEventCount).toBe(1);
+    expect(report.repartitionMetrics.maxRound).toBe(1);
+    expect(report.repartitionMetrics.depthMetrics).toEqual([
+      {
+        depth: 1,
+        eventCount: 1,
+        preSummaryEventCount: 0,
+        postSummaryEventCount: 1,
+        maxRound: 1,
+      },
+    ]);
   });
 
   it("ignores generatedAt in canonical render/hash so report identity is reproducible", () => {

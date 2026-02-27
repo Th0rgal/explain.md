@@ -275,6 +275,19 @@ export interface PolicyReportResponse {
       meanVocabularyContinuity: number;
       meanTermJumpRate: number;
     }>;
+    repartitionMetrics: {
+      eventCount: number;
+      preSummaryEventCount: number;
+      postSummaryEventCount: number;
+      maxRound: number;
+      depthMetrics: Array<{
+        depth: number;
+        eventCount: number;
+        preSummaryEventCount: number;
+        postSummaryEventCount: number;
+        maxRound: number;
+      }>;
+    };
   };
 }
 
