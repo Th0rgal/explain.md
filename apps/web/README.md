@@ -71,6 +71,14 @@ The tree panel uses incremental root/children/path queries:
   - `ArrowLeft`: collapse expanded parent, otherwise move to parent row
   - `Home` / `End`: jump to first/last visible row
   - `Enter` / `Space`: activate focused row (leaf select, parent selection clear)
+- Tree panel now uses deterministic render windowing for large trees:
+  - full render below threshold, windowed render above threshold
+  - focus/selection anchored window center with stable overscan
+  - explicit browser-auditable diagnostics (`data-tree-render-mode`, rendered/hidden row counts)
+  - window paging controls (`Show previous rows` / `Show next rows`) for mouse-only traversal
+- Render-window thresholds are configurable via:
+  - `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_MAX_ROWS` (default `120`)
+  - `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_OVERSCAN_ROWS` (default `24`)
 - Config profiles are persisted to `.explain-md/web-config-profiles.json` (override with `EXPLAIN_MD_WEB_CONFIG_PROFILE_LEDGER`).
 - Job IDs are deterministic and monotonic (`job-000001`, `job-000002`, ...).
 - Reproducibility contract values can be configured with:

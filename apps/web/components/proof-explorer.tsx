@@ -28,6 +28,7 @@ import {
 } from "../lib/api-client";
 import { buildLeafSourceProvenanceView } from "../lib/leaf-provenance";
 import { resolveTreeKeyboardIntent } from "../lib/tree-keyboard-navigation";
+import { computeTreeRenderWindow } from "../lib/tree-render-window";
 
 const DEFAULT_CONFIG: ProofConfigInput = {
   abstractionLevel: 3,
@@ -42,6 +43,8 @@ const DEFAULT_CONFIG: ProofConfigInput = {
 };
 
 const DEFAULT_PROFILE_USER_ID = "local-user";
+const TREE_RENDER_MAX_VISIBLE_ROWS = Number.parseInt(process.env.NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_MAX_ROWS ?? "120", 10);
+const TREE_RENDER_OVERSCAN_ROWS = Number.parseInt(process.env.NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_OVERSCAN_ROWS ?? "24", 10);
 
 interface ProofExplorerProps {
   proofId: string;
@@ -325,6 +328,27 @@ export function ProofExplorer(props: ProofExplorerProps) {
     [childrenByParentId, expandedNodeIds, visibleRows],
   );
 
+  const focusRowIndex = useMemo(
+    () => (focusedTreeNodeId ? visibleRows.findIndex((row) => row.node.id === focusedTreeNodeId) : -1),
+    [focusedTreeNodeId, visibleRows],
+  );
+  const selectedRowIndex = useMemo(
+    () => (selectedLeafId ? visibleRows.findIndex((row) => row.node.id === selectedLeafId) : -1),
+    [selectedLeafId, visibleRows],
+  );
+  const renderAnchorIndex = focusRowIndex >= 0 ? focusRowIndex : selectedRowIndex >= 0 ? selectedRowIndex : 0;
+  const renderWindow = useMemo(
+    () =>
+      computeTreeRenderWindow({
+        totalRowCount: visibleRows.length,
+        anchorRowIndex: renderAnchorIndex,
+        maxVisibleRows: TREE_RENDER_MAX_VISIBLE_ROWS,
+        overscanRows: TREE_RENDER_OVERSCAN_ROWS,
+      }),
+    [renderAnchorIndex, visibleRows.length],
+  );
+  const renderedRows = useMemo(() => visibleRows.slice(renderWindow.startIndex, renderWindow.endIndex), [renderWindow, visibleRows]);
+
   useEffect(() => {
     if (visibleRows.length === 0) {
       setFocusedTreeNodeId(null);
@@ -562,6 +586,19 @@ export function ProofExplorer(props: ProofExplorerProps) {
     setSelectedLeafId(null);
   }
 
+  function shiftRenderWindow(direction: -1 | 1): void {
+    if (visibleRows.length === 0) {
+      return;
+    }
+    const currentIndex = focusRowIndex >= 0 ? focusRowIndex : 0;
+    const stepSize = Math.max(1, Math.floor(TREE_RENDER_MAX_VISIBLE_ROWS));
+    const nextIndex = Math.max(0, Math.min(visibleRows.length - 1, currentIndex + direction * stepSize));
+    const nextRow = visibleRows[nextIndex];
+    if (nextRow) {
+      setFocusedTreeNodeId(nextRow.node.id);
+    }
+  }
+
   if (isLoading) {
     return <div className="panel">Loading seeded explanation tree...</div>;
   }
@@ -705,12 +742,32 @@ export function ProofExplorer(props: ProofExplorerProps) {
         {profileError ? <p className="meta">Profile error: {profileError}</p> : null}
       </section>
 
-      <section className="panel tree" aria-label="Root-first explanation tree">
+      <section
+        className="panel tree"
+        aria-label="Root-first explanation tree"
+        data-tree-render-mode={renderWindow.mode}
+        data-tree-rendered-row-count={renderWindow.renderedRowCount}
+        data-tree-total-row-count={visibleRows.length}
+        data-tree-hidden-above={renderWindow.hiddenAboveCount}
+        data-tree-hidden-below={renderWindow.hiddenBelowCount}
+      >
         <h2>Tree</h2>
         <p className="meta">Config hash: {treeConfigHash || root?.configHash || "unavailable"}</p>
         <p className="meta">Snapshot hash: {treeSnapshotHash || root?.snapshotHash || "unavailable"}</p>
+        <p className="meta">
+          Render mode: {renderWindow.mode} | rows {renderWindow.renderedRowCount}/{visibleRows.length} | hidden above{" "}
+          {renderWindow.hiddenAboveCount} | hidden below {renderWindow.hiddenBelowCount}
+        </p>
+        {renderWindow.hiddenAboveCount > 0 ? (
+          <div className="tree-row">
+            <button type="button" onClick={() => shiftRenderWindow(-1)}>
+              Show previous rows
+            </button>
+            <span className="meta">{renderWindow.hiddenAboveCount} rows above current window</span>
+          </div>
+        ) : null}
         <ul className="tree-list" role="tree">
-          {visibleRows.map((row) => {
+          {renderedRows.map((row) => {
             const { node } = row;
             const childrenState = childrenByParentId[node.id];
             const isExpanded = expandedNodeIds.includes(node.id);
@@ -812,6 +869,14 @@ export function ProofExplorer(props: ProofExplorerProps) {
             );
           })}
         </ul>
+        {renderWindow.hiddenBelowCount > 0 ? (
+          <div className="tree-row">
+            <button type="button" onClick={() => shiftRenderWindow(1)}>
+              Show next rows
+            </button>
+            <span className="meta">{renderWindow.hiddenBelowCount} rows below current window</span>
+          </div>
+        ) : null}
       </section>
 
       <section className="panel diff" aria-label="Explanation diff">
