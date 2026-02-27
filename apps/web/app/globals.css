@@ -1,0 +1,153 @@
+:root {
+  --bg: #f2eee5;
+  --surface: #fffcf5;
+  --text: #1f2328;
+  --muted: #586172;
+  --accent: #0d7a66;
+  --accent-2: #d88c17;
+  --danger: #8f1f2e;
+  --border: #d8d1c4;
+  --shadow: 0 6px 20px rgb(25 22 15 / 12%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "IBM Plex Sans", "Source Sans 3", sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 10% 15%, rgb(216 140 23 / 12%), transparent 38%),
+    radial-gradient(circle at 82% 5%, rgb(13 122 102 / 14%), transparent 30%),
+    var(--bg);
+  min-height: 100vh;
+}
+
+main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.25rem;
+}
+
+a {
+  color: var(--accent);
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1rem;
+  border-bottom: 1px solid var(--border);
+  padding: 1rem 1.25rem;
+  background: rgb(255 252 245 / 92%);
+  backdrop-filter: blur(2px);
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: clamp(1.2rem, 2vw, 1.7rem);
+}
+
+.kicker {
+  margin: 0 0 0.2rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+nav {
+  display: flex;
+  gap: 0.9rem;
+}
+
+.layout-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.8rem;
+  box-shadow: var(--shadow);
+  padding: 0.9rem;
+}
+
+.controls label {
+  display: grid;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.tree-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tree-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  margin: 0.25rem 0;
+}
+
+.leaf-pill {
+  display: inline-block;
+  font-size: 0.72rem;
+  background: rgb(13 122 102 / 14%);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 0.14rem 0.45rem;
+}
+
+.statement-button {
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0.2rem 0;
+}
+
+.meta {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  border-radius: 0.45rem;
+  border: 1px solid var(--border);
+  background: #fff;
+  padding: 0.22rem 0.5rem;
+  cursor: pointer;
+}
+
+.home {
+  display: grid;
+  gap: 1rem;
+}
+
+.home-card {
+  background: linear-gradient(150deg, rgb(13 122 102 / 12%), rgb(216 140 23 / 10%));
+  border: 1px solid var(--border);
+  border-radius: 0.8rem;
+  padding: 1rem;
+}
+
+@media (max-width: 960px) {
+  .layout-grid {
+    grid-template-columns: 1fr;
+  }
+}

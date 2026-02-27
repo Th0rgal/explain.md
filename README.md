@@ -20,6 +20,7 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #16: deterministic leaf-detail/provenance contract for theorem inspection, source linking/share references, and verification-job binding for browser panels.
 - Issue #18: deterministic faithfulness/simplicity evaluation harness with per-parent/per-depth quality metrics, threshold gating, and canonical report hashing.
 - Issue #15 (backend contract): deterministic progressive-disclosure projection and config-aware explanation diff contract for root-first UI rendering.
+- Issue #14: Next.js App Router scaffold with deterministic seeded-proof API adapters, frontend client layer, and accessible loading/error shell.
 
 ## Local checks
 ```bash
@@ -33,6 +34,10 @@ npm run eval:tree-pipeline -- /path/to/lean-project --include=Verity --include=C
 npm run eval:leaf-detail -- /path/to/lean-project --include=Verity --leaf=<leaf-id>
 npm run eval:quality -- /path/to/lean-project --include=Verity --include=Compiler/ContractSpec.lean
 npm run serve:verification
+npm run web:lint
+npm run web:typecheck
+npm run web:test
+npm run web:build
 ```
 
 ## Live provider check
@@ -57,3 +62,4 @@ EXPLAIN_MD_LIVE_RPC_API_KEY=... npm run test:live:summary
 - [Verification HTTP API service](docs/verification-api.md)
 - [Leaf detail contract](docs/leaf-detail.md)
 - [Progressive disclosure + explanation diff](docs/progressive-disclosure.md)
+- [Next.js web scaffold](docs/nextjs-scaffold.md)
