@@ -16,10 +16,14 @@ import {
   buildSeedNodePathView,
   buildSeedProjection,
   buildSeedRootView,
+  clearProofQueryObservabilityMetricsForTests,
   clearProofDatasetCacheForTests,
+  configureProofQueryObservabilityClockForTests,
+  exportProofQueryObservabilityMetrics,
   LEAN_FIXTURE_PROOF_ID,
   listProofs,
   listSeedProofs,
+  resetProofQueryObservabilityClockForTests,
   SEED_PROOF_ID,
 } from "../lib/proof-service";
 
@@ -89,7 +93,24 @@ describe("proof service", () => {
     expect(() => buildSeedProjection({ proofId: "unknown-proof" })).toThrow(/Unsupported proofId/);
   });
 
+  it("renders seed proof in selected supported language with stable structure", () => {
+    const english = buildSeedRootView(SEED_PROOF_ID, { language: "en" });
+    const french = buildSeedRootView(SEED_PROOF_ID, { language: "fr" });
+
+    expect(english.root.node?.id).toBe(french.root.node?.id);
+    expect(english.root.node?.childIds).toEqual(french.root.node?.childIds);
+    expect(english.root.node?.statement).not.toBe(french.root.node?.statement);
+    expect(french.root.node?.statement).toContain("Cadre");
+  });
+
+  it("falls back unsupported language tags deterministically to english", () => {
+    const fallback = buildSeedRootView(SEED_PROOF_ID, { language: "de" as unknown as "en" });
+    const english = buildSeedRootView(SEED_PROOF_ID, { language: "en" });
+    expect(fallback.root.node?.statement).toBe(english.root.node?.statement);
+  });
+
   it("returns deterministic root/children/path query views", () => {
+    clearProofQueryObservabilityMetricsForTests();
     const root = buildSeedRootView(SEED_PROOF_ID, {
       abstractionLevel: 3,
       complexityLevel: 3,
@@ -97,6 +118,16 @@ describe("proof service", () => {
     expect(root.root.node?.id).toBe("p2_root");
     expect(root.root.node?.policyDiagnostics?.postSummary.ok).toBe(true);
     expect(root.snapshotHash).toHaveLength(64);
+    expect(root.observability.requestId).toBe(root.requestHash);
+    expect(root.observability.traceId).toHaveLength(64);
+    expect(root.observability.spans.map((span) => span.name)).toEqual([
+      "dataset_load",
+      "query_compute",
+      "response_materialization",
+    ]);
+    expect(root.observability.metrics.cacheStatus).toBe("miss");
+    expect(root.observability.metrics.cacheLayer).toBe("ephemeral");
+    expect(root.observability.metrics.latencyMs).toBeGreaterThanOrEqual(0);
 
     const children = buildSeedNodeChildrenView({
       proofId: SEED_PROOF_ID,
@@ -114,6 +145,93 @@ describe("proof service", () => {
     expect(path.path.ok).toBe(true);
     expect(path.path.path[0]?.id).toBe("p2_root");
     expect(path.path.path[path.path.path.length - 1]?.id).toBe("Verity.ContractSpec.init_sound");
+    expect(path.observability.traceId).toHaveLength(64);
+  });
+
+  it("exports deterministic aggregate proof-query observability metrics", () => {
+    clearProofQueryObservabilityMetricsForTests();
+
+    buildSeedProjection({
+      proofId: SEED_PROOF_ID,
+      config: {
+        abstractionLevel: 4,
+        complexityLevel: 2,
+      },
+    });
+    buildSeedRootView(SEED_PROOF_ID, {
+      abstractionLevel: 4,
+      complexityLevel: 2,
+    });
+    buildSeedNodeChildrenView({
+      proofId: SEED_PROOF_ID,
+      nodeId: "p2_root",
+      limit: 2,
+      offset: 0,
+    });
+
+    const first = exportProofQueryObservabilityMetrics();
+    const second = exportProofQueryObservabilityMetrics();
+    const deterministicFirst = exportProofQueryObservabilityMetrics({
+      generatedAt: "2026-02-27T00:00:00.000Z",
+    });
+    const deterministicSecond = exportProofQueryObservabilityMetrics({
+      generatedAt: "2026-02-27T00:00:00.000Z",
+    });
+    expect(first.schemaVersion).toBe("1.0.0");
+    expect(first.requestCount).toBe(3);
+    expect(first.uniqueRequestCount).toBe(3);
+    expect(first.uniqueTraceCount).toBe(3);
+    expect(first.cache.hitCount).toBe(0);
+    expect(first.cache.missCount).toBe(3);
+    expect(first.cache.hitRate).toBe(0);
+    expect(first.latencyHistogram).toHaveLength(5);
+    expect(first.latencyHistogram.reduce((sum, bucket) => sum + bucket.count, 0)).toBe(first.requestCount);
+    expect(first.queries.find((entry) => entry.query === "view")?.requestCount).toBe(1);
+    expect(first.queries.find((entry) => entry.query === "view")?.p95LatencyMs).toBeGreaterThanOrEqual(0);
+    expect(first.queries.find((entry) => entry.query === "view")?.latencyHistogram.reduce((sum, bucket) => sum + bucket.count, 0)).toBe(
+      1,
+    );
+    expect(first.queries.find((entry) => entry.query === "root")?.requestCount).toBe(1);
+    expect(first.queries.find((entry) => entry.query === "children")?.requestCount).toBe(1);
+    expect(first.queries.find((entry) => entry.query === "diff")?.requestCount).toBe(0);
+    expect(first.snapshotHash).toHaveLength(64);
+    expect(second.snapshotHash).toHaveLength(64);
+    expect(deterministicFirst.snapshotHash).toBe(deterministicSecond.snapshotHash);
+  });
+
+  it("exports deterministic proof latency histogram buckets", () => {
+    clearProofQueryObservabilityMetricsForTests();
+    const nowMs = [1000, 1001, 1010, 1017, 1020, 1080];
+    let index = 0;
+    configureProofQueryObservabilityClockForTests(() => {
+      const value = nowMs[index];
+      index += 1;
+      return value ?? (nowMs[nowMs.length - 1] ?? 0);
+    });
+
+    try {
+      buildSeedProjection({ proofId: SEED_PROOF_ID });
+      buildSeedRootView(SEED_PROOF_ID);
+      buildSeedNodeChildrenView({
+        proofId: SEED_PROOF_ID,
+        nodeId: "p2_root",
+        limit: 1,
+        offset: 0,
+      });
+    } finally {
+      resetProofQueryObservabilityClockForTests();
+    }
+
+    const snapshot = exportProofQueryObservabilityMetrics({
+      generatedAt: "2026-02-27T00:00:00.000Z",
+    });
+    expect(snapshot.latencyHistogram).toEqual([
+      { bucket: "lte_5ms", maxInclusiveMs: 5, count: 1 },
+      { bucket: "lte_10ms", maxInclusiveMs: 10, count: 1 },
+      { bucket: "lte_25ms", maxInclusiveMs: 25, count: 0 },
+      { bucket: "lte_50ms", maxInclusiveMs: 50, count: 0 },
+      { bucket: "gt_50ms", maxInclusiveMs: null, count: 1 },
+    ]);
   });
 
   it("lists both seed and Lean fixture proofs in catalog", async () => {
@@ -161,6 +279,15 @@ describe("proof service", () => {
     }
   });
 
+  it("resolves Lean fixture language deterministically with locale fallback", async () => {
+    const frenchRoot = await buildProofRootView(LEAN_FIXTURE_PROOF_ID, { language: "fr" });
+    const fallbackRoot = await buildProofRootView(LEAN_FIXTURE_PROOF_ID, { language: "de" as unknown as "en" });
+    const englishRoot = await buildProofRootView(LEAN_FIXTURE_PROOF_ID, { language: "en" });
+
+    expect(frenchRoot.root.node?.statement).toContain(" et ");
+    expect(fallbackRoot.root.node?.statement).toBe(englishRoot.root.node?.statement);
+  });
+
   it("computes diff deterministically for Lean-ingested fixture proof", async () => {
     const first = await buildProofDiff({
       proofId: LEAN_FIXTURE_PROOF_ID,
@@ -175,6 +302,8 @@ describe("proof service", () => {
 
     expect(first.requestHash).toBe(second.requestHash);
     expect(first.diffHash).toBe(second.diffHash);
+    expect(first.observability.traceId).toBe(second.observability.traceId);
+    expect(first.observability.requestId).toBe(first.requestHash);
     expect(first.report.summary.total).toBeGreaterThanOrEqual(0);
   });
 
@@ -197,6 +326,8 @@ describe("proof service", () => {
     expect(first.declaration?.declarationId).toBe("lean:Verity/Loop:loop_preserves:3:1");
     expect(first.declaration?.supportingDeclarations).toContain("lean:Verity/Core:core_safe:8:1");
     expect(first.diagnostics).toEqual([]);
+    expect(first.observability.requestId).toBe(first.requestHash);
+    expect(first.observability.metrics.leafCount).toBeGreaterThan(0);
   });
 
   it("reports machine-checkable diagnostics for unknown dependency declaration ids", async () => {
@@ -226,6 +357,8 @@ describe("proof service", () => {
 
     expect(first.requestHash).toBe(second.requestHash);
     expect(first.reportHash).toBe(second.reportHash);
+    expect(first.observability.traceId).toBe(second.observability.traceId);
+    expect(first.observability.metrics.parentCount).toBe(first.report.metrics.parentCount);
     expect(first.report.metrics.parentCount).toBeGreaterThan(0);
     expect(first.report.thresholdPass).toBe(true);
     expect(first.report.repartitionMetrics.eventCount).toBeGreaterThanOrEqual(0);
@@ -264,6 +397,7 @@ describe("proof service", () => {
       expect(first.cache.layer).toBe("persistent");
       expect(first.cache.status).toBe("miss");
       expect(first.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_miss")).toBe(true);
+      expect(first.observability.metrics.cacheStatus).toBe("miss");
       expect(first.cache.snapshotHash).toHaveLength(64);
 
       clearProofDatasetCacheForTests();
@@ -273,6 +407,7 @@ describe("proof service", () => {
       expect(second.cache.layer).toBe("persistent");
       expect(second.cache.status).toBe("hit");
       expect(second.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_hit")).toBe(true);
+      expect(second.observability.metrics.cacheStatus).toBe("hit");
       expect(second.cache.sourceFingerprint).toBe(first.cache.sourceFingerprint);
       expect(second.cache.snapshotHash).toBe(first.cache.snapshotHash);
       expect(second.cache.cacheEntryHash).toBe(first.cache.cacheEntryHash);
@@ -485,8 +620,10 @@ describe("proof service", () => {
 
       const corePath = path.join(tempFixtureRoot, "Verity", "Core.lean");
       const coreBefore = await fs.readFile(corePath, "utf8");
-      const addedTheorem = "\n\ntheorem cache_shape_added : True := by\n  trivial\n";
-      await fs.writeFile(corePath, `${coreBefore.trimEnd()}${addedTheorem}`, "utf8");
+      const addedTheorems =
+        "\n\ntheorem cache_shape_added_a : True := by\n  trivial\n" +
+        "\n\ntheorem cache_shape_added_b : True := by\n  trivial\n";
+      await fs.writeFile(corePath, `${coreBefore.trimEnd()}${addedTheorems}`, "utf8");
 
       clearProofDatasetCacheForTests();
       const rebuilt = await buildProofCacheReportView({
@@ -517,11 +654,16 @@ describe("proof service", () => {
       expect(additionDiagnostic?.details?.recoveryMode).toBe("insertion");
       expect((additionDiagnostic?.details?.addedLeafCount as number) > 0).toBe(true);
       expect((additionDiagnostic?.details?.insertionFrontierCount as number) > 0).toBe(true);
+      expect((additionDiagnostic?.details?.insertionAnchorCount as number) > 0).toBe(true);
       expect((additionDiagnostic?.details?.insertionMergeParentCount as number) > 0).toBe(true);
       expect((additionDiagnostic?.details?.insertedParentCount as number) > 0).toBe(true);
       expect((additionDiagnostic?.details?.insertionScheduledAttachmentCount as number) > 0).toBe(true);
+      expect(
+        (additionDiagnostic?.details?.insertionScheduledAttachmentCount as number) <=
+          (additionDiagnostic?.details?.insertionFrontierCount as number),
+      ).toBe(true);
       expect((additionDiagnostic?.details?.insertionRecomputedAncestorCount as number) >= 0).toBe(true);
-      expect(additionDiagnostic?.details?.insertionStrategy).toBe("edge_connector_ancestor_recompute");
+      expect(additionDiagnostic?.details?.insertionStrategy).toBe("anchor_grouped_connector_ancestor_recompute");
       expect((additionDiagnostic?.details?.reusableParentSummaryCount as number) >= 0).toBe(true);
       expect((additionDiagnostic?.details?.reusedParentSummaryCount as number) >= 0).toBe(true);
       expect(

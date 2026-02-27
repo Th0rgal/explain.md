@@ -1,0 +1,118 @@
+{
+  "schemaVersion": "1.0.0",
+  "requestHash": "2b32f7a8b62aae43607f469535fb142c3120d5d79d5d906853266bdf40f71d8f",
+  "outcomeHash": "f81f1f1387c5f82c0426e9c4214987414bd7d5f9c00e73f0867b40bdbbbe59bf",
+  "summary": {
+    "profileCount": 6,
+    "passCount": 6,
+    "sanitizationProfileCount": 1,
+    "sanitizationPassCount": 1,
+    "rejectionProfileCount": 4,
+    "promptInjectionRejectionCount": 2,
+    "secretLeakRejectionCount": 2,
+    "configuredSecretRejectionCount": 1
+  },
+  "profiles": [
+    {
+      "profileId": "accept_clean_summary_output",
+      "pass": true,
+      "observedOutcome": "accepted_summary",
+      "violationCodes": [],
+      "violationLocations": [],
+      "redactedSecrets": 0,
+      "redactedInstructions": 0,
+      "hasBoundaryBegin": false,
+      "hasBoundaryEnd": false,
+      "leakedSecretLiteral": false,
+      "leakedInstructionLiteral": false,
+      "failureReasons": []
+    },
+    {
+      "profileId": "reject_configured_secret_leak",
+      "pass": true,
+      "observedOutcome": "validation_error",
+      "violationCodes": [
+        "secret_leak"
+      ],
+      "violationLocations": [
+        "raw_output"
+      ],
+      "redactedSecrets": 0,
+      "redactedInstructions": 0,
+      "hasBoundaryBegin": false,
+      "hasBoundaryEnd": false,
+      "leakedSecretLiteral": false,
+      "leakedInstructionLiteral": false,
+      "failureReasons": []
+    },
+    {
+      "profileId": "reject_parsed_summary_prompt_injection",
+      "pass": true,
+      "observedOutcome": "validation_error",
+      "violationCodes": [
+        "prompt_injection",
+        "unsupported_terms"
+      ],
+      "violationLocations": [
+        "parsed_summary"
+      ],
+      "redactedSecrets": 0,
+      "redactedInstructions": 0,
+      "hasBoundaryBegin": false,
+      "hasBoundaryEnd": false,
+      "leakedSecretLiteral": false,
+      "leakedInstructionLiteral": false,
+      "failureReasons": []
+    },
+    {
+      "profileId": "reject_raw_output_prompt_injection",
+      "pass": true,
+      "observedOutcome": "validation_error",
+      "violationCodes": [
+        "prompt_injection"
+      ],
+      "violationLocations": [
+        "raw_output"
+      ],
+      "redactedSecrets": 0,
+      "redactedInstructions": 0,
+      "hasBoundaryBegin": false,
+      "hasBoundaryEnd": false,
+      "leakedSecretLiteral": false,
+      "leakedInstructionLiteral": false,
+      "failureReasons": []
+    },
+    {
+      "profileId": "reject_raw_output_secret_leak",
+      "pass": true,
+      "observedOutcome": "validation_error",
+      "violationCodes": [
+        "secret_leak"
+      ],
+      "violationLocations": [
+        "raw_output"
+      ],
+      "redactedSecrets": 0,
+      "redactedInstructions": 0,
+      "hasBoundaryBegin": false,
+      "hasBoundaryEnd": false,
+      "leakedSecretLiteral": false,
+      "leakedInstructionLiteral": false,
+      "failureReasons": []
+    },
+    {
+      "profileId": "sanitize_untrusted_children_payload",
+      "pass": true,
+      "observedOutcome": "prompt_sanitization_redaction",
+      "violationCodes": [],
+      "violationLocations": [],
+      "redactedSecrets": 2,
+      "redactedInstructions": 2,
+      "hasBoundaryBegin": true,
+      "hasBoundaryEnd": true,
+      "leakedSecretLiteral": false,
+      "leakedInstructionLiteral": false,
+      "failureReasons": []
+    }
+  ]
+}

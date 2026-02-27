@@ -33,8 +33,44 @@ jobs:
       - name: Run unit tests
         run: npm test
 
-      - name: Run deterministic quality gate
-        run: npm run eval:quality:ci
+      - name: Run web lint
+        run: npm run web:lint
+
+      - name: Run web typecheck
+        run: npm run web:typecheck
+
+      - name: Run web tests
+        run: npm run web:test
+
+      - name: Run web build
+        run: npm run web:build
+
+      - name: Run deterministic tree accessibility benchmark baseline check
+        run: npm run web:eval:tree-a11y:ci
+
+      - name: Run deterministic tree scale benchmark baseline check
+        run: npm run web:eval:tree-scale:ci
+
+      - name: Run deterministic explanation diff benchmark baseline check
+        run: npm run web:eval:explanation-diff:ci
+
+      - name: Run deterministic verification replay benchmark baseline check
+        run: npm run web:eval:verification-replay:ci
+
+      - name: Run deterministic multilingual benchmark baseline check
+        run: npm run web:eval:multilingual:ci
+
+      - name: Run deterministic domain adapter benchmark baseline check
+        run: npm run eval:domain-adapters:ci
+
+      - name: Run deterministic summary prompt security benchmark baseline check
+        run: npm run eval:summary-security:ci
+
+      - name: Validate research dossier evidence map
+        run: npm run eval:research-dossier
+
+      - name: Run deterministic release gate
+        run: npm run eval:release-gate:ci
 
       - name: Upload quality gate reports
         if: always()
@@ -44,3 +80,13 @@ jobs:
           path: |
             .explain-md/quality-gate-report-*.json
             .explain-md/quality-gate-baseline-check.json
+            .explain-md/tree-a11y-evaluation-report.json
+            .explain-md/tree-scale-evaluation-report.json
+            .explain-md/explanation-diff-evaluation-report.json
+            .explain-md/verification-replay-evaluation-report.json
+            .explain-md/multilingual-evaluation-report.json
+            .explain-md/domain-adapter-evaluation-report.json
+            .explain-md/summary-security-evaluation-report.json
+            .explain-md/observability-slo-benchmark-report.json
+            .explain-md/research-dossier-report.json
+            .explain-md/release-gate-report.json

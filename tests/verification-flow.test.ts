@@ -4,12 +4,16 @@ import path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 import {
   VerificationWorkflow,
+  buildVerificationReplayDescriptor,
   buildLeanVerificationContract,
   canonicalizeVerificationLedger,
   computeVerificationJobHash,
+  computeVerificationReproducibilityHash,
   createVerificationTargetFromLeaf,
   readVerificationLedger,
   renderVerificationJobCanonical,
+  renderVerificationReproducibilityCanonical,
+  renderVerificationReplayCommand,
   writeVerificationLedger,
   type VerificationCommandRunner,
   type VerificationReproducibilityContract,
@@ -308,5 +312,33 @@ describe("verification workflow", () => {
           maxLogLinesPerJob: 0,
         }),
     ).toThrow("maxLogLinesPerJob");
+  });
+
+  test("renders deterministic replay descriptors for reproducibility contracts", () => {
+    const contract = buildLeanVerificationContract({
+      projectRoot: "/tmp/project with spaces",
+      sourceRevision: "rev-123",
+      filePath: "Verity/Core.lean",
+      leanVersion: "4.13.0",
+      lakeVersion: "5.0.0",
+      env: {
+        LEAN_PATH: "/tmp/project/.lake/packages",
+        WITH_SPACE: "hello world",
+      },
+    });
+
+    const canonical = renderVerificationReproducibilityCanonical(contract);
+    const hash = computeVerificationReproducibilityHash(contract);
+    const replayCommand = renderVerificationReplayCommand(contract);
+    const descriptor = buildVerificationReplayDescriptor(contract);
+
+    expect(canonical).toContain("source_revision=rev-123");
+    expect(canonical).toContain("toolchain_lean=4.13.0");
+    expect(hash).toHaveLength(64);
+    expect(replayCommand).toContain("cd '/tmp/project with spaces' &&");
+    expect(replayCommand).toContain("WITH_SPACE='hello world'");
+    expect(replayCommand).toContain("lake env lean Verity/Core.lean");
+    expect(descriptor.reproducibilityHash).toBe(hash);
+    expect(descriptor.replayCommand).toBe(replayCommand);
   });
 });

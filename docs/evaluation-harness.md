@@ -150,9 +150,20 @@ CLI JSON output includes `repartitionMetrics` so CI and benchmark artifacts can 
 ## CI quality gate
 GitHub Actions runs `.github/workflows/quality-gate.yml` on PRs and `main` pushes:
 - `npm ci`
+- `npm --prefix apps/web ci`
 - `npm run build`
 - `npm test`
-- `npm run eval:quality:ci`
+- `npm run web:lint`
+- `npm run web:typecheck`
+- `npm run web:test`
+- `npm run web:build`
+- `npm run web:eval:tree-a11y:ci`
+- `npm run web:eval:tree-scale:ci`
+- `npm run web:eval:explanation-diff:ci`
+- `npm run web:eval:verification-replay:ci`
+- `npm run eval:summary-security:ci`
+- `npm run eval:domain-adapters:ci`
+- `npm run eval:release-gate:ci`
 
 The workflow uploads `.explain-md/quality-gate-report-*.json` as `quality-gate-reports`.
 Each report includes:
@@ -160,6 +171,13 @@ Each report includes:
 - `preset.name` + `preset.hash`
 - threshold pass/failure and metrics summary
 - a deterministic baseline check artifact at `.explain-md/quality-gate-baseline-check.json`
+- a deterministic tree-a11y check artifact at `.explain-md/tree-a11y-evaluation-report.json`
+- a deterministic tree-scale check artifact at `.explain-md/tree-scale-evaluation-report.json`
+- a deterministic explanation-diff check artifact at `.explain-md/explanation-diff-evaluation-report.json`
+- a deterministic verification replay check artifact at `.explain-md/verification-replay-evaluation-report.json`
+- a deterministic summary prompt-security check artifact at `.explain-md/summary-security-evaluation-report.json`
+- a deterministic domain adapter check artifact at `.explain-md/domain-adapter-evaluation-report.json`
+- a deterministic release-gate artifact at `.explain-md/release-gate-report.json`
 
 CI also runs a deterministic baseline drift gate against committed benchmark expectations:
 

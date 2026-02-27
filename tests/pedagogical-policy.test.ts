@@ -104,4 +104,25 @@ describe("pedagogical policy engine", () => {
     expect(decision.ok).toBe(false);
     expect(decision.violations.map((violation) => violation.code)).toContain("vocabulary_continuity");
   });
+
+  test("strict entailment mode rejects introduced terms regardless of configured budget", () => {
+    const config = normalizeConfig({ entailmentMode: "strict", termIntroductionBudget: 3 });
+    const summary: ParentSummary = {
+      parent_statement: "Storage bounds are preserved.",
+      why_true_from_children: "c1 proves preservation.",
+      new_terms_introduced: ["preservation"],
+      complexity_score: 3,
+      abstraction_score: 3,
+      evidence_refs: ["c1"],
+      confidence: 0.8,
+    };
+
+    const decision = evaluatePostSummaryPolicy(
+      [{ id: "c1", statement: "Storage bounds are preserved." }],
+      summary,
+      config,
+    );
+    expect(decision.ok).toBe(false);
+    expect(decision.violations.map((violation) => violation.code)).toContain("term_budget");
+  });
 });

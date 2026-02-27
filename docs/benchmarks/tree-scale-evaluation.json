@@ -1,0 +1,432 @@
+{
+  "schemaVersion": "1.0.0",
+  "requestHash": "6e2072989f8d0afb16b8345348518664ddea32267f9363a9370b6d85a0c0c5b8",
+  "outcomeHash": "a008ecb1c61bf88c6ef37cf607d6b6b17e54bf923f4ad143483f1de5d3d900c8",
+  "parameters": {
+    "profiles": [
+      {
+        "profileId": "full-small-tree",
+        "totalRowCount": 72,
+        "renderSettings": {
+          "maxVisibleRows": 120,
+          "overscanRows": 24
+        },
+        "virtualizationSettings": {
+          "enabled": true,
+          "minRows": 400,
+          "rowHeightPx": 36,
+          "viewportRows": 18,
+          "overscanRows": 6
+        },
+        "activeRowSequence": [
+          0,
+          5,
+          12,
+          24,
+          36,
+          48,
+          60,
+          71
+        ]
+      },
+      {
+        "profileId": "windowed-medium-tree",
+        "totalRowCount": 520,
+        "renderSettings": {
+          "maxVisibleRows": 80,
+          "overscanRows": 10
+        },
+        "virtualizationSettings": {
+          "enabled": false,
+          "minRows": 400,
+          "rowHeightPx": 36,
+          "viewportRows": 18,
+          "overscanRows": 6
+        },
+        "activeRowSequence": [
+          0,
+          30,
+          79,
+          120,
+          200,
+          280,
+          360,
+          440,
+          519
+        ]
+      },
+      {
+        "profileId": "virtualized-large-tree",
+        "totalRowCount": 1600,
+        "renderSettings": {
+          "maxVisibleRows": 120,
+          "overscanRows": 24
+        },
+        "virtualizationSettings": {
+          "enabled": true,
+          "minRows": 400,
+          "rowHeightPx": 32,
+          "viewportRows": 20,
+          "overscanRows": 4
+        },
+        "activeRowSequence": [
+          0,
+          30,
+          90,
+          200,
+          400,
+          700,
+          1000,
+          1300,
+          1599
+        ]
+      }
+    ]
+  },
+  "summary": {
+    "profileCount": 3,
+    "totalSamples": 26,
+    "fullModeSampleCount": 8,
+    "windowedModeSampleCount": 9,
+    "virtualizedModeSampleCount": 9,
+    "maxRenderedRowCount": 100,
+    "boundedSampleCount": 26
+  },
+  "profileReports": [
+    {
+      "profileId": "full-small-tree",
+      "totalRowCount": 72,
+      "renderSettings": {
+        "maxVisibleRows": 120,
+        "overscanRows": 24
+      },
+      "virtualizationSettings": {
+        "enabled": true,
+        "minRows": 400,
+        "rowHeightPx": 36,
+        "viewportRows": 18,
+        "overscanRows": 6
+      },
+      "summary": {
+        "sampleCount": 8,
+        "fullModeSampleCount": 8,
+        "windowedModeSampleCount": 0,
+        "virtualizedModeSampleCount": 0,
+        "maxRenderedRowCount": 72,
+        "boundedSampleCount": 8
+      },
+      "samples": [
+        {
+          "activeRowIndex": 0,
+          "effectiveMode": "full",
+          "renderedRowCount": 72,
+          "hiddenAboveCount": 0,
+          "hiddenBelowCount": 0,
+          "clampedScrollTopPx": 0,
+          "maxScrollTopPx": 0,
+          "boundedRenderCount": true
+        },
+        {
+          "activeRowIndex": 5,
+          "effectiveMode": "full",
+          "renderedRowCount": 72,
+          "hiddenAboveCount": 0,
+          "hiddenBelowCount": 0,
+          "clampedScrollTopPx": 0,
+          "maxScrollTopPx": 0,
+          "boundedRenderCount": true
+        },
+        {
+          "activeRowIndex": 12,
+          "effectiveMode": "full",
+          "renderedRowCount": 72,
+          "hiddenAboveCount": 0,
+          "hiddenBelowCount": 0,
+          "clampedScrollTopPx": 0,
+          "maxScrollTopPx": 0,
+          "boundedRenderCount": true
+        },
+        {
+          "activeRowIndex": 24,
+          "effectiveMode": "full",
+          "renderedRowCount": 72,
+          "hiddenAboveCount": 0,
+          "hiddenBelowCount": 0,
+          "clampedScrollTopPx": 0,
+          "maxScrollTopPx": 0,
+          "boundedRenderCount": true
+        },
+        {
+          "activeRowIndex": 36,
+          "effectiveMode": "full",
+          "renderedRowCount": 72,
+          "hiddenAboveCount": 0,
+          "hiddenBelowCount": 0,
+          "clampedScrollTopPx": 0,
+          "maxScrollTopPx": 0,
+          "boundedRenderCount": true
+        },
+        {
+          "activeRowIndex": 48,
+          "effectiveMode": "full",
+          "renderedRowCount": 72,
+          "hiddenAboveCount": 0,
+          "hiddenBelowCount": 0,
+          "clampedScrollTopPx": 0,
+          "maxScrollTopPx": 0,
+          "boundedRenderCount": true
+        },
+        {
+          "activeRowIndex": 60,
+          "effectiveMode": "full",
+          "renderedRowCount": 72,
+          "hiddenAboveCount": 0,
+          "hiddenBelowCount": 0,
+          "clampedScrollTopPx": 0,
+          "maxScrollTopPx": 0,
+          "boundedRenderCount": true
+        },
+        {
+          "activeRowIndex": 71,
+          "effectiveMode": "full",
+          "renderedRowCount": 72,
+          "hiddenAboveCount": 0,
+          "hiddenBelowCount": 0,
+          "clampedScrollTopPx": 0,
+          "maxScrollTopPx": 0,
+          "boundedRenderCount": true
+        }
+      ]
+    },
+    {
+      "profileId": "windowed-medium-tree",
+      "totalRowCount": 520,
+      "renderSettings": {
+        "maxVisibleRows": 80,
+        "overscanRows": 10
+      },
+      "virtualizationSettings": {
+        "enabled": false,
+        "minRows": 400,
+        "rowHeightPx": 36,
+        "viewportRows": 18,
+        "overscanRows": 6
+      },
+      "summary": {
+        "sampleCount": 9,
+        "fullModeSampleCount": 0,
+        "windowedModeSampleCount": 9,
+        "virtualizedModeSampleCount": 0,
+        "maxRenderedRowCount": 100,
+        "boundedSampleCount": 9
+      },
+      "samples": [
+        {
+          "activeRowIndex": 0,
+          "effectiveMode": "windowed",
+          "renderedRowCount": 90,
+          "hiddenAboveCount": 0,
+          "hiddenBelowCount": 430,
+          "clampedScrollTopPx": 0,
+          "maxScrollTopPx": 0,
+          "boundedRenderCount": true
+        },
+        {
+          "activeRowIndex": 30,
+          "effectiveMode": "windowed",
+          "renderedRowCount": 90,
+          "hiddenAboveCount": 0,
+          "hiddenBelowCount": 430,
+          "clampedScrollTopPx": 0,
+          "maxScrollTopPx": 0,
+          "boundedRenderCount": true
+        },
+        {
+          "activeRowIndex": 79,
+          "effectiveMode": "windowed",
+          "renderedRowCount": 100,
+          "hiddenAboveCount": 29,
+          "hiddenBelowCount": 391,
+          "clampedScrollTopPx": 0,
+          "maxScrollTopPx": 0,
+          "boundedRenderCount": true
+        },
+        {
+          "activeRowIndex": 120,
+          "effectiveMode": "windowed",
+          "renderedRowCount": 100,
+          "hiddenAboveCount": 70,
+          "hiddenBelowCount": 350,
+          "clampedScrollTopPx": 0,
+          "maxScrollTopPx": 0,
+          "boundedRenderCount": true
+        },
+        {
+          "activeRowIndex": 200,
+          "effectiveMode": "windowed",
+          "renderedRowCount": 100,
+          "hiddenAboveCount": 150,
+          "hiddenBelowCount": 270,
+          "clampedScrollTopPx": 0,
+          "maxScrollTopPx": 0,
+          "boundedRenderCount": true
+        },
+        {
+          "activeRowIndex": 280,
+          "effectiveMode": "windowed",
+          "renderedRowCount": 100,
+          "hiddenAboveCount": 230,
+          "hiddenBelowCount": 190,
+          "clampedScrollTopPx": 0,
+          "maxScrollTopPx": 0,
+          "boundedRenderCount": true
+        },
+        {
+          "activeRowIndex": 360,
+          "effectiveMode": "windowed",
+          "renderedRowCount": 100,
+          "hiddenAboveCount": 310,
+          "hiddenBelowCount": 110,
+          "clampedScrollTopPx": 0,
+          "maxScrollTopPx": 0,
+          "boundedRenderCount": true
+        },
+        {
+          "activeRowIndex": 440,
+          "effectiveMode": "windowed",
+          "renderedRowCount": 100,
+          "hiddenAboveCount": 390,
+          "hiddenBelowCount": 30,
+          "clampedScrollTopPx": 0,
+          "maxScrollTopPx": 0,
+          "boundedRenderCount": true
+        },
+        {
+          "activeRowIndex": 519,
+          "effectiveMode": "windowed",
+          "renderedRowCount": 90,
+          "hiddenAboveCount": 430,
+          "hiddenBelowCount": 0,
+          "clampedScrollTopPx": 0,
+          "maxScrollTopPx": 0,
+          "boundedRenderCount": true
+        }
+      ]
+    },
+    {
+      "profileId": "virtualized-large-tree",
+      "totalRowCount": 1600,
+      "renderSettings": {
+        "maxVisibleRows": 120,
+        "overscanRows": 24
+      },
+      "virtualizationSettings": {
+        "enabled": true,
+        "minRows": 400,
+        "rowHeightPx": 32,
+        "viewportRows": 20,
+        "overscanRows": 4
+      },
+      "summary": {
+        "sampleCount": 9,
+        "fullModeSampleCount": 0,
+        "windowedModeSampleCount": 0,
+        "virtualizedModeSampleCount": 9,
+        "maxRenderedRowCount": 28,
+        "boundedSampleCount": 9
+      },
+      "samples": [
+        {
+          "activeRowIndex": 0,
+          "effectiveMode": "virtualized",
+          "renderedRowCount": 24,
+          "hiddenAboveCount": 0,
+          "hiddenBelowCount": 1576,
+          "clampedScrollTopPx": 0,
+          "maxScrollTopPx": 50560,
+          "boundedRenderCount": true
+        },
+        {
+          "activeRowIndex": 30,
+          "effectiveMode": "virtualized",
+          "renderedRowCount": 28,
+          "hiddenAboveCount": 7,
+          "hiddenBelowCount": 1565,
+          "clampedScrollTopPx": 352,
+          "maxScrollTopPx": 50560,
+          "boundedRenderCount": true
+        },
+        {
+          "activeRowIndex": 90,
+          "effectiveMode": "virtualized",
+          "renderedRowCount": 28,
+          "hiddenAboveCount": 67,
+          "hiddenBelowCount": 1505,
+          "clampedScrollTopPx": 2272,
+          "maxScrollTopPx": 50560,
+          "boundedRenderCount": true
+        },
+        {
+          "activeRowIndex": 200,
+          "effectiveMode": "virtualized",
+          "renderedRowCount": 28,
+          "hiddenAboveCount": 177,
+          "hiddenBelowCount": 1395,
+          "clampedScrollTopPx": 5792,
+          "maxScrollTopPx": 50560,
+          "boundedRenderCount": true
+        },
+        {
+          "activeRowIndex": 400,
+          "effectiveMode": "virtualized",
+          "renderedRowCount": 28,
+          "hiddenAboveCount": 377,
+          "hiddenBelowCount": 1195,
+          "clampedScrollTopPx": 12192,
+          "maxScrollTopPx": 50560,
+          "boundedRenderCount": true
+        },
+        {
+          "activeRowIndex": 700,
+          "effectiveMode": "virtualized",
+          "renderedRowCount": 28,
+          "hiddenAboveCount": 677,
+          "hiddenBelowCount": 895,
+          "clampedScrollTopPx": 21792,
+          "maxScrollTopPx": 50560,
+          "boundedRenderCount": true
+        },
+        {
+          "activeRowIndex": 1000,
+          "effectiveMode": "virtualized",
+          "renderedRowCount": 28,
+          "hiddenAboveCount": 977,
+          "hiddenBelowCount": 595,
+          "clampedScrollTopPx": 31392,
+          "maxScrollTopPx": 50560,
+          "boundedRenderCount": true
+        },
+        {
+          "activeRowIndex": 1300,
+          "effectiveMode": "virtualized",
+          "renderedRowCount": 28,
+          "hiddenAboveCount": 1277,
+          "hiddenBelowCount": 295,
+          "clampedScrollTopPx": 40992,
+          "maxScrollTopPx": 50560,
+          "boundedRenderCount": true
+        },
+        {
+          "activeRowIndex": 1599,
+          "effectiveMode": "virtualized",
+          "renderedRowCount": 24,
+          "hiddenAboveCount": 1576,
+          "hiddenBelowCount": 0,
+          "clampedScrollTopPx": 50560,
+          "maxScrollTopPx": 50560,
+          "boundedRenderCount": true
+        }
+      ]
+    }
+  ]
+}

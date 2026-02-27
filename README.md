@@ -8,6 +8,7 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #3: deterministic Lean ingestion/indexer with stable declaration IDs, provenance spans/hashes, and unsupported-construct diagnostics.
 - Issue #4: deterministic Lean declaration dependency graph with SCC/cycle diagnostics, transitive support queries, and canonical graph hashing.
 - Issue #6: deterministic domain-adapter pipeline (Verity specialization + generic fallback), low-confidence downgrade, manual overrides, and sampled precision/recall reporting.
+- Issue #6 follow-up: deterministic domain-adapter benchmark is now fail-closed in CI and in the root release gate via baseline hash checks (`eval:domain-adapters:ci`).
 - Issue #11: OpenAI-compatible provider layer with deterministic retries, timeout handling, streaming SSE support, and typed error taxonomy.
 - Issue #7: inductive child-grouping algorithm with deterministic prerequisite-aware scheduling and complexity-bounded sibling partitioning.
 - Issue #8: parent-summary generation pipeline with strict structured-output schema, deterministic prompting, and critic validation diagnostics.
@@ -15,6 +16,7 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #25: pedagogical policy engine with deterministic pre/post summary checks, node-level diagnostics, and bounded rewrite retry.
 - Issue #25 follow-up: prerequisite-order policy now evaluates deterministic grouping order (not lexical IDs) and treats cyclic in-group edges as explicit violations that deterministically trigger repartition or fail-fast.
 - Issue #25 follow-up: tree builder now reorders each group by local prerequisites and uses a safe depth guard with explicit no-progress failure diagnostics for large Lean corpora.
+- Issue #25 follow-up: strict entailment mode is now fail-closed on parent synthesis (`evidence_refs` must cover all children, `new_terms_introduced` must be empty, and unsupported-term checks include both parent statement and rationale).
 - Issue #25 follow-up: web proof service now exposes deterministic pedagogy policy reports (threshold-calibrated quality metrics + canonical report hashing) via `GET /api/proofs/policy-report`.
 - Issue #23 follow-up: web config/query contracts now expose advanced pedagogy knobs (`readingLevelTarget`, `complexityBandWidth`, `proofDetailMode`, `entailmentMode`) with strict deterministic parsing across routes and explorer controls.
 - Issue #23 follow-up: `/api/proofs/view` and `/api/proofs/diff` now share the same full-knob parser as query routes, so regeneration planning cannot drift from configured pedagogy controls.
@@ -28,6 +30,7 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #18/#25 follow-up: CI now includes a frozen real-Verity counter snapshot preset with explicit fixture provenance and baseline drift checks.
 - Issue #18/#25 follow-up: CI baseline now also gates a strict-entailment variant of the frozen counter snapshot preset.
 - Issue #18/#25 follow-up: CI quality baseline now also gates a frozen real-Verity SimpleToken snapshot in calibrated and strict entailment modes.
+- Issue #1 follow-up: deterministic cross-benchmark release-gate contract now composes quality baseline, a11y transcript evidence, cache benchmark evidence, and observability SLO baseline checks into one auditable pass/fail report.
 - Issue #15 (backend contract): deterministic progressive-disclosure projection and config-aware explanation diff contract for root-first UI rendering.
 - Issue #14: Next.js App Router scaffold with deterministic seeded-proof API adapters, frontend client layer, and accessible loading/error shell.
 - Issue #3 follow-up: web proof service now exposes a deterministic Lean-ingested Verity fixture (`lean-verity-fixture`) through the same root/children/path/diff/leaf contracts as seed data.
@@ -35,6 +38,18 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #12: Lean fixture web proof datasets now support deterministic persistent cache reuse/invalidation (source-fingerprint + config-hash keyed) with auditable cache telemetry via `GET /api/proofs/cache-report`.
 - Issue #12 follow-up: deterministic cache benchmark harness now records cold/warm latency profiles plus source-fingerprint invalidation recovery with machine-checkable `requestHash`/`outcomeHash`.
 - Issue #13: deterministic tree storage/query contract with versioned snapshot schema, root/children/ancestry/leaf-provenance reads, and canonical import/export hashing.
+- Issue #19 follow-up: deterministic prompt-boundary hardening for parent-summary generation with child-ID safety validation, untrusted-text sanitization, secret/injection redaction, configured-secret-value leak checks, auditable boundary markers, and fail-closed output rejection (`secret_leak` / `prompt_injection`).
+- Issue #19 follow-up: deterministic summary prompt-security benchmark is now fail-closed in CI and in the root release gate via baseline hash checks (`eval:summary-security:ci`).
+- Issue #24: research dossier with machine-checkable issue-to-evidence mapping for inductive tree design decisions, pedagogy controls, and evaluation strategy.
+- Issue #24 follow-up: research dossier decisions now include pinned artifact-hash evidence checks plus pinned command-replay outcome hashes, fail-closed in CI via `eval:research-dossier`.
+- Issue #15 follow-up: deterministic tree accessibility benchmark is now fail-closed in CI via baseline hash checks (`web:eval:tree-a11y:ci`).
+- Issue #15 follow-up: deterministic large-tree rendering benchmark is now fail-closed in CI via baseline hash checks (`web:eval:tree-scale:ci`).
+- Issue #15 follow-up: deterministic explanation-diff benchmark is now fail-closed in CI and in the root release gate via baseline hash checks (`web:eval:explanation-diff:ci`).
+- Issue #20 follow-up: Proof Explorer telemetry now avoids keyboard double-emission drift by recording keyboard actions as `tree_keyboard` and emitting direct tree action events only for non-keyboard sources.
+- Issue #15 follow-up: leaf verification panel now exports deterministic replay artifacts (canonical JSON + hash-tagged filename) for browser-to-operator provenance handoff.
+- Issue #15 follow-up: replay artifact export now also embeds tree/leaf query hash context (`treeSnapshotHash`, `leafDetailHash`, `nodePathRequestHash`, etc.) so browser context remains auditable after handoff.
+- Issue #15 follow-up: verification replay artifact benchmarks are now fail-closed in CI and in the root release gate via baseline hash checks (`web:eval:verification-replay:ci`).
+- Issue #10 follow-up: Lean/Verity tree node rendering now applies deterministic language-localized leaf statements (`en`/`fr`) with locale fallback (`fr-CA` -> `fr`, unsupported -> `en`), and multilingual contract benchmarks are fail-closed in CI + release gate (`web:eval:multilingual:ci`).
 
 ## Local checks
 ```bash
@@ -44,18 +59,29 @@ npm run build
 npm run bench:dependency-graph
 npm run ingest:lean -- /path/to/lean-project
 npm run eval:domain-adapters
+npm run eval:domain-adapters:ci
+npm run eval:summary-security
+npm run eval:summary-security:ci
 npm run eval:tree-pipeline -- /path/to/lean-project --include=Verity --include=Compiler/ContractSpec.lean
 npm run eval:leaf-detail -- /path/to/lean-project --include=Verity --leaf=<leaf-id>
 npm run eval:quality -- /path/to/lean-project --include=Verity --include=Compiler/ContractSpec.lean
 npm run eval:quality -- --list-presets
 npm run eval:quality:ci
 npm run eval:quality:baseline
+npm run eval:research-dossier
+npm run eval:release-gate:ci
 npm run serve:verification
 npm run web:lint
 npm run web:typecheck
 npm run web:test
 npm run web:build
 npm run web:bench:cache
+npm run web:eval:tree-a11y:ci
+npm run web:eval:tree-scale:ci
+npm run web:eval:explanation-diff:ci
+npm run web:eval:verification-replay:ci
+npm run web:eval:multilingual:ci
+npm run eval:domain-adapters:ci
 ```
 
 ## Live provider check
@@ -73,12 +99,21 @@ EXPLAIN_MD_LIVE_RPC_API_KEY=... npm run test:live:summary
 - [Provider layer](docs/openai-provider.md)
 - [Inductive child grouping](docs/child-grouping.md)
 - [Parent summary pipeline](docs/summary-pipeline.md)
+- [Prompt security model](docs/security-prompt-safety.md)
+- [Summary prompt-security benchmark](docs/summary-security-evaluation.md)
 - [Recursive tree builder](docs/tree-builder.md)
 - [Evaluation harness](docs/evaluation-harness.md)
+- [Research dossier](docs/research-dossier.md)
+- [Research dossier evidence map](docs/research-dossier-evidence.json)
+- [Release gate charter](docs/release-gate.md)
 - [Pedagogical policy engine](docs/pedagogical-policy.md)
 - [Policy report API](docs/policy-report-api.md)
 - [Proof cache report API](docs/proof-cache-api.md)
 - [Proof cache benchmark harness](docs/proof-cache-benchmark.md)
+- [Tree scale benchmark](docs/tree-scale-evaluation.md)
+- [Explanation diff benchmark](docs/explanation-diff-evaluation.md)
+- [Verification replay benchmark](docs/verification-replay-evaluation.md)
+- [Multilingual rendering benchmark](docs/multilingual-evaluation.md)
 - [Config profile API](docs/config-profile-api.md)
 - [Browser-triggered verification flow](docs/verification-flow.md)
 - [Verification HTTP API service](docs/verification-api.md)

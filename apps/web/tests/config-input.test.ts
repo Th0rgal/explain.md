@@ -66,6 +66,26 @@ describe("config input", () => {
     });
   });
 
+  it("falls back unsupported language tags to default deterministically", () => {
+    expect(
+      normalizeConfigInput({
+        language: "de",
+      }),
+    ).toMatchObject({
+      language: "en",
+    });
+  });
+
+  it("normalizes locale variants to supported base language", () => {
+    expect(
+      normalizeConfigInput({
+        language: "fr-CA",
+      }),
+    ).toMatchObject({
+      language: "fr",
+    });
+  });
+
   it("rejects invalid body config enums", () => {
     expect(() =>
       normalizeConfigInput({

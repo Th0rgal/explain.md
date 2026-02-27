@@ -16,7 +16,6 @@ import {
   getSupportingDeclarations,
   ingestLeanSources,
   mapLeanIngestionToTheoremLeaves,
-  mapTheoremLeavesToTreeLeaves,
   normalizeConfig,
   validateExplanationTree,
   type DependencyGraph,
@@ -29,6 +28,7 @@ import {
   type ProviderClient,
   type TheoremLeafRecord,
 } from "../../../dist/index";
+import { resolveExplanationLanguage } from "../../../src/language-contract";
 import {
   buildExplanationDiffReport,
   buildProgressiveDisclosureView,
@@ -56,6 +56,18 @@ const LEAN_FIXTURE_SOURCE_BASE_URL =
   "https://github.com/Th0rgal/explain.md/blob/main/tests/fixtures/lean-project";
 const PROOF_DATASET_CACHE_SCHEMA_VERSION = "1.0.0";
 const DEFAULT_PROOF_DATASET_CACHE_DIR = path.resolve(process.cwd(), ".explain-md", "web-proof-cache");
+const PROOF_QUERY_OBSERVABILITY_SAMPLE_WINDOW = 1024;
+const PROOF_QUERY_LATENCY_BUCKETS = [
+  { bucket: "lte_5ms", maxInclusiveMs: 5 },
+  { bucket: "lte_10ms", maxInclusiveMs: 10 },
+  { bucket: "lte_25ms", maxInclusiveMs: 25 },
+  { bucket: "lte_50ms", maxInclusiveMs: 50 },
+  { bucket: "gt_50ms", maxInclusiveMs: null },
+] as const satisfies ReadonlyArray<{
+  bucket: ProofQueryLatencyHistogramBucket["bucket"];
+  maxInclusiveMs: number | null;
+}>;
+let proofNowMs: () => number = () => Date.now();
 
 const SUPPORTED_PROOF_IDS = [SEED_PROOF_ID, LEAN_FIXTURE_PROOF_ID] as const;
 
@@ -88,6 +100,31 @@ interface ResolvedDataset {
 
 type ProofDatasetCacheStatus = "hit" | "miss";
 type ProofDatasetCacheLayer = "persistent" | "ephemeral";
+export type ProofObservabilityQuery =
+  | "view"
+  | "diff"
+  | "leaf-detail"
+  | "root"
+  | "children"
+  | "path"
+  | "dependency-graph"
+  | "policy-report"
+  | "cache-report";
+
+interface ProofQueryObservabilityEvent {
+  query: ProofObservabilityQuery;
+  traceId: string;
+  requestId: string;
+  latencyMs: number;
+  cacheLayer: ProofDatasetCacheLayer;
+  cacheStatus: ProofDatasetCacheStatus;
+  leafCount: number;
+  parentCount: number;
+  nodeCount: number;
+  maxDepth: number;
+}
+
+const proofQueryObservabilityEvents: ProofQueryObservabilityEvent[] = [];
 
 export interface ProofDatasetCacheDiagnostic {
   code:
@@ -243,6 +280,7 @@ export interface DependencyGraphView {
     inCycle: boolean;
   };
   diagnostics: DependencyGraphQueryDiagnostic[];
+  observability: ProofQueryObservability;
 }
 
 export interface PolicyReportView {
@@ -251,6 +289,7 @@ export interface PolicyReportView {
   requestHash: string;
   reportHash: string;
   report: ReturnType<typeof evaluateExplanationTreeQuality>;
+  observability: ProofQueryObservability;
 }
 
 export interface ProofCacheReportView {
@@ -258,6 +297,63 @@ export interface ProofCacheReportView {
   configHash: string;
   requestHash: string;
   cache: ProofDatasetCacheMetadata;
+  observability: ProofQueryObservability;
+}
+
+export interface ProofQueryObservability {
+  requestId: string;
+  traceId: string;
+  query: ProofObservabilityQuery;
+  spans: Array<{
+    spanId: string;
+    name: "dataset_load" | "query_compute" | "response_materialization";
+    attributes: Record<string, boolean | number | string>;
+  }>;
+  metrics: {
+    latencyMs: number;
+    cacheLayer: ProofDatasetCacheLayer;
+    cacheStatus: ProofDatasetCacheStatus;
+    leafCount: number;
+    parentCount: number;
+    nodeCount: number;
+    maxDepth: number;
+  };
+}
+
+export interface ProofQueryObservabilityMetricsSnapshot {
+  schemaVersion: "1.0.0";
+  requestCount: number;
+  uniqueRequestCount: number;
+  uniqueTraceCount: number;
+  cache: {
+    hitCount: number;
+    missCount: number;
+    hitRate: number;
+  };
+  latencyHistogram: ProofQueryLatencyHistogramBucket[];
+  queries: Array<{
+    query: ProofObservabilityQuery;
+    requestCount: number;
+    cacheHitCount: number;
+    cacheMissCount: number;
+    minLatencyMs: number;
+    maxLatencyMs: number;
+    meanLatencyMs: number;
+    p95LatencyMs: number;
+    latencyHistogram: ProofQueryLatencyHistogramBucket[];
+    meanLeafCount: number;
+    meanParentCount: number;
+    meanNodeCount: number;
+    maxDepth: number;
+  }>;
+  generatedAt: string;
+  snapshotHash: string;
+}
+
+export interface ProofQueryLatencyHistogramBucket {
+  bucket: "lte_5ms" | "lte_10ms" | "lte_25ms" | "lte_50ms" | "gt_50ms";
+  maxInclusiveMs: number | null;
+  count: number;
 }
 
 export function getSupportedProofIds(): string[] {
@@ -318,7 +414,14 @@ export function loadSeedDataset(proofId: string, configInput: ExplanationConfigI
 }
 
 export function buildSeedProjection(request: ProjectionRequest) {
+  const startedAt = proofNowMs();
   const dataset = loadSeedDataset(request.proofId, request.config);
+  const snapshot = exportTreeStorageSnapshot(dataset.tree as never, {
+    proofId: dataset.proofId,
+    leaves: dataset.leaves,
+    config: dataset.config,
+  });
+  const cache = buildSeedCacheMetadata(dataset, computeTreeStorageSnapshotHash(snapshot));
   const expandedNodeIds = normalizeExpandedNodeIds(request.expandedNodeIds);
   const view = buildProgressiveDisclosureView(dataset.tree as never, {
     expandedNodeIds,
@@ -331,6 +434,15 @@ export function buildSeedProjection(request: ProjectionRequest) {
     expandedNodeIds,
     maxChildrenPerExpandedNode: request.maxChildrenPerExpandedNode,
   });
+  const observability = buildProofQueryObservability({
+    proofId: dataset.proofId,
+    configHash: dataset.configHash,
+    requestHash,
+    query: "view",
+    tree: dataset.tree as ExplanationTree,
+    cache,
+    latencyMs: elapsedMs(startedAt),
+  });
 
   return {
     proofId: dataset.proofId,
@@ -339,11 +451,13 @@ export function buildSeedProjection(request: ProjectionRequest) {
     requestHash,
     view,
     viewHash,
+    observability,
   };
 }
 
 export async function buildProofProjection(request: ProjectionRequest) {
-  const { dataset } = await loadProofDataset(request.proofId, request.config);
+  const startedAt = proofNowMs();
+  const { dataset, cache } = await loadProofDataset(request.proofId, request.config);
   const expandedNodeIds = normalizeExpandedNodeIds(request.expandedNodeIds);
   const view = buildProgressiveDisclosureView(dataset.tree as never, {
     expandedNodeIds,
@@ -356,6 +470,15 @@ export async function buildProofProjection(request: ProjectionRequest) {
     expandedNodeIds,
     maxChildrenPerExpandedNode: request.maxChildrenPerExpandedNode,
   });
+  const observability = buildProofQueryObservability({
+    proofId: dataset.proofId,
+    configHash: dataset.configHash,
+    requestHash,
+    query: "view",
+    tree: dataset.tree,
+    cache,
+    latencyMs: elapsedMs(startedAt),
+  });
 
   return {
     proofId: dataset.proofId,
@@ -364,18 +487,40 @@ export async function buildProofProjection(request: ProjectionRequest) {
     requestHash,
     view,
     viewHash,
+    observability,
   };
 }
 
 export function buildSeedDiff(request: DiffRequest) {
+  const startedAt = proofNowMs();
   const baseline = loadSeedDataset(request.proofId, request.baselineConfig);
   const candidate = loadSeedDataset(request.proofId, request.candidateConfig);
+  const snapshot = exportTreeStorageSnapshot(candidate.tree as never, {
+    proofId: candidate.proofId,
+    leaves: candidate.leaves,
+    config: candidate.config,
+  });
+  const cache = buildSeedCacheMetadata(candidate, computeTreeStorageSnapshotHash(snapshot));
   const report = buildExplanationDiffReport(baseline.tree as never, candidate.tree as never, baseline.config, candidate.config);
   const diffHash = computeExplanationDiffHash(report);
   const requestHash = computeCanonicalRequestHash({
     proofId: request.proofId,
     baselineConfigHash: baseline.configHash,
     candidateConfigHash: candidate.configHash,
+  });
+  const observability = buildProofQueryObservability({
+    proofId: request.proofId,
+    configHash: candidate.configHash,
+    requestHash,
+    query: "diff",
+    tree: candidate.tree as ExplanationTree,
+    cache,
+    latencyMs: elapsedMs(startedAt),
+    extraMetrics: {
+      baselineLeafCount: baseline.tree.leafIds.length,
+      baselineNodeCount: Object.keys(baseline.tree.nodes).length,
+      changeCount: report.summary.total,
+    },
   });
 
   return {
@@ -385,10 +530,12 @@ export function buildSeedDiff(request: DiffRequest) {
     candidateConfig: candidate.config,
     report,
     diffHash,
+    observability,
   };
 }
 
 export async function buildProofDiff(request: DiffRequest) {
+  const startedAt = proofNowMs();
   const [baseline, candidate] = await Promise.all([
     loadProofDataset(request.proofId, request.baselineConfig),
     loadProofDataset(request.proofId, request.candidateConfig),
@@ -405,6 +552,22 @@ export async function buildProofDiff(request: DiffRequest) {
     baselineConfigHash: baseline.dataset.configHash,
     candidateConfigHash: candidate.dataset.configHash,
   });
+  const observability = buildProofQueryObservability({
+    proofId: request.proofId,
+    configHash: candidate.dataset.configHash,
+    requestHash,
+    query: "diff",
+    tree: candidate.dataset.tree,
+    cache: candidate.cache,
+    latencyMs: elapsedMs(startedAt),
+    extraMetrics: {
+      baselineCacheStatus: baseline.cache.status,
+      baselineCacheLayer: baseline.cache.layer,
+      baselineLeafCount: baseline.dataset.tree.leafIds.length,
+      baselineNodeCount: Object.keys(baseline.dataset.tree.nodes).length,
+      changeCount: report.summary.total,
+    },
+  });
 
   return {
     proofId: request.proofId,
@@ -413,99 +576,173 @@ export async function buildProofDiff(request: DiffRequest) {
     candidateConfig: candidate.dataset.config,
     report,
     diffHash,
+    observability,
   };
 }
 
 export async function buildProofLeafDetail(request: LeafDetailRequest) {
-  const { dataset } = await loadProofDataset(request.proofId, request.config);
+  const startedAt = proofNowMs();
+  const { dataset, cache } = await loadProofDataset(request.proofId, request.config);
   const jobs = request.verificationJobs ?? sampleVerificationJobs(request.proofId, request.leafId);
   const result = buildLeafDetailView(dataset.tree as never, dataset.leaves, request.leafId, {
     verificationJobs: jobs,
   });
 
   if (!result.view) {
+    const requestHash = computeCanonicalRequestHash({
+      proofId: request.proofId,
+      leafId: request.leafId,
+      configHash: dataset.configHash,
+    });
     return {
       ok: false as const,
       proofId: request.proofId,
       diagnostics: result.diagnostics,
-      requestHash: computeCanonicalRequestHash({
+      requestHash,
+      observability: buildProofQueryObservability({
         proofId: request.proofId,
-        leafId: request.leafId,
         configHash: dataset.configHash,
+        requestHash,
+        query: "leaf-detail",
+        tree: dataset.tree,
+        cache,
+        latencyMs: elapsedMs(startedAt),
+        extraMetrics: {
+          leafFound: false,
+        },
       }),
     };
   }
 
   const detailHash = computeLeafDetailHash(result.view);
+  const requestHash = computeCanonicalRequestHash({
+    proofId: request.proofId,
+    leafId: request.leafId,
+    configHash: dataset.configHash,
+  });
   return {
     ok: result.ok,
     proofId: request.proofId,
     configHash: dataset.configHash,
-    requestHash: computeCanonicalRequestHash({
-      proofId: request.proofId,
-      leafId: request.leafId,
-      configHash: dataset.configHash,
-    }),
+    requestHash,
     view: result.view,
     detailHash,
+    observability: buildProofQueryObservability({
+      proofId: request.proofId,
+      configHash: dataset.configHash,
+      requestHash,
+      query: "leaf-detail",
+      tree: dataset.tree,
+      cache,
+      latencyMs: elapsedMs(startedAt),
+      extraMetrics: {
+        leafFound: true,
+        verificationJobCount: jobs.length,
+      },
+    }),
   };
 }
 
 export function buildSeedLeafDetail(request: LeafDetailRequest) {
+  const startedAt = proofNowMs();
   const dataset = loadSeedDataset(request.proofId, request.config);
+  const snapshot = exportTreeStorageSnapshot(dataset.tree as never, {
+    proofId: dataset.proofId,
+    leaves: dataset.leaves,
+    config: dataset.config,
+  });
+  const cache = buildSeedCacheMetadata(dataset, computeTreeStorageSnapshotHash(snapshot));
   const jobs = request.verificationJobs ?? sampleVerificationJobs(request.proofId, request.leafId);
   const result = buildLeafDetailView(dataset.tree as never, dataset.leaves, request.leafId, {
     verificationJobs: jobs,
   });
 
   if (!result.view) {
+    const requestHash = computeCanonicalRequestHash({
+      proofId: request.proofId,
+      leafId: request.leafId,
+      configHash: dataset.configHash,
+    });
     return {
       ok: false as const,
       proofId: request.proofId,
       diagnostics: result.diagnostics,
-      requestHash: computeCanonicalRequestHash({
+      requestHash,
+      observability: buildProofQueryObservability({
         proofId: request.proofId,
-        leafId: request.leafId,
         configHash: dataset.configHash,
+        requestHash,
+        query: "leaf-detail",
+        tree: dataset.tree as ExplanationTree,
+        cache,
+        latencyMs: elapsedMs(startedAt),
+        extraMetrics: { leafFound: false },
       }),
     };
   }
 
   const detailHash = computeLeafDetailHash(result.view);
+  const requestHash = computeCanonicalRequestHash({
+    proofId: request.proofId,
+    leafId: request.leafId,
+    configHash: dataset.configHash,
+  });
   return {
     ok: result.ok,
     proofId: request.proofId,
     configHash: dataset.configHash,
-    requestHash: computeCanonicalRequestHash({
-      proofId: request.proofId,
-      leafId: request.leafId,
-      configHash: dataset.configHash,
-    }),
+    requestHash,
     view: result.view,
     detailHash,
+    observability: buildProofQueryObservability({
+      proofId: request.proofId,
+      configHash: dataset.configHash,
+      requestHash,
+      query: "leaf-detail",
+      tree: dataset.tree as ExplanationTree,
+      cache,
+      latencyMs: elapsedMs(startedAt),
+      extraMetrics: {
+        leafFound: true,
+        verificationJobCount: jobs.length,
+      },
+    }),
   };
 }
 
 export async function buildProofRootView(proofId: string, configInput: ExplanationConfigInput = {}) {
-  const { dataset, queryApi } = await loadProofDataset(proofId, configInput);
+  const startedAt = proofNowMs();
+  const { dataset, queryApi, cache } = await loadProofDataset(proofId, configInput);
   const root = queryApi.getRoot();
+  const requestHash = computeCanonicalRequestHash({
+    proofId,
+    configHash: dataset.configHash,
+    query: "root",
+  });
 
   return {
     proofId,
     configHash: dataset.configHash,
-    requestHash: computeCanonicalRequestHash({
-      proofId,
-      configHash: dataset.configHash,
-      query: "root",
-    }),
+    requestHash,
     snapshotHash: computeTreeStorageSnapshotHash(queryApi.snapshot),
     root,
+    observability: buildProofQueryObservability({
+      proofId,
+      configHash: dataset.configHash,
+      requestHash,
+      query: "root",
+      tree: dataset.tree,
+      cache,
+      latencyMs: elapsedMs(startedAt),
+    }),
   };
 }
 
 export function buildSeedRootView(proofId: string, configInput: ExplanationConfigInput = {}) {
+  const startedAt = proofNowMs();
   const dataset = loadSeedDataset(proofId, configInput);
   const api = createSeedTreeQueryApi(dataset);
+  const cache = buildSeedCacheMetadata(dataset, computeTreeStorageSnapshotHash(api.snapshot));
   const root = api.getRoot();
   const requestHash = computeCanonicalRequestHash({
     proofId,
@@ -519,35 +756,64 @@ export function buildSeedRootView(proofId: string, configInput: ExplanationConfi
     requestHash,
     snapshotHash: computeTreeStorageSnapshotHash(api.snapshot),
     root,
+    observability: buildProofQueryObservability({
+      proofId,
+      configHash: dataset.configHash,
+      requestHash,
+      query: "root",
+      tree: dataset.tree as ExplanationTree,
+      cache,
+      latencyMs: elapsedMs(startedAt),
+    }),
   };
 }
 
 export async function buildProofNodeChildrenView(request: NodeChildrenRequest) {
-  const { dataset, queryApi } = await loadProofDataset(request.proofId, request.config);
+  const startedAt = proofNowMs();
+  const { dataset, queryApi, cache } = await loadProofDataset(request.proofId, request.config);
   const children = queryApi.getChildren(request.nodeId, {
     offset: request.offset,
     limit: request.limit,
+  });
+  const requestHash = computeCanonicalRequestHash({
+    proofId: request.proofId,
+    nodeId: request.nodeId,
+    configHash: dataset.configHash,
+    offset: request.offset,
+    limit: request.limit,
+    query: "children",
   });
 
   return {
     proofId: request.proofId,
     configHash: dataset.configHash,
-    requestHash: computeCanonicalRequestHash({
-      proofId: request.proofId,
-      nodeId: request.nodeId,
-      configHash: dataset.configHash,
-      offset: request.offset,
-      limit: request.limit,
-      query: "children",
-    }),
+    requestHash,
     snapshotHash: computeTreeStorageSnapshotHash(queryApi.snapshot),
     children,
+    observability: buildProofQueryObservability({
+      proofId: request.proofId,
+      configHash: dataset.configHash,
+      requestHash,
+      query: "children",
+      tree: dataset.tree,
+      cache,
+      latencyMs: elapsedMs(startedAt),
+      extraMetrics: {
+        requestedNodeId: request.nodeId,
+        pageOffset: children.offset,
+        pageLimit: children.limit,
+        returnedChildren: children.children.length,
+        totalChildren: children.totalChildren,
+      },
+    }),
   };
 }
 
 export function buildSeedNodeChildrenView(request: NodeChildrenRequest) {
+  const startedAt = proofNowMs();
   const dataset = loadSeedDataset(request.proofId, request.config);
   const api = createSeedTreeQueryApi(dataset);
+  const cache = buildSeedCacheMetadata(dataset, computeTreeStorageSnapshotHash(api.snapshot));
   const children = api.getChildren(request.nodeId, {
     offset: request.offset,
     limit: request.limit,
@@ -567,29 +833,62 @@ export function buildSeedNodeChildrenView(request: NodeChildrenRequest) {
     requestHash,
     snapshotHash: computeTreeStorageSnapshotHash(api.snapshot),
     children,
+    observability: buildProofQueryObservability({
+      proofId: request.proofId,
+      configHash: dataset.configHash,
+      requestHash,
+      query: "children",
+      tree: dataset.tree as ExplanationTree,
+      cache,
+      latencyMs: elapsedMs(startedAt),
+      extraMetrics: {
+        requestedNodeId: request.nodeId,
+        pageOffset: children.offset,
+        pageLimit: children.limit,
+        returnedChildren: children.children.length,
+        totalChildren: children.totalChildren,
+      },
+    }),
   };
 }
 
 export async function buildProofNodePathView(request: NodePathRequest) {
-  const { dataset, queryApi } = await loadProofDataset(request.proofId, request.config);
+  const startedAt = proofNowMs();
+  const { dataset, queryApi, cache } = await loadProofDataset(request.proofId, request.config);
   const pathResult = queryApi.getAncestryPath(request.nodeId);
+  const requestHash = computeCanonicalRequestHash({
+    proofId: request.proofId,
+    nodeId: request.nodeId,
+    configHash: dataset.configHash,
+    query: "path",
+  });
 
   return {
     proofId: request.proofId,
     configHash: dataset.configHash,
-    requestHash: computeCanonicalRequestHash({
-      proofId: request.proofId,
-      nodeId: request.nodeId,
-      configHash: dataset.configHash,
-      query: "path",
-    }),
+    requestHash,
     snapshotHash: computeTreeStorageSnapshotHash(queryApi.snapshot),
     path: pathResult,
+    observability: buildProofQueryObservability({
+      proofId: request.proofId,
+      configHash: dataset.configHash,
+      requestHash,
+      query: "path",
+      tree: dataset.tree,
+      cache,
+      latencyMs: elapsedMs(startedAt),
+      extraMetrics: {
+        requestedNodeId: request.nodeId,
+        pathLength: pathResult.path.length,
+        pathOk: pathResult.ok,
+      },
+    }),
   };
 }
 
 export async function buildProofDependencyGraphView(request: DependencyGraphRequest): Promise<DependencyGraphView> {
-  const { dataset } = await loadProofDataset(request.proofId, request.config);
+  const startedAt = proofNowMs();
+  const { dataset, cache } = await loadProofDataset(request.proofId, request.config);
   const declarationId = normalizeOptionalDeclarationId(request.declarationId);
   const includeExternalSupport = request.includeExternalSupport ?? true;
   const diagnostics: DependencyGraphQueryDiagnostic[] = [];
@@ -620,16 +919,17 @@ export async function buildProofDependencyGraphView(request: DependencyGraphRequ
     }
   }
 
+  const requestHash = computeCanonicalRequestHash({
+    proofId: request.proofId,
+    declarationId,
+    configHash: dataset.configHash,
+    includeExternalSupport,
+    query: "dependency-graph",
+  });
   return {
     proofId: request.proofId,
     configHash: dataset.configHash,
-    requestHash: computeCanonicalRequestHash({
-      proofId: request.proofId,
-      declarationId,
-      configHash: dataset.configHash,
-      includeExternalSupport,
-      query: "dependency-graph",
-    }),
+    requestHash,
     dependencyGraphHash: dataset.dependencyGraphHash,
     graph: {
       schemaVersion: dataset.dependencyGraph.schemaVersion,
@@ -644,46 +944,95 @@ export async function buildProofDependencyGraphView(request: DependencyGraphRequ
     },
     declaration,
     diagnostics,
+    observability: buildProofQueryObservability({
+      proofId: request.proofId,
+      configHash: dataset.configHash,
+      requestHash,
+      query: "dependency-graph",
+      tree: dataset.tree,
+      cache,
+      latencyMs: elapsedMs(startedAt),
+      extraMetrics: {
+        declarationRequested: declarationId ?? "none",
+        includeExternalSupport,
+        graphNodeCount: dataset.dependencyGraph.nodeIds.length,
+        graphEdgeCount: dataset.dependencyGraph.edgeCount,
+        graphCyclicSccCount: dataset.dependencyGraph.cyclicSccs.length,
+      },
+    }),
   };
 }
 
 export async function buildProofPolicyReportView(request: PolicyReportRequest): Promise<PolicyReportView> {
-  const { dataset } = await loadProofDataset(request.proofId, request.config);
+  const startedAt = proofNowMs();
+  const { dataset, cache } = await loadProofDataset(request.proofId, request.config);
   const report = evaluateExplanationTreeQuality(dataset.tree, dataset.config, {
     thresholds: request.thresholds,
   });
 
+  const requestHash = computeCanonicalRequestHash({
+    proofId: request.proofId,
+    configHash: dataset.configHash,
+    thresholds: request.thresholds ?? {},
+    query: "policy-report",
+  });
   return {
     proofId: request.proofId,
     configHash: dataset.configHash,
-    requestHash: computeCanonicalRequestHash({
-      proofId: request.proofId,
-      configHash: dataset.configHash,
-      thresholds: request.thresholds ?? {},
-      query: "policy-report",
-    }),
+    requestHash,
     reportHash: computeTreeQualityReportHash(report),
     report,
+    observability: buildProofQueryObservability({
+      proofId: request.proofId,
+      configHash: dataset.configHash,
+      requestHash,
+      query: "policy-report",
+      tree: dataset.tree,
+      cache,
+      latencyMs: elapsedMs(startedAt),
+      extraMetrics: {
+        thresholdPass: report.thresholdPass,
+        thresholdFailureCount: report.thresholdFailures.length,
+        repartitionEventCount: report.repartitionMetrics.eventCount,
+      },
+    }),
   };
 }
 
 export async function buildProofCacheReportView(request: ProofCacheReportRequest): Promise<ProofCacheReportView> {
+  const startedAt = proofNowMs();
   const resolved = await loadProofDataset(request.proofId, request.config);
+  const requestHash = computeCanonicalRequestHash({
+    proofId: request.proofId,
+    configHash: resolved.dataset.configHash,
+    query: "cache-report",
+  });
   return {
     proofId: request.proofId,
     configHash: resolved.dataset.configHash,
-    requestHash: computeCanonicalRequestHash({
+    requestHash,
+    cache: resolved.cache,
+    observability: buildProofQueryObservability({
       proofId: request.proofId,
       configHash: resolved.dataset.configHash,
+      requestHash,
       query: "cache-report",
+      tree: resolved.dataset.tree,
+      cache: resolved.cache,
+      latencyMs: elapsedMs(startedAt),
+      extraMetrics: {
+        cacheDiagnosticCount: resolved.cache.diagnostics.length,
+        hasBlockedSubtreePlan: Boolean(resolved.cache.blockedSubtreePlan),
+      },
     }),
-    cache: resolved.cache,
   };
 }
 
 export function buildSeedNodePathView(request: NodePathRequest) {
+  const startedAt = proofNowMs();
   const dataset = loadSeedDataset(request.proofId, request.config);
   const api = createSeedTreeQueryApi(dataset);
+  const cache = buildSeedCacheMetadata(dataset, computeTreeStorageSnapshotHash(api.snapshot));
   const pathResult = api.getAncestryPath(request.nodeId);
   const requestHash = computeCanonicalRequestHash({
     proofId: request.proofId,
@@ -698,6 +1047,20 @@ export function buildSeedNodePathView(request: NodePathRequest) {
     requestHash,
     snapshotHash: computeTreeStorageSnapshotHash(api.snapshot),
     path: pathResult,
+    observability: buildProofQueryObservability({
+      proofId: request.proofId,
+      configHash: dataset.configHash,
+      requestHash,
+      query: "path",
+      tree: dataset.tree as ExplanationTree,
+      cache,
+      latencyMs: elapsedMs(startedAt),
+      extraMetrics: {
+        requestedNodeId: request.nodeId,
+        pathLength: pathResult.path.length,
+        pathOk: pathResult.ok,
+      },
+    }),
   };
 }
 
@@ -1156,6 +1519,7 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
           recoveryMode: topologyAdditionRecovery.recoveryMode,
           addedLeafCount: topologyAdditionRecovery.addedLeafIds.length,
           insertionFrontierCount: topologyAdditionRecovery.insertionFrontierCount,
+          insertionAnchorCount: topologyAdditionRecovery.insertionAnchorCount,
           insertionMergeParentCount: topologyAdditionRecovery.insertionMergeParentCount,
           insertedParentCount: topologyAdditionRecovery.insertedParentCount,
           insertionScheduledAttachmentCount: topologyAdditionRecovery.insertionScheduledAttachmentCount,
@@ -1369,7 +1733,7 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
   }
 
   const tree = await buildRecursiveExplanationTree(createDeterministicSummaryProvider(), {
-    leaves: mapTheoremLeavesToTreeLeaves(theoremLeaves),
+    leaves: mapTheoremLeavesToLocalizedTreeLeaves(theoremLeaves, config.language),
     config,
   });
 
@@ -1780,11 +2144,12 @@ interface TopologyAdditionRecoveryResult {
   recoveryMode: "insertion" | "regeneration";
   addedLeafIds: string[];
   insertionFrontierCount: number;
+  insertionAnchorCount: number;
   insertionMergeParentCount: number;
   insertedParentCount: number;
   insertionScheduledAttachmentCount: number;
   insertionRecomputedAncestorCount: number;
-  insertionStrategy: "edge_connector_ancestor_recompute" | "regeneration";
+  insertionStrategy: "anchor_grouped_connector_ancestor_recompute" | "regeneration";
   reusableParentSummaryCount: number;
   reusedParentSummaryCount: number;
   reusedParentSummaryByGroundingCount: number;
@@ -1896,7 +2261,7 @@ async function attemptBlockedSubtreeRecovery(
     }
     nextNodes[leafId] = {
       ...existing,
-      statement: leaf.prettyStatement,
+      statement: renderLocalizedTreeLeafStatement(leaf, request.config.language),
       evidenceRefs: [leaf.id],
     };
   }
@@ -2144,7 +2509,7 @@ async function attemptTopologyRemovalRecovery(
     }
     nextNodes[leaf.id] = {
       ...node,
-      statement: leaf.prettyStatement,
+      statement: renderLocalizedTreeLeafStatement(leaf, request.config.language),
       evidenceRefs: [leaf.id],
     };
   }
@@ -2552,6 +2917,7 @@ async function attemptTopologyAdditionRecovery(
     recoveryMode: "regeneration",
     addedLeafIds,
     insertionFrontierCount: 0,
+    insertionAnchorCount: 0,
     insertionMergeParentCount: 0,
     insertedParentCount: 0,
     insertionScheduledAttachmentCount: 0,
@@ -2723,7 +3089,7 @@ async function attemptTopologyAdditionSubtreeInsertionRecovery(
     let addedSubtree: ExplanationTree;
     try {
       addedSubtree = await buildRecursiveExplanationTree(insertionProvider, {
-        leaves: mapTheoremLeavesToTreeLeaves(frontier.leaves),
+        leaves: mapTheoremLeavesToLocalizedTreeLeaves(frontier.leaves, request.config.language),
         config: request.config,
       });
     } catch {
@@ -2821,7 +3187,7 @@ async function attemptTopologyAdditionSubtreeInsertionRecovery(
     }
     mergedNodes[leaf.id] = {
       ...existing,
-      statement: leaf.prettyStatement,
+      statement: renderLocalizedTreeLeafStatement(leaf, request.config.language),
       evidenceRefs: [leaf.id],
     };
   }
@@ -2833,27 +3199,71 @@ async function attemptTopologyAdditionSubtreeInsertionRecovery(
   const insertionGroupingEntries: Array<{ outputNodeId: string; orderedNodeIds: string[]; complexitySpread: number }> = [];
   const pendingRecomputeParentIds = new Set<string>();
   const recomputedAncestorIds = new Set<string>();
-  for (let frontierIndex = 0; frontierIndex < insertionFrontiers.length; frontierIndex += 1) {
-    const frontier = insertionFrontiers[frontierIndex];
-    const frontierRootId = frontierSubtreeRootIds[frontierIndex];
-    if (!frontierRootId || !(frontierRootId in mergedNodes)) {
-      return undefined;
-    }
+  const parentsByChildIdBeforeInsertion = buildParentsByChildId(mergedNodes);
+  const frontierAssignments = insertionFrontiers
+    .map((frontier, frontierIndex) => {
+      const frontierRootId = frontierSubtreeRootIds[frontierIndex];
+      if (!frontierRootId || !(frontierRootId in mergedNodes)) {
+        return undefined;
+      }
+      const anchorNodeId = resolveInsertionAnchorNodeId({
+        rootId: request.cachedTree.rootId,
+        frontierLeafIds: frontier.frontierLeafIds,
+        parentsByChildId: parentsByChildIdBeforeInsertion,
+      });
+      if (!anchorNodeId || !(anchorNodeId in mergedNodes)) {
+        return undefined;
+      }
+      return {
+        frontierIndex,
+        frontierKey: frontier.frontierKey,
+        frontierRootId,
+        anchorNodeId,
+      };
+    })
+    .filter(
+      (
+        assignment,
+      ): assignment is {
+        frontierIndex: number;
+        frontierKey: string;
+        frontierRootId: string;
+        anchorNodeId: string;
+      } => Boolean(assignment),
+    );
+  if (frontierAssignments.length !== insertionFrontiers.length) {
+    return undefined;
+  }
 
-    const parentsByChildId = buildParentsByChildId(mergedNodes);
-    const anchorNodeId = resolveInsertionAnchorNodeId({
-      rootId: mergedRootId,
-      frontierLeafIds: frontier.frontierLeafIds,
-      parentsByChildId,
+  const anchorGroupsById = new Map<
+    string,
+    Array<{
+      frontierIndex: number;
+      frontierKey: string;
+      frontierRootId: string;
+    }>
+  >();
+  for (const assignment of frontierAssignments) {
+    const group = anchorGroupsById.get(assignment.anchorNodeId) ?? [];
+    group.push({
+      frontierIndex: assignment.frontierIndex,
+      frontierKey: assignment.frontierKey,
+      frontierRootId: assignment.frontierRootId,
     });
-    if (!anchorNodeId || !(anchorNodeId in mergedNodes)) {
-      return undefined;
-    }
-    const insertionChildIds = dedupeOrdered([anchorNodeId, frontierRootId]);
-    if (insertionChildIds.length < 2) {
-      return undefined;
-    }
-    const insertionChildren = insertionChildIds.map((childId) => {
+    anchorGroupsById.set(assignment.anchorNodeId, group);
+  }
+
+  const sortedAnchorNodeIds = [...anchorGroupsById.keys()].sort((left, right) => left.localeCompare(right));
+  const insertionAnchorCount = sortedAnchorNodeIds.length;
+  let insertionScheduledAttachmentCount = 0;
+  let insertionMergeParentCount = 0;
+
+  const createInsertionParentNode = async (requestInput: {
+    childIds: string[];
+    groupIndex: number;
+    seed: Record<string, unknown>;
+  }): Promise<{ parentId: string; complexitySpread: number } | undefined> => {
+    const insertionChildren = requestInput.childIds.map((childId) => {
       const childNode = mergedNodes[childId];
       if (!childNode) {
         return undefined;
@@ -2892,17 +3302,15 @@ async function attemptTopologyAdditionSubtreeInsertionRecovery(
     }
     const insertionParentId = `p_addition_${computeCanonicalRequestHash({
       planHash: request.blockedSubtreePlan.planHash,
-      frontierKey: frontier.frontierKey,
-      frontierIndex,
-      anchorNodeId,
-      frontierRootId,
+      ...requestInput.seed,
+      childIds: requestInput.childIds.slice(),
     }).slice(0, 16)}`;
     if (insertionParentId in mergedNodes) {
       return undefined;
     }
     const insertionPolicyDiagnostics: ParentPolicyDiagnostics = {
       depth: 0,
-      groupIndex: frontierIndex,
+      groupIndex: requestInput.groupIndex,
       retriesUsed: 0,
       preSummary: preSummaryDecision,
       postSummary: postSummaryDecision,
@@ -2911,7 +3319,7 @@ async function attemptTopologyAdditionSubtreeInsertionRecovery(
       id: insertionParentId,
       kind: "parent",
       statement: insertionSummary.summary.parent_statement,
-      childIds: insertionChildIds.slice(),
+      childIds: requestInput.childIds.slice(),
       depth: 0,
       complexityScore: insertionSummary.summary.complexity_score,
       abstractionScore: insertionSummary.summary.abstraction_score,
@@ -2925,17 +3333,110 @@ async function attemptTopologyAdditionSubtreeInsertionRecovery(
     insertionParentIds.push(insertionParentId);
     insertionPlanEntries.push({
       outputNodeId: insertionParentId,
-      index: frontierIndex,
-      inputNodeIds: insertionChildIds.slice(),
+      index: insertionPlanEntries.length,
+      inputNodeIds: requestInput.childIds.slice(),
       complexitySpread: preSummaryDecision.metrics.complexitySpread,
     });
     insertionGroupingEntries.push({
       outputNodeId: insertionParentId,
-      orderedNodeIds: insertionChildIds.slice(),
+      orderedNodeIds: requestInput.childIds.slice(),
       complexitySpread: preSummaryDecision.metrics.complexitySpread,
     });
+    return {
+      parentId: insertionParentId,
+      complexitySpread: preSummaryDecision.metrics.complexitySpread,
+    };
+  };
 
-    const anchorParentIds = (parentsByChildId.get(anchorNodeId) ?? []).slice().sort((left, right) => left.localeCompare(right));
+  const composeFrontierRootsByAnchor = async (requestInput: {
+    anchorNodeId: string;
+    anchorGroupIndex: number;
+    frontierRootIds: string[];
+    frontierKeys: string[];
+  }): Promise<string | undefined> => {
+    let levelNodeIds = requestInput.frontierRootIds.slice();
+    let level = 0;
+    while (levelNodeIds.length > 1) {
+      const nextLevelNodeIds: string[] = [];
+      for (let index = 0; index < levelNodeIds.length; index += request.config.maxChildrenPerParent) {
+        const chunkNodeIds = levelNodeIds.slice(index, index + request.config.maxChildrenPerParent);
+        if (chunkNodeIds.length === 1) {
+          nextLevelNodeIds.push(chunkNodeIds[0] as string);
+          continue;
+        }
+        const mergedParent = await createInsertionParentNode({
+          childIds: chunkNodeIds,
+          groupIndex: requestInput.anchorGroupIndex,
+          seed: {
+            mode: "frontier_merge",
+            anchorNodeId: requestInput.anchorNodeId,
+            anchorGroupIndex: requestInput.anchorGroupIndex,
+            frontierKeys: requestInput.frontierKeys.slice(),
+            mergeLevel: level,
+            mergeChunkIndex: index / request.config.maxChildrenPerParent,
+          },
+        });
+        if (!mergedParent) {
+          return undefined;
+        }
+        insertionMergeParentCount += 1;
+        nextLevelNodeIds.push(mergedParent.parentId);
+      }
+      levelNodeIds = nextLevelNodeIds;
+      level += 1;
+    }
+    return levelNodeIds[0];
+  };
+
+  for (let anchorGroupIndex = 0; anchorGroupIndex < sortedAnchorNodeIds.length; anchorGroupIndex += 1) {
+    const anchorNodeId = sortedAnchorNodeIds[anchorGroupIndex] as string;
+    const anchorGroup = (anchorGroupsById.get(anchorNodeId) ?? [])
+      .slice()
+      .sort((left, right) => {
+        const keyComparison = left.frontierKey.localeCompare(right.frontierKey);
+        if (keyComparison !== 0) {
+          return keyComparison;
+        }
+        return left.frontierIndex - right.frontierIndex;
+      });
+    if (anchorGroup.length === 0) {
+      continue;
+    }
+
+    const frontierRootIds = anchorGroup.map((entry) => entry.frontierRootId);
+    const frontierKeys = anchorGroup.map((entry) => entry.frontierKey);
+    const frontierCompositeRootId = await composeFrontierRootsByAnchor({
+      anchorNodeId,
+      anchorGroupIndex,
+      frontierRootIds,
+      frontierKeys,
+    });
+    if (!frontierCompositeRootId || !(frontierCompositeRootId in mergedNodes)) {
+      return undefined;
+    }
+
+    const connectorChildIds = dedupeOrdered([anchorNodeId, frontierCompositeRootId]);
+    if (connectorChildIds.length < 2) {
+      return undefined;
+    }
+    const connectorParent = await createInsertionParentNode({
+      childIds: connectorChildIds,
+      groupIndex: anchorGroupIndex,
+      seed: {
+        mode: "anchor_attachment",
+        anchorNodeId,
+        anchorGroupIndex,
+        frontierKeys: frontierKeys.slice(),
+      },
+    });
+    if (!connectorParent) {
+      return undefined;
+    }
+    insertionScheduledAttachmentCount += 1;
+    const insertionParentId = connectorParent.parentId;
+    const anchorParentIds = (parentsByChildIdBeforeInsertion.get(anchorNodeId) ?? [])
+      .slice()
+      .sort((left, right) => left.localeCompare(right));
     if (anchorParentIds.length === 0) {
       mergedRootId = insertionParentId;
       continue;
@@ -3172,22 +3673,31 @@ async function attemptTopologyAdditionSubtreeInsertionRecovery(
     snapshot: recoveredSnapshot,
   };
 
-  const insertionMergeParentCount = insertionParentIds.length;
-  const insertedParentCount = addedSubtreeParentCount + insertionMergeParentCount;
+  const insertedParentCount = addedSubtreeParentCount + insertionParentIds.length;
   const insertionRecomputedAncestorCount = recomputedAncestorIds.size;
-  const insertionStrategy = "edge_connector_ancestor_recompute" as const;
+  const insertionStrategy = "anchor_grouped_connector_ancestor_recompute" as const;
   const generatedParentSummaryCount = insertedParentCount + insertionRecomputedAncestorCount;
   const insertionHash = computeCanonicalRequestHash({
     planHash: request.blockedSubtreePlan.planHash,
     addedLeafIds: request.addedLeafIds.slice(),
     insertionFrontierCount: insertionFrontiers.length,
+    insertionAnchorCount,
     insertionFrontierKeys: insertionFrontiers.map((frontier) => frontier.frontierKey),
     insertionFrontierLeafIds: insertionFrontiers.map((frontier) => frontier.frontierLeafIds),
+    frontierAnchorAssignments: frontierAssignments.map((assignment) => ({
+      frontierIndex: assignment.frontierIndex,
+      frontierKey: assignment.frontierKey,
+      frontierRootId: assignment.frontierRootId,
+      anchorNodeId: assignment.anchorNodeId,
+    })),
+    sortedAnchorNodeIds: sortedAnchorNodeIds.slice(),
     frontierSubtreeRootIds: frontierSubtreeRootIds.slice(),
     insertionParentIds: insertionParentIds.slice(),
     insertionRecomputedAncestorIds: [...recomputedAncestorIds].sort((left, right) => left.localeCompare(right)),
     mergedRootId,
     insertionStrategy,
+    insertionMergeParentCount,
+    insertionScheduledAttachmentCount,
     insertedParentCount,
     insertionRecomputedAncestorCount,
     generatedParentSummaryCount,
@@ -3201,9 +3711,10 @@ async function attemptTopologyAdditionSubtreeInsertionRecovery(
     recoveryMode: "insertion",
     addedLeafIds: request.addedLeafIds.slice(),
     insertionFrontierCount: insertionFrontiers.length,
+    insertionAnchorCount,
     insertionMergeParentCount,
     insertedParentCount,
-    insertionScheduledAttachmentCount: insertionParentIds.length,
+    insertionScheduledAttachmentCount,
     insertionRecomputedAncestorCount,
     insertionStrategy,
     reusableParentSummaryCount: 0,
@@ -3218,9 +3729,10 @@ async function attemptTopologyAdditionSubtreeInsertionRecovery(
       planHash: request.blockedSubtreePlan.planHash,
       addedLeafIds: request.addedLeafIds.slice(),
       insertionFrontierCount: insertionFrontiers.length,
+      insertionAnchorCount,
       insertionMergeParentCount,
       insertedParentCount,
-      insertionScheduledAttachmentCount: insertionParentIds.length,
+      insertionScheduledAttachmentCount,
       insertionRecomputedAncestorCount,
       insertionStrategy,
       generatedParentSummaryCount,
@@ -3370,7 +3882,7 @@ async function attemptTopologyRegenerationRecovery(
   let tree: ExplanationTree;
   try {
     tree = await buildRecursiveExplanationTree(provider, {
-      leaves: mapTheoremLeavesToTreeLeaves(request.currentLeaves),
+      leaves: mapTheoremLeavesToLocalizedTreeLeaves(request.currentLeaves, request.config.language),
       config: request.config,
     });
   } catch {
@@ -3710,11 +4222,12 @@ function createDeterministicSummaryProvider(): ProviderClient {
     generate: async (request) => {
       const prompt = request.messages[1]?.content ?? "";
       const children = parseChildrenFromPrompt(prompt);
+      const language = parsePromptLanguageConstraint(prompt);
       const targetComplexity = parsePromptNumericConstraint(prompt, "target_complexity", 3, 1, 5);
       const targetAbstraction = parsePromptNumericConstraint(prompt, "target_abstraction", 3, 1, 5);
       const evidenceRefs = children.map((child) => child.id);
-      const composed = children.map((child) => child.statement).join(" and ");
-      const parentStatement = composed.length > 0 ? composed : "No child statements provided.";
+      const composed = children.map((child) => child.statement).join(language === "fr" ? " et " : " and ");
+      const parentStatement = composed.length > 0 ? composed : language === "fr" ? "Aucun enonce enfant fourni." : "No child statements provided.";
 
       return {
         text: JSON.stringify({
@@ -3767,6 +4280,35 @@ function parsePromptNumericConstraint(
   return Math.max(min, Math.min(max, Math.trunc(parsed)));
 }
 
+function parsePromptLanguageConstraint(prompt: string): "en" | "fr" {
+  const match = prompt.match(/language=([^\s]+)/);
+  const requested = match?.[1] ?? "en";
+  return resolveExplanationLanguage(requested).effective;
+}
+
+function renderLocalizedTreeLeafStatement(
+  leaf: TheoremLeafRecord,
+  language: "en" | "fr",
+): string {
+  if (language === "fr") {
+    return `Enonce ${leaf.declarationName}: ${leaf.prettyStatement}`;
+  }
+  return leaf.prettyStatement;
+}
+
+function mapTheoremLeavesToLocalizedTreeLeaves(
+  leaves: TheoremLeafRecord[],
+  language: "en" | "fr",
+): Array<{ id: string; statement: string; prerequisiteIds: string[] }> {
+  return leaves
+    .map((leaf) => ({
+      id: leaf.id,
+      statement: renderLocalizedTreeLeafStatement(leaf, language),
+      prerequisiteIds: leaf.dependencyIds,
+    }))
+    .sort((left, right) => left.id.localeCompare(right.id));
+}
+
 function assertSeedProof(proofId: string): void {
   if (proofId !== SEED_PROOF_ID) {
     throw new Error(`Unsupported proofId '${proofId}'. Supported proofs: ${SEED_PROOF_ID}.`);
@@ -3799,6 +4341,185 @@ function normalizeExpandedNodeIds(nodeIds: string[] | undefined): string[] {
   return unique;
 }
 
+function buildSeedCacheMetadata(dataset: SeedDataset, snapshotHash: string): ProofDatasetCacheMetadata {
+  return {
+    layer: "ephemeral",
+    status: "miss",
+    cacheKey: `${dataset.proofId}:${dataset.configHash}`,
+    sourceFingerprint: "seed",
+    snapshotHash,
+    cacheEntryHash: computeCanonicalRequestHash({
+      proofId: dataset.proofId,
+      configHash: dataset.configHash,
+      snapshotHash,
+    }),
+    diagnostics: [
+      {
+        code: "cache_miss",
+        message: "Seed dataset is rebuilt deterministically per request (ephemeral cache only).",
+      },
+    ],
+  };
+}
+
+function buildProofQueryObservability(input: {
+  proofId: string;
+  configHash: string;
+  requestHash: string;
+  query: ProofObservabilityQuery;
+  tree: ExplanationTree;
+  cache: ProofDatasetCacheMetadata;
+  latencyMs: number;
+  extraMetrics?: Record<string, boolean | number | string>;
+}): ProofQueryObservability {
+  const base = {
+    proofId: input.proofId,
+    configHash: input.configHash,
+    requestId: input.requestHash,
+    query: input.query,
+    cacheLayer: input.cache.layer,
+    cacheStatus: input.cache.status,
+  };
+  const traceId = computeCanonicalRequestHash(base);
+  const metrics: ProofQueryObservability["metrics"] = {
+    latencyMs: normalizeLatencyMs(input.latencyMs),
+    cacheLayer: input.cache.layer,
+    cacheStatus: input.cache.status,
+    leafCount: input.tree.leafIds.length,
+    parentCount: Object.values(input.tree.nodes).filter((node) => node.kind === "parent").length,
+    nodeCount: Object.keys(input.tree.nodes).length,
+    maxDepth: input.tree.maxDepth,
+  };
+  const attributes = {
+    ...metrics,
+    ...(input.extraMetrics ?? {}),
+  };
+  const spanNames: Array<ProofQueryObservability["spans"][number]["name"]> = [
+    "dataset_load",
+    "query_compute",
+    "response_materialization",
+  ];
+  const spans: ProofQueryObservability["spans"] = spanNames.map((name) => ({
+    spanId: computeCanonicalRequestHash({ traceId, name }),
+    name,
+    attributes: {
+      ...attributes,
+      query: input.query,
+      proofId: input.proofId,
+      configHash: input.configHash,
+    },
+  }));
+  recordProofQueryObservabilityEvent({
+    query: input.query,
+    traceId,
+    requestId: input.requestHash,
+    latencyMs: metrics.latencyMs,
+    cacheLayer: input.cache.layer,
+    cacheStatus: input.cache.status,
+    leafCount: metrics.leafCount,
+    parentCount: metrics.parentCount,
+    nodeCount: metrics.nodeCount,
+    maxDepth: metrics.maxDepth,
+  });
+  return {
+    requestId: input.requestHash,
+    traceId,
+    query: input.query,
+    spans,
+    metrics,
+  };
+}
+
+export function exportProofQueryObservabilityMetrics(options: { generatedAt?: string } = {}): ProofQueryObservabilityMetricsSnapshot {
+  const generatedAt = options.generatedAt ?? new Date().toISOString();
+  const requestCount = proofQueryObservabilityEvents.length;
+  const uniqueRequestCount = new Set(proofQueryObservabilityEvents.map((event) => event.requestId)).size;
+  const uniqueTraceCount = new Set(proofQueryObservabilityEvents.map((event) => event.traceId)).size;
+  const hitCount = proofQueryObservabilityEvents.filter((event) => event.cacheStatus === "hit").length;
+  const missCount = requestCount - hitCount;
+  const latencyHistogram = buildProofLatencyHistogram(proofQueryObservabilityEvents.map((event) => event.latencyMs));
+  const queryOrder: ProofObservabilityQuery[] = [
+    "view",
+    "diff",
+    "leaf-detail",
+    "root",
+    "children",
+    "path",
+    "dependency-graph",
+    "policy-report",
+    "cache-report",
+  ];
+  const queries = queryOrder.map((query) => {
+    const events = proofQueryObservabilityEvents.filter((event) => event.query === query);
+    const requestCountForQuery = events.length;
+    const latencies = events.map((event) => event.latencyMs).sort((left, right) => left - right);
+    const cacheHitCount = events.filter((event) => event.cacheStatus === "hit").length;
+    const cacheMissCount = requestCountForQuery - cacheHitCount;
+    const minLatencyMs = requestCountForQuery === 0 ? 0 : latencies[0] ?? 0;
+    const maxLatencyMs = requestCountForQuery === 0 ? 0 : latencies[latencies.length - 1] ?? 0;
+    const meanLatencyMs = requestCountForQuery === 0 ? 0 : sum(latencies) / requestCountForQuery;
+    const p95LatencyMs = requestCountForQuery === 0 ? 0 : percentile(latencies, 0.95);
+    const meanLeafCount = requestCountForQuery === 0 ? 0 : sum(events.map((event) => event.leafCount)) / requestCountForQuery;
+    const meanParentCount = requestCountForQuery === 0 ? 0 : sum(events.map((event) => event.parentCount)) / requestCountForQuery;
+    const meanNodeCount = requestCountForQuery === 0 ? 0 : sum(events.map((event) => event.nodeCount)) / requestCountForQuery;
+    const maxDepth = requestCountForQuery === 0 ? 0 : Math.max(...events.map((event) => event.maxDepth));
+    return {
+      query,
+      requestCount: requestCountForQuery,
+      cacheHitCount,
+      cacheMissCount,
+      minLatencyMs,
+      maxLatencyMs,
+      meanLatencyMs,
+      p95LatencyMs,
+      latencyHistogram: buildProofLatencyHistogram(latencies),
+      meanLeafCount,
+      meanParentCount,
+      meanNodeCount,
+      maxDepth,
+    };
+  });
+
+  const snapshotWithoutHash = {
+    schemaVersion: "1.0.0" as const,
+    requestCount,
+    uniqueRequestCount,
+    uniqueTraceCount,
+    cache: {
+      hitCount,
+      missCount,
+      hitRate: requestCount === 0 ? 0 : hitCount / requestCount,
+    },
+    latencyHistogram,
+    queries,
+    generatedAt,
+  };
+
+  return {
+    ...snapshotWithoutHash,
+    snapshotHash: computeCanonicalRequestHash(snapshotWithoutHash),
+  };
+}
+
+export function clearProofQueryObservabilityMetricsForTests(): void {
+  proofQueryObservabilityEvents.length = 0;
+}
+
+export function configureProofQueryObservabilityClockForTests(nowMs: () => number): void {
+  proofNowMs = nowMs;
+}
+
+export function resetProofQueryObservabilityClockForTests(): void {
+  proofNowMs = () => Date.now();
+}
+
+function recordProofQueryObservabilityEvent(event: ProofQueryObservabilityEvent): void {
+  proofQueryObservabilityEvents.push(event);
+  if (proofQueryObservabilityEvents.length > PROOF_QUERY_OBSERVABILITY_SAMPLE_WINDOW) {
+    proofQueryObservabilityEvents.splice(0, proofQueryObservabilityEvents.length - PROOF_QUERY_OBSERVABILITY_SAMPLE_WINDOW);
+  }
+}
+
 function computeCanonicalRequestHash(input: Record<string, unknown>): string {
   const canonical = JSON.stringify(input, stableReplacer);
   return createHash("sha256").update(canonical).digest("hex");
@@ -3816,6 +4537,46 @@ function stableReplacer(_key: string, value: unknown): unknown {
       accumulator[key] = record[key];
       return accumulator;
     }, {});
+}
+
+function buildProofLatencyHistogram(latencies: number[]): ProofQueryLatencyHistogramBucket[] {
+  const buckets = PROOF_QUERY_LATENCY_BUCKETS.map((definition) => ({
+    bucket: definition.bucket,
+    maxInclusiveMs: definition.maxInclusiveMs,
+    count: 0,
+  }));
+  for (const rawLatency of latencies) {
+    const latencyMs = normalizeLatencyMs(rawLatency);
+    const bucket = buckets.find((entry) => entry.maxInclusiveMs === null || latencyMs <= entry.maxInclusiveMs);
+    if (bucket) {
+      bucket.count += 1;
+    }
+  }
+  return buckets;
+}
+
+function sum(values: number[]): number {
+  return values.reduce((accumulator, value) => accumulator + value, 0);
+}
+
+function percentile(sortedValues: number[], quantile: number): number {
+  if (sortedValues.length === 0) {
+    return 0;
+  }
+  const clampedQuantile = Math.min(1, Math.max(0, quantile));
+  const index = Math.min(sortedValues.length - 1, Math.max(0, Math.ceil(sortedValues.length * clampedQuantile) - 1));
+  return sortedValues[index] ?? 0;
+}
+
+function elapsedMs(startedAtMs: number): number {
+  return normalizeLatencyMs(proofNowMs() - startedAtMs);
+}
+
+function normalizeLatencyMs(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.max(0, Math.round(value));
 }
 
 function sampleVerificationJobs(proofId: string, leafId: string): VerificationJob[] {

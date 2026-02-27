@@ -65,12 +65,13 @@ export interface ProofCacheBenchmarkReport {
       afterChangeAdditionRecovery?: {
         recoveryMode: "insertion" | "regeneration";
         insertionFrontierCount: number;
+        insertionAnchorCount: number;
         insertionMergeParentCount: number;
         addedLeafCount: number;
         insertedParentCount: number;
         insertionScheduledAttachmentCount: number;
         insertionRecomputedAncestorCount: number;
-        insertionStrategy: "edge_connector_ancestor_recompute" | "regeneration";
+        insertionStrategy: "anchor_grouped_connector_ancestor_recompute" | "regeneration";
         reusableParentSummaryCount: number;
         reusedParentSummaryCount: number;
         reusedParentSummaryByGroundingCount: number;
@@ -244,7 +245,9 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
     const beforeShapeChange = await buildProofCacheReportView({ proofId, config: normalizedConfig });
     const topologyShapeMutationPath = path.join(fixtureProjectRoot, MUTATION_TARGET_RELATIVE_PATH);
     const topologyShapeBefore = await fs.readFile(topologyShapeMutationPath, "utf8");
-    const topologyShapeAddition = "\n\ntheorem cache_shape_added : True := by\n  trivial\n";
+    const topologyShapeAddition =
+      "\n\ntheorem cache_shape_added_a : True := by\n  trivial\n" +
+      "\n\ntheorem cache_shape_added_b : True := by\n  trivial\n";
     let afterShapeChange: Awaited<ReturnType<typeof buildProofCacheReportView>>;
     let afterShapeRecovery: Awaited<ReturnType<typeof buildProofCacheReportView>>;
     try {
@@ -483,14 +486,15 @@ function extractTopologyAdditionRecoveryDiagnostics(
       | "insertion"
       | "regeneration",
     insertionFrontierCount: Number(additionRecovery.details.insertionFrontierCount ?? 0),
+    insertionAnchorCount: Number(additionRecovery.details.insertionAnchorCount ?? 0),
     insertionMergeParentCount: Number(additionRecovery.details.insertionMergeParentCount ?? 0),
     addedLeafCount: Number(additionRecovery.details.addedLeafCount ?? 0),
     insertedParentCount: Number(additionRecovery.details.insertedParentCount ?? 0),
     insertionScheduledAttachmentCount: Number(additionRecovery.details.insertionScheduledAttachmentCount ?? 0),
     insertionRecomputedAncestorCount: Number(additionRecovery.details.insertionRecomputedAncestorCount ?? 0),
     insertionStrategy:
-      additionRecovery.details.insertionStrategy === "edge_connector_ancestor_recompute"
-        ? "edge_connector_ancestor_recompute"
+      additionRecovery.details.insertionStrategy === "anchor_grouped_connector_ancestor_recompute"
+        ? "anchor_grouped_connector_ancestor_recompute"
         : "regeneration",
     reusableParentSummaryCount: Number(additionRecovery.details.reusableParentSummaryCount ?? 0),
     reusedParentSummaryCount: Number(additionRecovery.details.reusedParentSummaryCount ?? 0),

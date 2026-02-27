@@ -1,6 +1,16 @@
 import type { DiffResponse } from "./api-client";
 
 type DiffChangeRecord = DiffResponse["report"]["changes"][number];
+type DiffChangeType = DiffChangeRecord["type"];
+
+const DEFAULT_MAX_CHANGES = 24;
+const MAX_DIFF_CHANGES = 200;
+
+const DIFF_CHANGE_TYPE_ORDER: Record<DiffChangeType, number> = {
+  changed: 0,
+  added: 1,
+  removed: 2,
+};
 
 export interface DiffStatementDelta {
   prefix: string;
@@ -29,12 +39,22 @@ export interface ExplanationDiffPanelView {
   removed: ExplanationDiffChangeView[];
 }
 
+export interface ExplanationDiffPanelSettings {
+  maxChanges: number;
+}
+
 export function buildExplanationDiffPanelView(
   report: DiffResponse["report"],
   options?: { maxChanges?: number },
 ): ExplanationDiffPanelView {
   const maxChanges = sanitizeMaxChanges(options?.maxChanges);
-  const visibleChanges = report.changes.slice(0, maxChanges);
+  const visibleChanges = report.changes
+    .map((change) => ({
+      ...change,
+      supportLeafIds: change.supportLeafIds.slice().sort((left, right) => left.localeCompare(right)),
+    }))
+    .sort(compareDiffChanges)
+    .slice(0, maxChanges);
 
   const view: ExplanationDiffPanelView = {
     totalChanges: report.changes.length,
@@ -73,6 +93,14 @@ export function buildExplanationDiffPanelView(
   }
 
   return view;
+}
+
+export function resolveExplanationDiffPanelSettings(
+  env: Record<string, string | undefined>,
+): ExplanationDiffPanelSettings {
+  return {
+    maxChanges: sanitizeMaxChanges(Number(env.NEXT_PUBLIC_EXPLAIN_MD_DIFF_MAX_CHANGES)),
+  };
 }
 
 export function computeStatementDelta(before: string, after: string): DiffStatementDelta {
@@ -114,16 +142,30 @@ function computeCommonSuffixLength(left: string, right: string, consumedPrefixLe
 
 function sanitizeMaxChanges(value: number | undefined): number {
   if (!Number.isFinite(value)) {
-    return 24;
+    return DEFAULT_MAX_CHANGES;
   }
 
   const integerValue = Math.floor(value as number);
   if (integerValue < 1) {
     return 1;
   }
-  if (integerValue > 200) {
-    return 200;
+  if (integerValue > MAX_DIFF_CHANGES) {
+    return MAX_DIFF_CHANGES;
   }
 
   return integerValue;
+}
+
+function compareDiffChanges(left: DiffChangeRecord, right: DiffChangeRecord): number {
+  const keyComparison = left.key.localeCompare(right.key);
+  if (keyComparison !== 0) {
+    return keyComparison;
+  }
+
+  const typeComparison = DIFF_CHANGE_TYPE_ORDER[left.type] - DIFF_CHANGE_TYPE_ORDER[right.type];
+  if (typeComparison !== 0) {
+    return typeComparison;
+  }
+
+  return left.kind.localeCompare(right.kind);
 }

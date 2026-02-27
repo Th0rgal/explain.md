@@ -44,14 +44,16 @@ describe("config contract", () => {
   });
 
   test("invalid config returns clear errors", () => {
-    const config = normalizeConfig({
+    const config = {
+      ...normalizeConfig({
       maxChildrenPerParent: 1,
-      language: "english",
       modelProvider: { temperature: 2, timeoutMs: 100, maxRetries: 99 },
       audienceLevel: "expert",
       readingLevelTarget: "elementary",
       entailmentMode: "invalid" as "calibrated",
-    });
+      }),
+      language: "de" as "en",
+    };
 
     const result = validateConfig(config);
     expect(result.ok).toBe(false);
@@ -62,6 +64,16 @@ describe("config contract", () => {
     expect(result.errors.map((e) => e.path)).toContain("modelProvider.maxRetries");
     expect(result.errors.map((e) => e.path)).toContain("readingLevelTarget");
     expect(result.errors.map((e) => e.path)).toContain("entailmentMode");
+  });
+
+  test("normalizes unsupported language input to deterministic default", () => {
+    const config = normalizeConfig({ language: "de" });
+    expect(config.language).toBe("en");
+  });
+
+  test("normalizes locale variants to supported base language", () => {
+    const config = normalizeConfig({ language: "fr-CA" });
+    expect(config.language).toBe("fr");
   });
 
   test("rejects non-finite model provider temperature", () => {

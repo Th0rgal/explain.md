@@ -74,8 +74,9 @@ Deterministic cache-reuse diagnostics for proof dataset generation.
     - recovery mode: `recoveryMode="insertion"`
     - addition evidence: `addedLeafCount`
     - insertion scheduler telemetry:
-      - `insertionStrategy="edge_connector_ancestor_recompute"`
+      - `insertionStrategy="anchor_grouped_connector_ancestor_recompute"`
       - `insertionFrontierCount`
+      - `insertionAnchorCount`
       - `insertionMergeParentCount`
       - `insertionScheduledAttachmentCount`
       - `insertionRecomputedAncestorCount`

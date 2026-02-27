@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "1.0.0",
+  "requestHash": "c38fc29da899af673dbc7bdad5064543dd316bc138d9df0aad839e6fe345d3d2",
+  "outcomeHash": "967101f76ef6496b5980f7445edf45e35752a1371838d0078b918e0990b5fdd9",
+  "parameters": {
+    "proofId": "seed-verity",
+    "leafId": "leaf/tx prover",
+    "jobId": "job 1",
+    "contextFieldCount": 7
+  },
+  "summary": {
+    "exportFilename": "verification-replay-seed-verity-leaf-tx-prover-job-1-ffffffffffff.json",
+    "requestHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "jobHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "reproducibilityHash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "replayCommand": "cd /tmp/verity && lake env lean Verity/Core.lean",
+    "treeConfigHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "treeSnapshotHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "leafDetailRequestHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "leafDetailConfigHash": "1111111111111111111111111111111111111111111111111111111111111111",
+    "leafDetailHash": "2222222222222222222222222222222222222222222222222222222222222222",
+    "nodePathRequestHash": "3333333333333333333333333333333333333333333333333333333333333333",
+    "nodePathSnapshotHash": "4444444444444444444444444444444444444444444444444444444444444444",
+    "envKeyCount": 2,
+    "logLineCount": 2,
+    "jsonLineCount": 66
+  }
+}

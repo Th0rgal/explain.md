@@ -62,4 +62,16 @@ Use sampled precision/recall/F1 report:
 npm run eval:domain-adapters
 ```
 
+Deterministic CI baseline check:
+
+```bash
+npm run eval:domain-adapters:ci
+```
+
+Committed benchmark baseline:
+- `docs/benchmarks/domain-adapter-evaluation.json`
+
+CI check artifact:
+- `.explain-md/domain-adapter-evaluation-report.json`
+
 Report format is canonical and hashable for reproducible evaluation snapshots.

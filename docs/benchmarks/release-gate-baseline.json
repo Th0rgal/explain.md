@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "1.0.0",
+  "requestHash": "9c391c35f1168465b8c86b1a8771c54ad44221f22278e71640bb0cbee9fee4e1",
+  "outcomeHash": "478efb22c01b556002c264a434de8d39a60692e36dabceb72290ab0e6650b451",
+  "thresholdPass": true,
+  "checkStatus": [
+    {
+      "code": "cache_recovery_hits",
+      "pass": true
+    },
+    {
+      "code": "cache_warm_speedup",
+      "pass": true
+    },
+    {
+      "code": "domain_adapter_quality_floor",
+      "pass": true
+    },
+    {
+      "code": "explanation_diff_profiles_cover_config_knobs",
+      "pass": true
+    },
+    {
+      "code": "multilingual_generation_contract",
+      "pass": true
+    },
+    {
+      "code": "observability_baseline_consistent",
+      "pass": true
+    },
+    {
+      "code": "observability_slo_gate",
+      "pass": true
+    },
+    {
+      "code": "quality_baseline_consistent",
+      "pass": true
+    },
+    {
+      "code": "quality_thresholds_pass",
+      "pass": true
+    },
+    {
+      "code": "strict_entailment_presets_present",
+      "pass": true
+    },
+    {
+      "code": "summary_prompt_security_contract",
+      "pass": true
+    },
+    {
+      "code": "tree_a11y_transcript_complete",
+      "pass": true
+    },
+    {
+      "code": "tree_scale_profiles_cover_modes",
+      "pass": true
+    },
+    {
+      "code": "verification_replay_contract_complete",
+      "pass": true
+    }
+  ]
+}

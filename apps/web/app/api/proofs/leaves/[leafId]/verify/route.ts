@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 interface VerifyBody {
   proofId?: string;
   autoRun?: boolean;
+  parentTraceId?: string;
 }
 
 export async function POST(request: Request, context: { params: { leafId: string } }) {
@@ -19,6 +20,7 @@ export async function POST(request: Request, context: { params: { leafId: string
       proofId,
       leafId,
       autoRun: body.autoRun !== false,
+      parentTraceId: body.parentTraceId,
     });
 
     return jsonSuccess(response, 201);

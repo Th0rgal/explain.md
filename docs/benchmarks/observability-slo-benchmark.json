@@ -1,0 +1,324 @@
+{
+  "schemaVersion": "1.0.0",
+  "generatedAt": "2026-02-27T00:00:00.000Z",
+  "requestHash": "fdcfee39686f91db5fd4fb51a666fdd7531e8239f9e2e7d93aa94a88d9c3f656",
+  "outcomeHash": "fb223b8a93ddb72c38697f01dfa7a1a13cfb9a72dd4ce2c1b74ee3c8576b6dd8",
+  "parameters": {
+    "profiles": [
+      {
+        "profileId": "seed-verity",
+        "proofId": "seed-verity",
+        "leafId": "Verity.ContractSpec.init_sound",
+        "configHash": "a75632c3c71bea58a13445a49951b87763ebd9e868fb4f51ac128e6c783e8af7"
+      },
+      {
+        "profileId": "lean-verity-fixture",
+        "proofId": "lean-verity-fixture",
+        "leafId": "lean:Verity/Loop:loop_preserves:3:1",
+        "configHash": "a75632c3c71bea58a13445a49951b87763ebd9e868fb4f51ac128e6c783e8af7"
+      }
+    ],
+    "proofQueries": [
+      "view",
+      "diff",
+      "leaf-detail",
+      "root",
+      "children",
+      "path",
+      "dependency-graph",
+      "policy-report",
+      "cache-report"
+    ],
+    "verificationQueries": [
+      "verify_leaf",
+      "list_leaf_jobs",
+      "get_job"
+    ],
+    "uiInteractionKinds": [
+      "config_update",
+      "tree_expand_toggle",
+      "tree_load_more",
+      "tree_select_leaf",
+      "tree_keyboard",
+      "verification_run",
+      "verification_job_select",
+      "profile_save",
+      "profile_delete",
+      "profile_apply"
+    ],
+    "baselineThresholds": {
+      "minProofRequestCount": 9,
+      "minVerificationRequestCount": 3,
+      "minProofCacheHitRate": 0,
+      "minProofUniqueTraceRate": 1,
+      "maxProofP95LatencyMs": 16,
+      "maxProofMeanLatencyMs": 12,
+      "maxVerificationFailureRate": 0,
+      "maxVerificationP95LatencyMs": 25,
+      "maxVerificationMeanLatencyMs": 20,
+      "minVerificationParentTraceRate": 0.66,
+      "minUiInteractionRequestCount": 5,
+      "minUiInteractionSuccessRate": 1,
+      "minUiInteractionKeyboardActionRate": 0.2,
+      "minUiInteractionParentTraceRate": 0.4,
+      "maxUiInteractionP95DurationMs": 25
+    },
+    "strictThresholds": {
+      "minProofRequestCount": 10,
+      "minVerificationRequestCount": 4,
+      "minProofCacheHitRate": 0.2,
+      "minProofUniqueTraceRate": 1,
+      "maxProofP95LatencyMs": 1,
+      "maxProofMeanLatencyMs": 1,
+      "maxVerificationFailureRate": 0,
+      "maxVerificationP95LatencyMs": 5,
+      "maxVerificationMeanLatencyMs": 5,
+      "minVerificationParentTraceRate": 0.9,
+      "minUiInteractionRequestCount": 6,
+      "minUiInteractionSuccessRate": 1,
+      "minUiInteractionKeyboardActionRate": 0.6,
+      "minUiInteractionParentTraceRate": 0.8,
+      "maxUiInteractionP95DurationMs": 10
+    }
+  },
+  "profileReports": [
+    {
+      "profileId": "seed-verity",
+      "proofId": "seed-verity",
+      "leafId": "Verity.ContractSpec.init_sound",
+      "configHash": "a75632c3c71bea58a13445a49951b87763ebd9e868fb4f51ac128e6c783e8af7",
+      "requestHash": "fdf81f2d8ac9af3ccaece6aa28c1ebd4e728d234d585cab166b1ff2250f788b2",
+      "outcomeHash": "9642469594db137e72860fc30eea8578caf8fc861489b65db8828bc4f8d490b2",
+      "snapshots": {
+        "proof": {
+          "snapshotHash": "3b2c28f074663720f1f1e8747797612df373e219e5219ce96f17b167fcfa63f2",
+          "requestCount": 9,
+          "uniqueRequestCount": 9,
+          "uniqueTraceCount": 9,
+          "cacheHitRate": 0,
+          "maxP95LatencyMs": 7,
+          "maxMeanLatencyMs": 7,
+          "latencyHistogramHash": "312e581f03c90a48ee16a4907e77d399567f843137c86e7b763e1ac45a7354b5"
+        },
+        "verification": {
+          "snapshotHash": "0af26ffbc50e5f2ea8c10745e5ce4bc931529a266a1057bd866f250da2559e61",
+          "requestCount": 3,
+          "failureCount": 0,
+          "parentTraceProvidedRate": 0.6666666666666666,
+          "maxP95LatencyMs": 12,
+          "maxMeanLatencyMs": 12
+        },
+        "uiInteraction": {
+          "snapshotHash": "a234793feed3689f2e514ee1be76cdba34b192aa0ee6f2c9ff7287e91bf249c2",
+          "requestCount": 5,
+          "successRate": 1,
+          "keyboardActionRate": 0.2,
+          "parentTraceProvidedRate": 0.6,
+          "maxP95DurationMs": 12
+        }
+      },
+      "evaluation": {
+        "baseline": {
+          "thresholdPass": true,
+          "thresholdFailureCodes": [],
+          "reportSnapshotHash": "e2a0e6d9b441b47f412df22ab14f2d89286e31d02d68aa00a254f3bfe5af81e7"
+        },
+        "strictRegression": {
+          "thresholdPass": false,
+          "thresholdFailureCodes": [
+            "proof_request_count_below_min",
+            "verification_request_count_below_min",
+            "proof_cache_hit_rate_below_min",
+            "proof_p95_latency_above_max",
+            "proof_mean_latency_above_max",
+            "verification_p95_latency_above_max",
+            "verification_mean_latency_above_max",
+            "verification_parent_trace_rate_below_min",
+            "ui_interaction_request_count_below_min",
+            "ui_interaction_keyboard_action_rate_below_min",
+            "ui_interaction_parent_trace_rate_below_min",
+            "ui_interaction_p95_duration_above_max"
+          ],
+          "reportSnapshotHash": "b0c0c6bb0c2a4531a1edc012495744da8de7bfa8ce9bf4fa5e5f6f2b8760130e"
+        }
+      }
+    },
+    {
+      "profileId": "lean-verity-fixture",
+      "proofId": "lean-verity-fixture",
+      "leafId": "lean:Verity/Loop:loop_preserves:3:1",
+      "configHash": "a75632c3c71bea58a13445a49951b87763ebd9e868fb4f51ac128e6c783e8af7",
+      "requestHash": "9f5fb12b65d03e42bc8d51991b8af90882b201a6cf3c79fc2f09646e43ba56f4",
+      "outcomeHash": "d3f5f34d27d79f345f443ce6eac1bbd73a1cc45ffd4be135077fb6746cae02b0",
+      "snapshots": {
+        "proof": {
+          "snapshotHash": "abce5a568ffbe95dd5f5fff9249c40f7bdb9ab4e6c6b69f73d4faeeecd4dbe44",
+          "requestCount": 9,
+          "uniqueRequestCount": 9,
+          "uniqueTraceCount": 9,
+          "cacheHitRate": 1,
+          "maxP95LatencyMs": 7,
+          "maxMeanLatencyMs": 7,
+          "latencyHistogramHash": "312e581f03c90a48ee16a4907e77d399567f843137c86e7b763e1ac45a7354b5"
+        },
+        "verification": {
+          "snapshotHash": "0af26ffbc50e5f2ea8c10745e5ce4bc931529a266a1057bd866f250da2559e61",
+          "requestCount": 3,
+          "failureCount": 0,
+          "parentTraceProvidedRate": 0.6666666666666666,
+          "maxP95LatencyMs": 12,
+          "maxMeanLatencyMs": 12
+        },
+        "uiInteraction": {
+          "snapshotHash": "a234793feed3689f2e514ee1be76cdba34b192aa0ee6f2c9ff7287e91bf249c2",
+          "requestCount": 5,
+          "successRate": 1,
+          "keyboardActionRate": 0.2,
+          "parentTraceProvidedRate": 0.6,
+          "maxP95DurationMs": 12
+        }
+      },
+      "evaluation": {
+        "baseline": {
+          "thresholdPass": true,
+          "thresholdFailureCodes": [],
+          "reportSnapshotHash": "3d8e77c0421507b804c655fd5f2296383e51a9a6ecb75c4847ba9652f951c8a9"
+        },
+        "strictRegression": {
+          "thresholdPass": false,
+          "thresholdFailureCodes": [
+            "proof_request_count_below_min",
+            "verification_request_count_below_min",
+            "proof_p95_latency_above_max",
+            "proof_mean_latency_above_max",
+            "verification_p95_latency_above_max",
+            "verification_mean_latency_above_max",
+            "verification_parent_trace_rate_below_min",
+            "ui_interaction_request_count_below_min",
+            "ui_interaction_keyboard_action_rate_below_min",
+            "ui_interaction_parent_trace_rate_below_min",
+            "ui_interaction_p95_duration_above_max"
+          ],
+          "reportSnapshotHash": "4a97dfc1c94fc4ec1b2cd6b6249ff42f3444bbf4a222b1a2546b0ad69f59fead"
+        }
+      }
+    }
+  ],
+  "snapshots": {
+    "proof": {
+      "snapshotHash": "106194c61c458dbc56347f89ca82ea2c0cdb240f099c82ce286715e80e17dc89",
+      "requestCount": 18,
+      "uniqueRequestCount": 18,
+      "uniqueTraceCount": 18,
+      "cacheHitRate": 0.5,
+      "maxP95LatencyMs": 7,
+      "maxMeanLatencyMs": 7,
+      "latencyHistogramHash": "02a65ccfead3d88b13b0c9dc34668040979307a9972e87e121603e1d9e31700e"
+    },
+    "verification": {
+      "snapshotHash": "723fe8856a8dd9cf0a8c989f50ff85defb863a19130c49e590fb2fc96147b136",
+      "requestCount": 6,
+      "failureCount": 0,
+      "parentTraceProvidedRate": 0.6666666666666666,
+      "maxP95LatencyMs": 12,
+      "maxMeanLatencyMs": 12
+    },
+    "uiInteraction": {
+      "snapshotHash": "5fb516b58ba64ad53dbb29feda537757150ee19fd0574e52f367f83c1263f700",
+      "requestCount": 10,
+      "successRate": 1,
+      "keyboardActionRate": 0.2,
+      "parentTraceProvidedRate": 0.6,
+      "maxP95DurationMs": 12
+    }
+  },
+  "evaluation": {
+    "baseline": {
+      "thresholdPass": true,
+      "thresholdFailureCodes": [],
+      "reportSnapshotHash": "049c1192586b8d43a6bde2069b15f65cd98d49f1df8954c6970b85056bc028fd"
+    },
+    "strictRegression": {
+      "thresholdPass": false,
+      "thresholdFailureCodes": [
+        "lean-verity-fixture:proof_mean_latency_above_max",
+        "lean-verity-fixture:proof_p95_latency_above_max",
+        "lean-verity-fixture:proof_request_count_below_min",
+        "lean-verity-fixture:ui_interaction_keyboard_action_rate_below_min",
+        "lean-verity-fixture:ui_interaction_p95_duration_above_max",
+        "lean-verity-fixture:ui_interaction_parent_trace_rate_below_min",
+        "lean-verity-fixture:ui_interaction_request_count_below_min",
+        "lean-verity-fixture:verification_mean_latency_above_max",
+        "lean-verity-fixture:verification_p95_latency_above_max",
+        "lean-verity-fixture:verification_parent_trace_rate_below_min",
+        "lean-verity-fixture:verification_request_count_below_min",
+        "seed-verity:proof_cache_hit_rate_below_min",
+        "seed-verity:proof_mean_latency_above_max",
+        "seed-verity:proof_p95_latency_above_max",
+        "seed-verity:proof_request_count_below_min",
+        "seed-verity:ui_interaction_keyboard_action_rate_below_min",
+        "seed-verity:ui_interaction_p95_duration_above_max",
+        "seed-verity:ui_interaction_parent_trace_rate_below_min",
+        "seed-verity:ui_interaction_request_count_below_min",
+        "seed-verity:verification_mean_latency_above_max",
+        "seed-verity:verification_p95_latency_above_max",
+        "seed-verity:verification_parent_trace_rate_below_min",
+        "seed-verity:verification_request_count_below_min"
+      ],
+      "reportSnapshotHash": "2a86a05365a0ba3181d9a9873dfebad293c505399acb2ee4eb7b23762d5d00d9"
+    },
+    "byProfile": [
+      {
+        "profileId": "seed-verity",
+        "baseline": {
+          "thresholdPass": true,
+          "thresholdFailureCodes": [],
+          "reportSnapshotHash": "e2a0e6d9b441b47f412df22ab14f2d89286e31d02d68aa00a254f3bfe5af81e7"
+        },
+        "strictRegression": {
+          "thresholdPass": false,
+          "thresholdFailureCodes": [
+            "proof_request_count_below_min",
+            "verification_request_count_below_min",
+            "proof_cache_hit_rate_below_min",
+            "proof_p95_latency_above_max",
+            "proof_mean_latency_above_max",
+            "verification_p95_latency_above_max",
+            "verification_mean_latency_above_max",
+            "verification_parent_trace_rate_below_min",
+            "ui_interaction_request_count_below_min",
+            "ui_interaction_keyboard_action_rate_below_min",
+            "ui_interaction_parent_trace_rate_below_min",
+            "ui_interaction_p95_duration_above_max"
+          ],
+          "reportSnapshotHash": "b0c0c6bb0c2a4531a1edc012495744da8de7bfa8ce9bf4fa5e5f6f2b8760130e"
+        }
+      },
+      {
+        "profileId": "lean-verity-fixture",
+        "baseline": {
+          "thresholdPass": true,
+          "thresholdFailureCodes": [],
+          "reportSnapshotHash": "3d8e77c0421507b804c655fd5f2296383e51a9a6ecb75c4847ba9652f951c8a9"
+        },
+        "strictRegression": {
+          "thresholdPass": false,
+          "thresholdFailureCodes": [
+            "proof_request_count_below_min",
+            "verification_request_count_below_min",
+            "proof_p95_latency_above_max",
+            "proof_mean_latency_above_max",
+            "verification_p95_latency_above_max",
+            "verification_mean_latency_above_max",
+            "verification_parent_trace_rate_below_min",
+            "ui_interaction_request_count_below_min",
+            "ui_interaction_keyboard_action_rate_below_min",
+            "ui_interaction_parent_trace_rate_below_min",
+            "ui_interaction_p95_duration_above_max"
+          ],
+          "reportSnapshotHash": "4a97dfc1c94fc4ec1b2cd6b6249ff42f3444bbf4a222b1a2546b0ad69f59fead"
+        }
+      }
+    ]
+  }
+}

@@ -88,6 +88,64 @@ interface TreeStorageDiagnostic {
   details?: Record<string, unknown>;
 }
 
+export interface ProofQueryObservability {
+  requestId: string;
+  traceId: string;
+  query: "view" | "diff" | "leaf-detail" | "root" | "children" | "path" | "dependency-graph" | "policy-report" | "cache-report";
+  spans: Array<{
+    spanId: string;
+    name: "dataset_load" | "query_compute" | "response_materialization";
+    attributes: Record<string, boolean | number | string>;
+  }>;
+  metrics: {
+    latencyMs: number;
+    cacheLayer: "persistent" | "ephemeral";
+    cacheStatus: "hit" | "miss";
+    leafCount: number;
+    parentCount: number;
+    nodeCount: number;
+    maxDepth: number;
+  };
+}
+
+export interface ProofQueryObservabilityMetricsResponse {
+  schemaVersion: "1.0.0";
+  requestCount: number;
+  uniqueRequestCount: number;
+  uniqueTraceCount: number;
+  cache: {
+    hitCount: number;
+    missCount: number;
+    hitRate: number;
+  };
+  latencyHistogram: Array<{
+    bucket: "lte_5ms" | "lte_10ms" | "lte_25ms" | "lte_50ms" | "gt_50ms";
+    maxInclusiveMs: number | null;
+    count: number;
+  }>;
+  queries: Array<{
+    query: "view" | "diff" | "leaf-detail" | "root" | "children" | "path" | "dependency-graph" | "policy-report" | "cache-report";
+    requestCount: number;
+    cacheHitCount: number;
+    cacheMissCount: number;
+    minLatencyMs: number;
+    maxLatencyMs: number;
+    meanLatencyMs: number;
+    p95LatencyMs: number;
+    latencyHistogram: Array<{
+      bucket: "lte_5ms" | "lte_10ms" | "lte_25ms" | "lte_50ms" | "gt_50ms";
+      maxInclusiveMs: number | null;
+      count: number;
+    }>;
+    meanLeafCount: number;
+    meanParentCount: number;
+    meanNodeCount: number;
+    maxDepth: number;
+  }>;
+  generatedAt: string;
+  snapshotHash: string;
+}
+
 export interface ProjectionResponse {
   proofId: string;
   config: Record<string, unknown>;
@@ -112,6 +170,7 @@ export interface ProjectionResponse {
     }>;
     diagnostics: Array<{ code: string; severity: string; message: string }>;
   };
+  observability?: ProofQueryObservability;
 }
 
 export interface DiffResponse {
@@ -134,6 +193,7 @@ export interface DiffResponse {
       candidateStatement?: string;
     }>;
   };
+  observability?: ProofQueryObservability;
 }
 
 export interface RootResponse {
@@ -145,6 +205,7 @@ export interface RootResponse {
     node?: TreeNodeRecord;
     diagnostics: TreeStorageDiagnostic[];
   };
+  observability?: ProofQueryObservability;
 }
 
 export interface NodeChildrenResponse {
@@ -161,6 +222,7 @@ export interface NodeChildrenResponse {
     children: TreeNodeRecord[];
     diagnostics: TreeStorageDiagnostic[];
   };
+  observability?: ProofQueryObservability;
 }
 
 export interface NodePathResponse {
@@ -174,6 +236,7 @@ export interface NodePathResponse {
     path: TreeNodeRecord[];
     diagnostics: TreeStorageDiagnostic[];
   };
+  observability?: ProofQueryObservability;
 }
 
 export interface DependencyGraphResponse {
@@ -206,6 +269,7 @@ export interface DependencyGraphResponse {
     message: string;
     details: Record<string, unknown>;
   }>;
+  observability?: ProofQueryObservability;
 }
 
 export interface PolicyReportResponse {
@@ -285,6 +349,7 @@ export interface PolicyReportResponse {
       }>;
     };
   };
+  observability?: ProofQueryObservability;
 }
 
 export interface PolicyThresholdFailure {
@@ -345,6 +410,7 @@ export interface CacheReportResponse {
       planHash: string;
     };
   };
+  observability?: ProofQueryObservability;
 }
 
 export interface LeafDetailResponse {
@@ -364,6 +430,7 @@ export interface LeafDetailResponse {
       compact: string;
       markdown: string;
       sourceUrl?: string;
+      sourceUrlOrigin: "leaf" | "source_span" | "missing";
     };
     verification: {
       summary: {
@@ -385,11 +452,13 @@ export interface LeafDetailResponse {
     };
   };
   diagnostics?: Array<{ code: string; severity: string; message: string }>;
+  observability?: ProofQueryObservability;
 }
 
 export interface VerificationJobsResponse {
   proofId: string;
   leafId: string;
+  requestHash: string;
   jobs: Array<{
     jobId: string;
     queueSequence: number;
@@ -410,21 +479,244 @@ export interface VerificationJobsResponse {
       stream: "stdout" | "stderr" | "system";
       message: string;
     }>;
+    reproducibility: {
+      sourceRevision: string;
+      workingDirectory: string;
+      command: string;
+      args: string[];
+      env: Record<string, string>;
+      toolchain: {
+        leanVersion: string;
+        lakeVersion?: string;
+      };
+    };
   }>;
   jobHashes: Array<{ jobId: string; hash: string }>;
+  jobReplays: Array<{
+    jobId: string;
+    jobHash: string;
+    reproducibilityHash: string;
+    replayCommand: string;
+  }>;
+  observability?: VerificationQueryObservability;
 }
 
 export interface VerifyLeafResponse {
   requestHash: string;
   queuedJob: VerificationJobsResponse["jobs"][number];
   queuedJobHash: string;
+  queuedJobReplay: VerificationJobsResponse["jobReplays"][number];
   finalJob: VerificationJobsResponse["jobs"][number];
   finalJobHash: string;
+  finalJobReplay: VerificationJobsResponse["jobReplays"][number];
+  observability?: VerificationQueryObservability;
 }
 
 export interface VerificationJobResponse {
+  requestHash: string;
   job: VerificationJobsResponse["jobs"][number];
   jobHash: string;
+  jobReplay: VerificationJobsResponse["jobReplays"][number];
+  observability?: VerificationQueryObservability;
+}
+
+export interface VerificationQueryObservability {
+  requestId: string;
+  traceId: string;
+  query: "verify_leaf" | "list_leaf_jobs" | "get_job";
+  parentTraceId?: string;
+  spans: Array<{
+    spanId: string;
+    name: "request_parse" | "workflow_execute" | "response_materialization";
+    attributes: Record<string, boolean | number | string>;
+  }>;
+  metrics: {
+    latencyMs: number;
+    totalJobs: number;
+    queueDepth: number;
+    queuedJobs: number;
+    runningJobs: number;
+    successJobs: number;
+    failureJobs: number;
+    timeoutJobs: number;
+    returnedJobCount: number;
+    autoRun: boolean;
+  };
+}
+
+export interface VerificationObservabilityMetricsResponse {
+  schemaVersion: "1.0.0";
+  requestCount: number;
+  failureCount: number;
+  correlation: {
+    parentTraceProvidedCount: number;
+    parentTraceProvidedRate: number;
+  };
+  queries: Array<{
+    query: "verify_leaf" | "list_leaf_jobs" | "get_job";
+    requestCount: number;
+    failureCount: number;
+    minLatencyMs: number;
+    maxLatencyMs: number;
+    meanLatencyMs: number;
+    p95LatencyMs: number;
+  }>;
+  generatedAt: string;
+  snapshotHash: string;
+}
+
+export interface UiInteractionObservabilityMetricsResponse {
+  schemaVersion: "1.0.0";
+  requestCount: number;
+  successCount: number;
+  failureCount: number;
+  keyboardActionCount: number;
+  keyboardActionRate: number;
+  uniqueTraceCount: number;
+  correlation: {
+    parentTraceProvidedCount: number;
+    parentTraceProvidedRate: number;
+  };
+  interactions: Array<{
+    interaction:
+      | "config_update"
+      | "tree_expand_toggle"
+      | "tree_load_more"
+      | "tree_select_leaf"
+      | "tree_keyboard"
+      | "verification_run"
+      | "verification_job_select"
+      | "profile_save"
+      | "profile_delete"
+      | "profile_apply";
+    requestCount: number;
+    successRate: number;
+    meanDurationMs: number;
+    p95DurationMs: number;
+  }>;
+  generatedAt: string;
+  snapshotHash: string;
+}
+
+export interface UiInteractionObservabilityLedgerResponse {
+  schemaVersion: "1.0.0";
+  sampleWindowSize: number;
+  rollingWindowRequestCount: number;
+  persistedEventCount: number;
+  droppedFromRollingWindowCount: number;
+  appendFailureCount: number;
+  latestRequestId?: string;
+  retention: {
+    enabled: boolean;
+    mode: "disabled" | "ndjson";
+    pathHash?: string;
+    compaction: {
+      enabled: boolean;
+      policy: "disabled" | "max_events" | "ttl_seconds" | "ttl_and_max_events";
+      maxEvents?: number;
+      ttlSeconds?: number;
+      runCount: number;
+      rewriteCount: number;
+      prunedEventCount: number;
+      invalidLineDropCount: number;
+      lastCompactionHash?: string;
+    };
+  };
+  generatedAt: string;
+  snapshotHash: string;
+}
+
+export interface ObservabilitySloThresholdsInput {
+  minProofRequestCount?: number;
+  minVerificationRequestCount?: number;
+  minProofCacheHitRate?: number;
+  minProofUniqueTraceRate?: number;
+  maxProofP95LatencyMs?: number;
+  maxProofMeanLatencyMs?: number;
+  maxVerificationFailureRate?: number;
+  maxVerificationP95LatencyMs?: number;
+  maxVerificationMeanLatencyMs?: number;
+  minVerificationParentTraceRate?: number;
+  minUiInteractionRequestCount?: number;
+  minUiInteractionSuccessRate?: number;
+  minUiInteractionKeyboardActionRate?: number;
+  minUiInteractionParentTraceRate?: number;
+  maxUiInteractionP95DurationMs?: number;
+}
+
+export interface ObservabilitySloReportResponse {
+  schemaVersion: "1.0.0";
+  thresholds: {
+    minProofRequestCount: number;
+    minVerificationRequestCount: number;
+    minProofCacheHitRate: number;
+    minProofUniqueTraceRate: number;
+    maxProofP95LatencyMs: number;
+    maxProofMeanLatencyMs: number;
+    maxVerificationFailureRate: number;
+    maxVerificationP95LatencyMs: number;
+    maxVerificationMeanLatencyMs: number;
+    minVerificationParentTraceRate: number;
+    minUiInteractionRequestCount: number;
+    minUiInteractionSuccessRate: number;
+    minUiInteractionKeyboardActionRate: number;
+    minUiInteractionParentTraceRate: number;
+    maxUiInteractionP95DurationMs: number;
+  };
+  metrics: {
+    proof: {
+      requestCount: number;
+      cacheHitRate: number;
+      uniqueTraceRate: number;
+      maxP95LatencyMs: number;
+      maxMeanLatencyMs: number;
+    };
+    verification: {
+      requestCount: number;
+      failureRate: number;
+      maxP95LatencyMs: number;
+      maxMeanLatencyMs: number;
+      parentTraceProvidedRate: number;
+    };
+    uiInteraction: {
+      requestCount: number;
+      successRate: number;
+      keyboardActionRate: number;
+      parentTraceProvidedRate: number;
+      maxP95DurationMs: number;
+    };
+  };
+  thresholdPass: boolean;
+  thresholdFailures: Array<{
+    code:
+      | "proof_request_count_below_min"
+      | "verification_request_count_below_min"
+      | "proof_cache_hit_rate_below_min"
+      | "proof_unique_trace_rate_below_min"
+      | "proof_p95_latency_above_max"
+      | "proof_mean_latency_above_max"
+      | "verification_failure_rate_above_max"
+      | "verification_p95_latency_above_max"
+      | "verification_mean_latency_above_max"
+      | "verification_parent_trace_rate_below_min"
+      | "ui_interaction_request_count_below_min"
+      | "ui_interaction_success_rate_below_min"
+      | "ui_interaction_keyboard_action_rate_below_min"
+      | "ui_interaction_parent_trace_rate_below_min"
+      | "ui_interaction_p95_duration_above_max";
+    message: string;
+    details: {
+      metric: string;
+      actual: number;
+      expected: number;
+      comparator: ">=" | "<=";
+    };
+  }>;
+  proofSnapshotHash: string;
+  verificationSnapshotHash: string;
+  uiInteractionSnapshotHash: string;
+  generatedAt: string;
+  snapshotHash: string;
 }
 
 export interface ConfigProfilesResponse {
@@ -565,26 +857,113 @@ export async function fetchCacheReport(proofId: string, config: ProofConfigInput
   return requestJson<CacheReportResponse>(`/api/proofs/cache-report?${params.toString()}`);
 }
 
-export async function verifyLeaf(proofId: string, leafId: string, autoRun = true): Promise<VerifyLeafResponse> {
+export async function verifyLeaf(
+  proofId: string,
+  leafId: string,
+  autoRun = true,
+  options: { parentTraceId?: string } = {},
+): Promise<VerifyLeafResponse> {
   return requestJson<VerifyLeafResponse>(`/api/proofs/leaves/${encodeURIComponent(leafId)}/verify`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       proofId,
       autoRun,
+      parentTraceId: options.parentTraceId,
     }),
   });
 }
 
-export async function fetchLeafVerificationJobs(proofId: string, leafId: string): Promise<VerificationJobsResponse> {
+export async function fetchLeafVerificationJobs(
+  proofId: string,
+  leafId: string,
+  options: { parentTraceId?: string } = {},
+): Promise<VerificationJobsResponse> {
   const params = new URLSearchParams({ proofId });
+  if (options.parentTraceId) {
+    params.set("parentTraceId", options.parentTraceId);
+  }
   return requestJson<VerificationJobsResponse>(
     `/api/proofs/leaves/${encodeURIComponent(leafId)}/verification-jobs?${params.toString()}`,
   );
 }
 
-export async function fetchVerificationJob(jobId: string): Promise<VerificationJobResponse> {
-  return requestJson<VerificationJobResponse>(`/api/verification/jobs/${encodeURIComponent(jobId)}`);
+export async function fetchVerificationJob(
+  jobId: string,
+  options: { parentTraceId?: string } = {},
+): Promise<VerificationJobResponse> {
+  const params = new URLSearchParams();
+  if (options.parentTraceId) {
+    params.set("parentTraceId", options.parentTraceId);
+  }
+  const query = params.toString();
+  return requestJson<VerificationJobResponse>(
+    `/api/verification/jobs/${encodeURIComponent(jobId)}${query.length > 0 ? `?${query}` : ""}`,
+  );
+}
+
+export async function fetchVerificationObservabilityMetrics(): Promise<VerificationObservabilityMetricsResponse> {
+  return requestJson<VerificationObservabilityMetricsResponse>("/api/observability/verification-metrics");
+}
+
+export async function fetchProofQueryObservabilityMetrics(): Promise<ProofQueryObservabilityMetricsResponse> {
+  return requestJson<ProofQueryObservabilityMetricsResponse>("/api/observability/proof-query-metrics");
+}
+
+export async function fetchUiInteractionObservabilityMetrics(): Promise<UiInteractionObservabilityMetricsResponse> {
+  return requestJson<UiInteractionObservabilityMetricsResponse>("/api/observability/ui-interaction-metrics");
+}
+
+export async function fetchUiInteractionObservabilityLedger(): Promise<UiInteractionObservabilityLedgerResponse> {
+  return requestJson<UiInteractionObservabilityLedgerResponse>("/api/observability/ui-interaction-ledger");
+}
+
+export async function postUiInteractionObservabilityEvent(payload: {
+  proofId: string;
+  interaction:
+    | "config_update"
+    | "tree_expand_toggle"
+    | "tree_load_more"
+    | "tree_select_leaf"
+    | "tree_keyboard"
+    | "verification_run"
+    | "verification_job_select"
+    | "profile_save"
+    | "profile_delete"
+    | "profile_apply";
+  source: "mouse" | "keyboard" | "programmatic";
+  success?: boolean;
+  parentTraceId?: string;
+  durationMs?: number;
+}): Promise<{
+  schemaVersion: "1.0.0";
+  requestId: string;
+  traceId: string;
+}> {
+  return requestJson<{
+    schemaVersion: "1.0.0";
+    requestId: string;
+    traceId: string;
+  }>("/api/observability/ui-interactions", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchObservabilitySloReport(
+  thresholds: ObservabilitySloThresholdsInput = {},
+): Promise<ObservabilitySloReportResponse> {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(thresholds)) {
+    if (value !== undefined) {
+      params.set(key, String(value));
+    }
+  }
+  const query = params.toString();
+  return requestJson<ObservabilitySloReportResponse>(
+    `/api/observability/slo-report${query.length > 0 ? `?${query}` : ""}`,
+  );
 }
 
 export async function fetchConfigProfiles(projectId: string, userId: string): Promise<ConfigProfilesResponse> {

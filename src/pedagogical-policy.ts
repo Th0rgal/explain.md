@@ -172,6 +172,16 @@ export function evaluatePostSummaryPolicy(
       },
     });
   }
+  if (config.entailmentMode === "strict" && introducedTermCount > 0) {
+    violations.push({
+      code: "term_budget",
+      message: "Strict entailment mode requires zero introduced terms.",
+      details: {
+        introducedTermCount,
+        budget: 0,
+      },
+    });
+  }
 
   const vocabularyContinuityFloor = computeVocabularyContinuityFloor(config);
   const vocabularyContinuityRatio = computeVocabularyContinuityRatio(children, summary);

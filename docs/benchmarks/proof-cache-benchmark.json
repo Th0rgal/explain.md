@@ -1,18 +1,18 @@
 {
   "schemaVersion": "1.0.0",
-  "generatedAt": "2026-02-27T15:59:09.695Z",
+  "generatedAt": "2026-02-27T16:05:16.945Z",
   "proofId": "lean-verity-fixture",
   "configHash": "a75632c3c71bea58a13445a49951b87763ebd9e868fb4f51ac128e6c783e8af7",
   "requestHash": "3f46810b2ac7310b0662c6e01ba36ed7e2f53d0d01cd2f7653b72ffecf20dc0e",
-  "outcomeHash": "87e641499542cb6d8cd2672d089809846d4b4c476ac1ce5bf7c048ed3cf824db",
+  "outcomeHash": "59d1d4c85134b372656213d6336969e870fab4bc41e5f2cfd24340038b75f145",
   "parameters": {
     "coldIterations": 3,
     "warmIterations": 3,
     "mutationTargetPath": "Verity/Core.lean"
   },
   "paths": {
-    "fixtureProjectRootHash": "f59d02f853f5046c951f2ff470e2b49135df117a97b9794843bbf8caa0c688f9",
-    "cacheDirHash": "d084da011b22df01f27d2f28cea441621b9e4bb0b3655451b9a6ef75a9cc9272"
+    "fixtureProjectRootHash": "7eadc6cd6744219e5dd00a2361dbadbb772b419124c3f7ef42c5a088e98a44d5",
+    "cacheDirHash": "242501dc96b3b3cea7ab8ddc2e4a671a6a557a5b00cc3ea20a772a8a1c1b7049"
   },
   "scenarios": {
     "coldNoPersistentCache": {
@@ -22,10 +22,10 @@
         "miss",
         "miss"
       ],
-      "meanMs": 9.675,
-      "medianMs": 3.502,
-      "minMs": 3.059,
-      "maxMs": 22.464
+      "meanMs": 11.117,
+      "medianMs": 4.746,
+      "minMs": 4.249,
+      "maxMs": 24.357
     },
     "warmPersistentCache": {
       "iterations": 3,
@@ -34,10 +34,10 @@
         "hit",
         "hit"
       ],
-      "meanMs": 2.129,
-      "medianMs": 2.65,
-      "minMs": 1.072,
-      "maxMs": 2.664
+      "meanMs": 1.769,
+      "medianMs": 1.623,
+      "minMs": 1.556,
+      "maxMs": 2.129
     },
     "invalidation": {
       "beforeChangeStatus": "hit",
@@ -64,34 +64,35 @@
       ],
       "afterChangeAdditionRecovery": {
         "recoveryMode": "insertion",
-        "insertionFrontierCount": 1,
+        "insertionFrontierCount": 2,
+        "insertionAnchorCount": 1,
         "insertionMergeParentCount": 1,
-        "addedLeafCount": 1,
-        "insertedParentCount": 1,
+        "addedLeafCount": 2,
+        "insertedParentCount": 2,
         "insertionScheduledAttachmentCount": 1,
         "insertionRecomputedAncestorCount": 0,
-        "insertionStrategy": "edge_connector_ancestor_recompute",
+        "insertionStrategy": "anchor_grouped_connector_ancestor_recompute",
         "reusableParentSummaryCount": 0,
         "reusedParentSummaryCount": 0,
         "reusedParentSummaryByGroundingCount": 0,
         "reusedParentSummaryByStatementSignatureCount": 0,
-        "generatedParentSummaryCount": 1,
+        "generatedParentSummaryCount": 2,
         "skippedAmbiguousStatementSignatureReuseCount": 0,
         "skippedUnrebasableStatementSignatureReuseCount": 0,
-        "regenerationHash": "4440e25ea5d078120d8bd479ad4daa660cc3a79897883f3947b8d5831236b794",
-        "additionRecoveryHash": "1de6d69ee5b69a6ffce6a01f90206494f7ee0a0ee97f2b0676e06dc6f561a54f"
+        "regenerationHash": "ebb09a29a5babfd0f8c686d24317818f3d413d23985e642395ecf81abc67b92b",
+        "additionRecoveryHash": "3d05141a1fd06eec44392ea8a8ef8648b6c369f307c3dd872b0de646ef666aa9"
       },
       "afterChangeTopologyPlan": {
         "fullRebuildRequired": true,
         "topologyShapeChanged": true,
-        "addedDeclarationCount": 1,
+        "addedDeclarationCount": 2,
         "removedDeclarationCount": 0,
-        "blockedDeclarationCount": 1,
-        "planHash": "bf473238a71fde44ce12e50d3ed61ac949a2c27bf8d1037cc7d980b941c67c2f"
+        "blockedDeclarationCount": 2,
+        "planHash": "672d30e35e442f20086dbd2148c8be542809506330c30f5c9f07ef0685250529"
       },
-      "afterChangeSnapshotHash": "766603237738fd2ace254740616864deb2818fd0678232dd5fac8ed695d264c7",
+      "afterChangeSnapshotHash": "af0e012a289cc1acba1752cda830d78a02c0ed87f4771ee1750ce27b0f0fbd2a",
       "recoveryStatus": "hit",
-      "recoverySnapshotHash": "766603237738fd2ace254740616864deb2818fd0678232dd5fac8ed695d264c7"
+      "recoverySnapshotHash": "af0e012a289cc1acba1752cda830d78a02c0ed87f4771ee1750ce27b0f0fbd2a"
     },
     "mixedTopologyShapeInvalidation": {
       "beforeChangeStatus": "hit",

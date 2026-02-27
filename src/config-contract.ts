@@ -1,4 +1,9 @@
 import { createHash } from "node:crypto";
+import {
+  resolveExplanationLanguage,
+  SUPPORTED_EXPLANATION_LANGUAGES,
+  type SupportedExplanationLanguage,
+} from "./language-contract.js";
 
 export type AbstractionLevel = 1 | 2 | 3 | 4 | 5;
 export type ComplexityLevel = 1 | 2 | 3 | 4 | 5;
@@ -23,7 +28,7 @@ export interface ExplanationConfig {
   abstractionLevel: AbstractionLevel;
   complexityLevel: ComplexityLevel;
   maxChildrenPerParent: number;
-  language: string;
+  language: SupportedExplanationLanguage;
   audienceLevel: AudienceLevel;
   readingLevelTarget: ReadingLevelTarget;
   complexityBandWidth: number;
@@ -103,7 +108,7 @@ export function normalizeConfig(input: ExplanationConfigInput = {}): Explanation
 
   return {
     ...merged,
-    language: merged.language.trim().toLowerCase(),
+    language: resolveExplanationLanguage(merged.language).effective,
     modelProvider: {
       ...merged.modelProvider,
       provider: merged.modelProvider.provider.trim().toLowerCase(),
@@ -127,8 +132,11 @@ export function validateConfig(config: ExplanationConfig): ValidationResult {
   assertIntBetween(errors, "complexityLevel", config.complexityLevel, 1, 5);
   assertIntBetween(errors, "maxChildrenPerParent", config.maxChildrenPerParent, 2, 12);
 
-  if (!config.language || !/^[a-z]{2}(-[a-z]{2})?$/.test(config.language)) {
-    errors.push({ path: "language", message: "Must be an ISO-like language tag such as 'en' or 'en-us'." });
+  if (!SUPPORTED_EXPLANATION_LANGUAGES.includes(config.language)) {
+    errors.push({
+      path: "language",
+      message: `Must resolve to one of: ${SUPPORTED_EXPLANATION_LANGUAGES.join(", ")}.`,
+    });
   }
 
   if (!(config.audienceLevel in AUDIENCE_ORDER)) {

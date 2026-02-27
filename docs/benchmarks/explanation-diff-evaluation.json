@@ -1,0 +1,144 @@
+{
+  "schemaVersion": "1.0.0",
+  "requestHash": "c3bc2fb3a8720cdd2467a1117bc027bd73c501a5a17c78e2845e7943025a3095",
+  "outcomeHash": "abe4f934aa427b91a57ebbd35fb58d5e9f805ac4fe37a3d2e393813a468331e5",
+  "parameters": {
+    "proofId": "seed-verity",
+    "maxPanelChanges": 2,
+    "profiles": [
+      {
+        "profileId": "abstraction-shift",
+        "candidateConfig": {
+          "abstractionLevel": 5,
+          "complexityLevel": 3,
+          "maxChildrenPerParent": 3,
+          "audienceLevel": "intermediate",
+          "language": "en",
+          "readingLevelTarget": "high_school",
+          "complexityBandWidth": 1,
+          "termIntroductionBudget": 2,
+          "proofDetailMode": "balanced",
+          "entailmentMode": "calibrated"
+        }
+      },
+      {
+        "profileId": "complexity-shift",
+        "candidateConfig": {
+          "abstractionLevel": 3,
+          "complexityLevel": 1,
+          "maxChildrenPerParent": 2,
+          "audienceLevel": "intermediate",
+          "language": "en",
+          "readingLevelTarget": "high_school",
+          "complexityBandWidth": 1,
+          "termIntroductionBudget": 1,
+          "proofDetailMode": "balanced",
+          "entailmentMode": "calibrated"
+        }
+      },
+      {
+        "profileId": "language-audience-shift",
+        "candidateConfig": {
+          "abstractionLevel": 3,
+          "complexityLevel": 3,
+          "maxChildrenPerParent": 3,
+          "audienceLevel": "novice",
+          "language": "fr",
+          "readingLevelTarget": "middle_school",
+          "complexityBandWidth": 1,
+          "termIntroductionBudget": 2,
+          "proofDetailMode": "balanced",
+          "entailmentMode": "calibrated"
+        }
+      }
+    ]
+  },
+  "summary": {
+    "profileCount": 3,
+    "totalChanges": 5,
+    "changedProfiles": 3,
+    "truncatedProfiles": 1,
+    "provenanceCoveredChanges": 14,
+    "zeroSupportChangeCount": 0,
+    "orderingPassProfiles": 3,
+    "coverage": {
+      "abstractionLevel": true,
+      "complexityLevel": true,
+      "maxChildrenPerParent": true,
+      "language": true,
+      "audienceLevel": true
+    }
+  },
+  "comparisons": [
+    {
+      "profileId": "abstraction-shift",
+      "changedFields": [
+        "abstractionLevel"
+      ],
+      "regenerationScope": "full",
+      "diffHash": "d4e9107473442d120355ee20b2cb3d8113f4c54994e22470ee5ff3839162f214",
+      "requestHash": "1575891e24e65cad9d77dea06a9608f9e0df517e619310095cd8d2ec5f13b1d0",
+      "summary": {
+        "total": 1,
+        "changed": 1,
+        "added": 0,
+        "removed": 0,
+        "rendered": 1,
+        "truncated": 0
+      },
+      "support": {
+        "totalSupportLeafRefs": 4,
+        "zeroSupportChangeCount": 0
+      },
+      "sortedOrderingPass": true
+    },
+    {
+      "profileId": "complexity-shift",
+      "changedFields": [
+        "complexityLevel",
+        "maxChildrenPerParent",
+        "termIntroductionBudget"
+      ],
+      "regenerationScope": "full",
+      "diffHash": "4965f3a8a87735491d975d66b2c248437ed9a09adc2a9a1e833080bd753764fe",
+      "requestHash": "eb28b4bab71b74125090a060fa94cf0d930905a343ef432455d19d7d12e0159a",
+      "summary": {
+        "total": 1,
+        "changed": 1,
+        "added": 0,
+        "removed": 0,
+        "rendered": 1,
+        "truncated": 0
+      },
+      "support": {
+        "totalSupportLeafRefs": 4,
+        "zeroSupportChangeCount": 0
+      },
+      "sortedOrderingPass": true
+    },
+    {
+      "profileId": "language-audience-shift",
+      "changedFields": [
+        "audienceLevel",
+        "language",
+        "readingLevelTarget"
+      ],
+      "regenerationScope": "full",
+      "diffHash": "a0d35c5a4e9e492d78bbf8b8aa5c7b6c326e4fd1432a9a059af3de826a01c8b5",
+      "requestHash": "ed019cf8eb798ac701dce007b9110ce78ee023591a492c8fffd4dd05e7229c05",
+      "summary": {
+        "total": 3,
+        "changed": 3,
+        "added": 0,
+        "removed": 0,
+        "rendered": 2,
+        "truncated": 1
+      },
+      "support": {
+        "totalSupportLeafRefs": 6,
+        "zeroSupportChangeCount": 0
+      },
+      "sortedOrderingPass": true
+    }
+  ]
+}
