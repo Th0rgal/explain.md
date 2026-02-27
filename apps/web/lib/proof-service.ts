@@ -95,6 +95,7 @@ export interface ProofDatasetCacheDiagnostic {
     | "cache_topology_recovery_hit"
     | "cache_blocked_subtree_rebuild_hit"
     | "cache_topology_removal_subtree_rebuild_hit"
+    | "cache_topology_addition_subtree_regeneration_rebuild_hit"
     | "cache_topology_mixed_subtree_regeneration_rebuild_hit"
     | "cache_topology_regeneration_rebuild_hit"
     | "cache_blocked_subtree_full_rebuild"
@@ -1117,6 +1118,77 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
       };
     }
 
+    const topologyAdditionRecovery = await attemptTopologyAdditionRecovery({
+      proofId,
+      config,
+      configHash,
+      sourceFingerprint,
+      ingestionHash,
+      dependencyGraphHash,
+      blockedSubtreePlan,
+      cachedTree: cachedTreeForTopologyRecovery,
+      currentLeaves: theoremLeaves,
+    });
+
+    if (topologyAdditionRecovery) {
+      const cacheWriteError = await writeProofDatasetCacheEntry(cachePath, topologyAdditionRecovery.cacheEntry);
+      if (cacheWriteError) {
+        cacheDiagnostics.push({
+          code: "cache_write_failed",
+          message: "Failed writing topology-addition recovery cache entry; continuing with recovered dataset.",
+          details: { cachePath, error: cacheWriteError },
+        });
+      }
+
+      cacheDiagnostics.push({
+        code: "cache_topology_addition_subtree_regeneration_rebuild_hit",
+        message:
+          "Recovered cached dataset by deterministic addition-only recovery (targeted addition evidence + topology regeneration).",
+        details: {
+          cachePath,
+          planHash: blockedSubtreePlan.planHash,
+          addedLeafCount: topologyAdditionRecovery.addedLeafIds.length,
+          reusableParentSummaryCount: topologyAdditionRecovery.reusableParentSummaryCount,
+          reusedParentSummaryCount: topologyAdditionRecovery.reusedParentSummaryCount,
+          reusedParentSummaryByGroundingCount: topologyAdditionRecovery.reusedParentSummaryByGroundingCount,
+          reusedParentSummaryByStatementSignatureCount:
+            topologyAdditionRecovery.reusedParentSummaryByStatementSignatureCount,
+          generatedParentSummaryCount: topologyAdditionRecovery.generatedParentSummaryCount,
+          skippedAmbiguousStatementSignatureReuseCount:
+            topologyAdditionRecovery.skippedAmbiguousStatementSignatureReuseCount,
+          skippedUnrebasableStatementSignatureReuseCount:
+            topologyAdditionRecovery.skippedUnrebasableStatementSignatureReuseCount,
+          regenerationHash: topologyAdditionRecovery.regenerationHash,
+          additionRecoveryHash: topologyAdditionRecovery.additionRecoveryHash,
+        },
+      });
+
+      return {
+        dataset: {
+          proofId,
+          title: `Lean Verity fixture (${theoremLeaves.length} declarations, ingestion=${ingestionHash.slice(0, 8)}, depgraph=${dependencyGraphHash.slice(0, 8)})`,
+          config,
+          configHash,
+          tree: topologyAdditionRecovery.tree,
+          leaves: theoremLeaves,
+          dependencyGraph,
+          dependencyGraphHash,
+        },
+        queryApi: createTreeQueryApi(topologyAdditionRecovery.cacheEntry.snapshot),
+        cache: {
+          layer: "persistent",
+          status: "hit",
+          cacheKey,
+          sourceFingerprint,
+          cachePath,
+          snapshotHash: topologyAdditionRecovery.cacheEntry.snapshotHash,
+          cacheEntryHash: computeProofDatasetCacheEntryHash(topologyAdditionRecovery.cacheEntry),
+          diagnostics: cacheDiagnostics,
+          blockedSubtreePlan,
+        },
+      };
+    }
+
     const topologyMixedRecovery = await attemptTopologyMixedRecovery({
       proofId,
       config,
@@ -1675,6 +1747,33 @@ interface TopologyMixedRecoveryResult {
   removalRecoveryHash: string;
   regenerationHash: string;
   mixedRecoveryHash: string;
+}
+
+interface TopologyAdditionRecoveryRequest {
+  proofId: string;
+  config: ExplanationConfig;
+  configHash: string;
+  sourceFingerprint: string;
+  ingestionHash: string;
+  dependencyGraphHash: string;
+  blockedSubtreePlan: ProofDatasetBlockedSubtreePlan;
+  cachedTree: ExplanationTree;
+  currentLeaves: TheoremLeafRecord[];
+}
+
+interface TopologyAdditionRecoveryResult {
+  tree: ExplanationTree;
+  cacheEntry: ProofDatasetCacheEntry;
+  addedLeafIds: string[];
+  reusableParentSummaryCount: number;
+  reusedParentSummaryCount: number;
+  reusedParentSummaryByGroundingCount: number;
+  reusedParentSummaryByStatementSignatureCount: number;
+  generatedParentSummaryCount: number;
+  skippedAmbiguousStatementSignatureReuseCount: number;
+  skippedUnrebasableStatementSignatureReuseCount: number;
+  regenerationHash: string;
+  additionRecoveryHash: string;
 }
 
 interface TopologyRegenerationRecoveryRequest {
@@ -2375,6 +2474,64 @@ async function attemptTopologyMixedRecovery(
     mixedRecoveryHash: computeCanonicalRequestHash({
       removalPlanHash: removalSubplan.planHash,
       removalRecoveryHash: removalRecovery.recoveryHash,
+      regenerationHash: regenerationRecovery.regenerationHash,
+      dependencyGraphHash: request.dependencyGraphHash,
+      configHash: request.configHash,
+    }),
+  };
+}
+
+async function attemptTopologyAdditionRecovery(
+  request: TopologyAdditionRecoveryRequest,
+): Promise<TopologyAdditionRecoveryResult | undefined> {
+  if (!request.blockedSubtreePlan.topologyShapeChanged) {
+    return undefined;
+  }
+  if (request.blockedSubtreePlan.addedDeclarationIds.length === 0 || request.blockedSubtreePlan.removedDeclarationIds.length > 0) {
+    return undefined;
+  }
+  const addedDeclarationSet = new Set(request.blockedSubtreePlan.addedDeclarationIds);
+  if (request.blockedSubtreePlan.changedDeclarationIds.some((declarationId) => !addedDeclarationSet.has(declarationId))) {
+    return undefined;
+  }
+
+  const addedLeafIds = request.currentLeaves
+    .filter((leaf) => addedDeclarationSet.has(leaf.declarationId))
+    .map((leaf) => leaf.id)
+    .sort((left, right) => left.localeCompare(right));
+  if (addedLeafIds.length !== request.blockedSubtreePlan.addedDeclarationIds.length) {
+    return undefined;
+  }
+
+  const regenerationRecovery = await attemptTopologyRegenerationRecovery({
+    proofId: request.proofId,
+    config: request.config,
+    configHash: request.configHash,
+    sourceFingerprint: request.sourceFingerprint,
+    ingestionHash: request.ingestionHash,
+    dependencyGraphHash: request.dependencyGraphHash,
+    cachedTree: request.cachedTree,
+    currentLeaves: request.currentLeaves,
+  });
+  if (!regenerationRecovery) {
+    return undefined;
+  }
+
+  return {
+    tree: regenerationRecovery.tree,
+    cacheEntry: regenerationRecovery.cacheEntry,
+    addedLeafIds,
+    reusableParentSummaryCount: regenerationRecovery.reusableParentSummaryCount,
+    reusedParentSummaryCount: regenerationRecovery.reusedParentSummaryCount,
+    reusedParentSummaryByGroundingCount: regenerationRecovery.reusedParentSummaryByGroundingCount,
+    reusedParentSummaryByStatementSignatureCount: regenerationRecovery.reusedParentSummaryByStatementSignatureCount,
+    generatedParentSummaryCount: regenerationRecovery.generatedParentSummaryCount,
+    skippedAmbiguousStatementSignatureReuseCount: regenerationRecovery.skippedAmbiguousStatementSignatureReuseCount,
+    skippedUnrebasableStatementSignatureReuseCount: regenerationRecovery.skippedUnrebasableStatementSignatureReuseCount,
+    regenerationHash: regenerationRecovery.regenerationHash,
+    additionRecoveryHash: computeCanonicalRequestHash({
+      planHash: request.blockedSubtreePlan.planHash,
+      addedLeafIds,
       regenerationHash: regenerationRecovery.regenerationHash,
       dependencyGraphHash: request.dependencyGraphHash,
       configHash: request.configHash,

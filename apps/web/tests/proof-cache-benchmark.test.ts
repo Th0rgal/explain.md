@@ -27,22 +27,27 @@ describe("proof cache benchmark", () => {
     expect(report.scenarios.topologyShapeInvalidation.afterChangeStatus).toBe("hit");
     expect(report.scenarios.topologyShapeInvalidation.afterChangeDiagnostics).toContain("cache_miss");
     expect(report.scenarios.topologyShapeInvalidation.afterChangeDiagnostics).toContain(
-      "cache_topology_regeneration_rebuild_hit",
+      "cache_topology_addition_subtree_regeneration_rebuild_hit",
     );
+    expect((report.scenarios.topologyShapeInvalidation.afterChangeAdditionRecovery?.addedLeafCount ?? 0) > 0).toBe(true);
+    expect(
+      report.scenarios.topologyShapeInvalidation.afterChangeAdditionRecovery?.additionRecoveryHash,
+    ).toHaveLength(64);
+    expect(report.scenarios.topologyShapeInvalidation.afterChangeRegenerationRecovery).toBeUndefined();
     expect(report.scenarios.topologyShapeInvalidation.afterChangeRemovalRecovery).toBeUndefined();
-    expect(report.scenarios.topologyShapeInvalidation.afterChangeRegenerationRecovery?.regenerationHash).toHaveLength(64);
+    expect(report.scenarios.topologyShapeInvalidation.afterChangeAdditionRecovery?.regenerationHash).toHaveLength(64);
     expect(
-      (report.scenarios.topologyShapeInvalidation.afterChangeRegenerationRecovery?.reusedParentSummaryByGroundingCount ??
+      (report.scenarios.topologyShapeInvalidation.afterChangeAdditionRecovery?.reusedParentSummaryByGroundingCount ??
         0) +
-        (report.scenarios.topologyShapeInvalidation.afterChangeRegenerationRecovery
+        (report.scenarios.topologyShapeInvalidation.afterChangeAdditionRecovery
           ?.reusedParentSummaryByStatementSignatureCount ?? 0),
-    ).toBe(report.scenarios.topologyShapeInvalidation.afterChangeRegenerationRecovery?.reusedParentSummaryCount ?? 0);
+    ).toBe(report.scenarios.topologyShapeInvalidation.afterChangeAdditionRecovery?.reusedParentSummaryCount ?? 0);
     expect(
-      report.scenarios.topologyShapeInvalidation.afterChangeRegenerationRecovery?.skippedAmbiguousStatementSignatureReuseCount ??
+      report.scenarios.topologyShapeInvalidation.afterChangeAdditionRecovery?.skippedAmbiguousStatementSignatureReuseCount ??
         0,
     ).toBeGreaterThanOrEqual(0);
     expect(
-      report.scenarios.topologyShapeInvalidation.afterChangeRegenerationRecovery
+      report.scenarios.topologyShapeInvalidation.afterChangeAdditionRecovery
         ?.skippedUnrebasableStatementSignatureReuseCount ?? 0,
     ).toBeGreaterThanOrEqual(0);
     expect(report.scenarios.topologyShapeInvalidation.afterChangeTopologyPlan?.fullRebuildRequired).toBe(true);

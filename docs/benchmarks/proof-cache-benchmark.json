@@ -1,18 +1,18 @@
 {
   "schemaVersion": "1.0.0",
-  "generatedAt": "2026-02-27T15:28:20.870Z",
+  "generatedAt": "2026-02-27T15:35:02.142Z",
   "proofId": "lean-verity-fixture",
   "configHash": "a75632c3c71bea58a13445a49951b87763ebd9e868fb4f51ac128e6c783e8af7",
   "requestHash": "3f46810b2ac7310b0662c6e01ba36ed7e2f53d0d01cd2f7653b72ffecf20dc0e",
-  "outcomeHash": "3ee385419e862a1fb5781763892d92d75a58e8ed10b679e53815b0b87c432822",
+  "outcomeHash": "18b3ebd487fc526985934fcd6101be79cb8b75ba56a30d4add42e3939ffa9c7d",
   "parameters": {
     "coldIterations": 3,
     "warmIterations": 3,
     "mutationTargetPath": "Verity/Core.lean"
   },
   "paths": {
-    "fixtureProjectRootHash": "28dac4c2cb61c6bf7bbbbbfc53ae0a5873b58245143f941aca00c001586bcba3",
-    "cacheDirHash": "b2dbb4ace9218a0510f7eaf2f7b7b572b078c7be94e759bae035717e08470d5b"
+    "fixtureProjectRootHash": "5321e6d765584324b07c7e4e42a22f9c6140b879d25cad51fcff6fc4e1cf191c",
+    "cacheDirHash": "8c8a6c60dadd20269586166b1e4865f66bc4edba6edb4c6727437e408cb1f13a"
   },
   "scenarios": {
     "coldNoPersistentCache": {
@@ -22,10 +22,10 @@
         "miss",
         "miss"
       ],
-      "meanMs": 16.579,
-      "medianMs": 5.753,
-      "minMs": 4.829,
-      "maxMs": 39.156
+      "meanMs": 25.481,
+      "medianMs": 29.167,
+      "minMs": 5.944,
+      "maxMs": 41.331
     },
     "warmPersistentCache": {
       "iterations": 3,
@@ -34,10 +34,10 @@
         "hit",
         "hit"
       ],
-      "meanMs": 9.501,
-      "medianMs": 2.986,
-      "minMs": 2.098,
-      "maxMs": 23.42
+      "meanMs": 2.502,
+      "medianMs": 2.45,
+      "minMs": 2.353,
+      "maxMs": 2.704
     },
     "invalidation": {
       "beforeChangeStatus": "hit",
@@ -60,9 +60,10 @@
       "afterChangeStatus": "hit",
       "afterChangeDiagnostics": [
         "cache_miss",
-        "cache_topology_regeneration_rebuild_hit"
+        "cache_topology_addition_subtree_regeneration_rebuild_hit"
       ],
-      "afterChangeRegenerationRecovery": {
+      "afterChangeAdditionRecovery": {
+        "addedLeafCount": 1,
         "reusableParentSummaryCount": 1,
         "reusedParentSummaryCount": 0,
         "reusedParentSummaryByGroundingCount": 0,
@@ -70,7 +71,8 @@
         "generatedParentSummaryCount": 2,
         "skippedAmbiguousStatementSignatureReuseCount": 0,
         "skippedUnrebasableStatementSignatureReuseCount": 0,
-        "regenerationHash": "f168506143513650c9a59ce7455e44322439b33f2d001c45ff8dc37ab43cae8e"
+        "regenerationHash": "f168506143513650c9a59ce7455e44322439b33f2d001c45ff8dc37ab43cae8e",
+        "additionRecoveryHash": "6ff6d41ce31787e3573e5bcaa1ee6ae12a08e76c53546481ef00dbad31fa5945"
       },
       "afterChangeTopologyPlan": {
         "fullRebuildRequired": true,

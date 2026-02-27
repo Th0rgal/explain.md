@@ -70,6 +70,10 @@ Deterministic cache-reuse diagnostics for proof dataset generation.
     - `collapsedParentCount`
     - `droppedParentCount`
     - `recoveryHash`
+  - if declaration shape changes are addition-only, deterministic topology regeneration runs with explicit addition evidence and emits `cache_topology_addition_subtree_regeneration_rebuild_hit`:
+    - addition evidence: `addedLeafCount`
+    - regeneration telemetry: `reusableParentSummaryCount`, `reusedParentSummaryCount`, `reusedParentSummaryByGroundingCount`, `reusedParentSummaryByStatementSignatureCount`, `generatedParentSummaryCount`, `skippedAmbiguousStatementSignatureReuseCount`, `skippedUnrebasableStatementSignatureReuseCount`, `regenerationHash`
+    - combined audit hash: `additionRecoveryHash`
   - if declaration shape changes are mixed (both additions and removals), deterministic two-stage recovery runs and emits `cache_topology_mixed_subtree_regeneration_rebuild_hit`:
     - stage 1 (removal prune): `removedLeafCount`, `touchedParentCount`, `recomputedParentCount`, `collapsedParentCount`, `droppedParentCount`, `removalRecoveryHash`
     - stage 2 (regeneration from stage-1 tree): `reusableParentSummaryCount`, `reusedParentSummaryCount`, `reusedParentSummaryByGroundingCount`, `reusedParentSummaryByStatementSignatureCount`, `generatedParentSummaryCount`, `skippedAmbiguousStatementSignatureReuseCount`, `skippedUnrebasableStatementSignatureReuseCount`, `regenerationHash`

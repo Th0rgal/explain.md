@@ -315,6 +315,7 @@ export interface CacheReportResponse {
         | "cache_topology_recovery_hit"
         | "cache_blocked_subtree_rebuild_hit"
         | "cache_topology_removal_subtree_rebuild_hit"
+        | "cache_topology_addition_subtree_regeneration_rebuild_hit"
         | "cache_topology_mixed_subtree_regeneration_rebuild_hit"
         | "cache_topology_regeneration_rebuild_hit"
         | "cache_blocked_subtree_full_rebuild"

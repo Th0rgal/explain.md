@@ -461,7 +461,7 @@ describe("proof service", () => {
     }
   });
 
-  it("recovers topology-shape-changing mutations via deterministic topology regeneration reuse", async () => {
+  it("recovers addition-only topology-shape mutations via deterministic addition recovery telemetry", async () => {
     const previousCacheDir = process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR;
     const previousFixtureRoot = process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT;
     const tempCacheDir = await fs.mkdtemp(path.join(os.tmpdir(), "explain-md-proof-cache-"));
@@ -496,26 +496,35 @@ describe("proof service", () => {
       expect(rebuilt.cache.status).toBe("hit");
       expect(rebuilt.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_miss")).toBe(true);
       expect(
-        rebuilt.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_topology_regeneration_rebuild_hit"),
+        rebuilt.cache.diagnostics.some(
+          (diagnostic) => diagnostic.code === "cache_topology_addition_subtree_regeneration_rebuild_hit",
+        ),
       ).toBe(true);
+      expect(
+        rebuilt.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_topology_regeneration_rebuild_hit"),
+      ).toBe(false);
       expect(rebuilt.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_blocked_subtree_full_rebuild")).toBe(
         false,
       );
-      const regenerationDiagnostic = rebuilt.cache.diagnostics.find(
-        (diagnostic) => diagnostic.code === "cache_topology_regeneration_rebuild_hit",
+      const additionDiagnostic = rebuilt.cache.diagnostics.find(
+        (diagnostic) => diagnostic.code === "cache_topology_addition_subtree_regeneration_rebuild_hit",
       );
-      expect((regenerationDiagnostic?.details?.reusableParentSummaryCount as number) >= 0).toBe(true);
-      expect((regenerationDiagnostic?.details?.reusedParentSummaryCount as number) >= 0).toBe(true);
+      expect((additionDiagnostic?.details?.addedLeafCount as number) > 0).toBe(true);
+      expect((additionDiagnostic?.details?.reusableParentSummaryCount as number) >= 0).toBe(true);
+      expect((additionDiagnostic?.details?.reusedParentSummaryCount as number) >= 0).toBe(true);
       expect(
-        (regenerationDiagnostic?.details?.reusedParentSummaryByGroundingCount as number) +
-          (regenerationDiagnostic?.details?.reusedParentSummaryByStatementSignatureCount as number),
-      ).toBe(regenerationDiagnostic?.details?.reusedParentSummaryCount);
-      expect((regenerationDiagnostic?.details?.generatedParentSummaryCount as number) > 0).toBe(true);
-      expect((regenerationDiagnostic?.details?.skippedAmbiguousStatementSignatureReuseCount as number) >= 0).toBe(true);
-      expect((regenerationDiagnostic?.details?.skippedUnrebasableStatementSignatureReuseCount as number) >= 0).toBe(true);
+        (additionDiagnostic?.details?.reusedParentSummaryByGroundingCount as number) +
+          (additionDiagnostic?.details?.reusedParentSummaryByStatementSignatureCount as number),
+      ).toBe(additionDiagnostic?.details?.reusedParentSummaryCount);
+      expect((additionDiagnostic?.details?.generatedParentSummaryCount as number) > 0).toBe(true);
+      expect((additionDiagnostic?.details?.skippedAmbiguousStatementSignatureReuseCount as number) >= 0).toBe(true);
+      expect((additionDiagnostic?.details?.skippedUnrebasableStatementSignatureReuseCount as number) >= 0).toBe(true);
+      expect(typeof additionDiagnostic?.details?.regenerationHash).toBe("string");
+      expect(typeof additionDiagnostic?.details?.additionRecoveryHash).toBe("string");
       expect(rebuilt.cache.blockedSubtreePlan?.fullRebuildRequired).toBe(true);
       expect(rebuilt.cache.blockedSubtreePlan?.topologyShapeChanged).toBe(true);
       expect((rebuilt.cache.blockedSubtreePlan?.addedDeclarationIds.length ?? 0) > 0).toBe(true);
+      expect(rebuilt.cache.blockedSubtreePlan?.removedDeclarationIds).toEqual([]);
       expect(rebuilt.cache.snapshotHash).not.toBe(warm.cache.snapshotHash);
     } finally {
       clearProofDatasetCacheForTests();
