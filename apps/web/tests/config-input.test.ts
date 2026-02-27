@@ -67,6 +67,17 @@ describe("config input parser", () => {
     });
   });
 
+  it("ignores prototype-chain keys in query params", () => {
+    const parsed = parseConfigFromSearchParams(new URLSearchParams({ constructor: "oops", toString: "oops", language: "ES" }));
+    expect(parsed).toEqual({
+      language: "es",
+    });
+  });
+
+  it("rejects empty integer query values", () => {
+    expect(() => parseConfigFromSearchParams(new URLSearchParams({ termIntroductionBudget: "" }))).toThrowError(ConfigContractError);
+  });
+
   it("fails with machine-checkable details for invalid numeric values", () => {
     try {
       parseConfigFromSearchParams(new URLSearchParams({ complexityBandWidth: "9" }));

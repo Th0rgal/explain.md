@@ -22,6 +22,8 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - tree/pedagogy knobs (`abstractionLevel`, `complexityLevel`, `maxChildrenPerParent`, `language`, `audienceLevel`, `readingLevelTarget`, `complexityBandWidth`, `termIntroductionBudget`, `proofDetailMode`)
   - provider knobs (`modelProvider.*`)
 - Invalid config returns machine-checkable diagnostics in `error.details.errors[]` (`path`, `message`).
+- Query parameter parsing is prototype-safe (`hasOwn` key checks only), so inherited keys like `constructor` are ignored.
+- Integer query fields reject empty-string values (for example `termIntroductionBudget=`) instead of silently coercing to `0`.
 
 ## Determinism and provenance
 - Seed dataset is fixed (`seed-verity`) and uses core canonical models from `src/`.

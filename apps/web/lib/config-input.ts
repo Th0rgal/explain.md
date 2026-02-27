@@ -120,7 +120,7 @@ export function parseConfigFromSearchParams(search: URLSearchParams): Explanatio
   const modelProvider: Partial<ModelProviderConfig> = {};
 
   for (const [rawKey, rawValue] of search.entries()) {
-    if (!(rawKey in QUERY_FIELD_MAP)) {
+    if (!hasOwn(QUERY_FIELD_MAP, rawKey)) {
       continue;
     }
 
@@ -315,6 +315,9 @@ function canonicalizePartial(partial: ExplanationConfigInput, normalized: Explan
 }
 
 function parseInteger(value: unknown, path: string): number {
+  if (typeof value === "string" && value.trim().length === 0) {
+    throw new ConfigContractError(`Expected integer for '${path}'.`, [{ path, message: "Must be a non-empty integer." }]);
+  }
   const numeric = Number(value);
   if (!Number.isInteger(numeric)) {
     throw new ConfigContractError(`Expected integer for '${path}'.`, [{ path, message: "Must be an integer." }]);
