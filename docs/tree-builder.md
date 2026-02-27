@@ -18,6 +18,7 @@ Issue: #9
 - Parent generation runs in deterministic batch order (`summaryBatchSize`, default `4`) while preserving stable `groupIndex` ordering.
 - Grouping diagnostics are preserved per depth for auditability.
 - Grouping diagnostics include `summaryBatches[]` with batch/group cardinalities for reproducible batching audits.
+- Grouping diagnostics include `summaryReuse` with generated vs reused group indexes when reusable parent summaries are provided.
 - Policy diagnostics are attached per parent (`preSummary`, `postSummary`, `retriesUsed`).
 
 ## Tree validity checks
@@ -59,6 +60,9 @@ Request shape:
 - `config`: normalized `ExplanationConfig`
 - `maxDepth?`: optional explicit depth guard
 - `summaryBatchSize?`: optional integer `1..32` controlling max concurrent parent summaries per depth
+- `reusableParentSummaries?`: optional map keyed by deterministic parent id (`p_<depth>_<groupIndex>_<digest>`) for stable-id parent reuse
+  - each entry includes `childStatementHash` and previously validated summary payload
+  - reuse is accepted only when the current child statement hash matches and post-summary policy still passes
 
 Output includes:
 - `rootId`, `leafIds`, `nodes`, `configHash`, `groupPlan`, `groupingDiagnostics`, `maxDepth`

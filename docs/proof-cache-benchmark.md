@@ -15,7 +15,7 @@ By default this writes:
 - Warm path (`warmPersistentCache`): persistent cache prewarmed, in-memory cache cleared between iterations.
 - Semantic noop path (`semanticNoop`): applies a source-only comment mutation and verifies theorem-delta-aware cache reuse (`cache_semantic_hit`).
 - Invalidation path (`invalidation`): applies a theorem-level mutation and verifies deterministic subtree recompute reuse (`cache_incremental_subtree_rebuild`) with hit recovery semantics.
-- Topology change path (`topologyChange`): applies a theorem-addition mutation and verifies deterministic topology-aware rebuild with parent-summary reuse diagnostics (`cache_incremental_topology_rebuild`).
+- Topology change path (`topologyChange`): applies a theorem-addition mutation and verifies deterministic topology-aware rebuild with stable parent-id reuse diagnostics (`cache_incremental_topology_rebuild`).
 
 ## Determinism and Auditability
 - Report includes:

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { describe, expect, test } from "vitest";
 import { normalizeConfig } from "../src/config-contract.js";
 import type { GenerateRequest, GenerateResult, ProviderClient } from "../src/openai-provider.js";
@@ -6,6 +7,7 @@ import {
   TreePolicyError,
   validateExplanationTree,
   type ExplanationTree,
+  type ReusableParentSummary,
 } from "../src/tree-builder.js";
 
 describe("tree builder", () => {
@@ -251,6 +253,47 @@ describe("tree builder", () => {
       }),
     ).rejects.toThrow("summaryBatchSize");
   });
+
+  test("reuses unchanged parent summaries by stable parent IDs", async () => {
+    const config = normalizeConfig({ maxChildrenPerParent: 2, complexityBandWidth: 2 });
+    const baselineProvider = countedDeterministicSummaryProvider();
+    const originalLeaves = [
+      { id: "l1", statement: "Leaf one." },
+      { id: "l2", statement: "Leaf two." },
+      { id: "l3", statement: "Leaf three." },
+      { id: "l4", statement: "Leaf four." },
+      { id: "l5", statement: "Leaf five." },
+      { id: "l6", statement: "Leaf six." },
+    ];
+
+    const previousTree = await buildRecursiveExplanationTree(baselineProvider.provider, {
+      config,
+      leaves: originalLeaves,
+    });
+    expect(baselineProvider.counter.count).toBeGreaterThan(0);
+
+    const nextLeaves = [
+      ...originalLeaves,
+      { id: "l7", statement: "Leaf seven introduces topology change." },
+    ];
+    const withoutReuseProvider = countedDeterministicSummaryProvider();
+    await buildRecursiveExplanationTree(withoutReuseProvider.provider, {
+      config,
+      leaves: nextLeaves,
+    });
+
+    const reusableParentSummaries = buildReusableParentSummaries(previousTree);
+    const withReuseProvider = countedDeterministicSummaryProvider();
+    const withReuseTree = await buildRecursiveExplanationTree(withReuseProvider.provider, {
+      config,
+      leaves: nextLeaves,
+      reusableParentSummaries,
+    });
+
+    expect(withReuseProvider.counter.count).toBeLessThan(withoutReuseProvider.counter.count);
+    const reusedGroups = withReuseTree.groupingDiagnostics.flatMap((layer) => layer.summaryReuse?.reusedGroupIndexes ?? []);
+    expect(reusedGroups.length).toBeGreaterThan(0);
+  });
 });
 
 function deterministicSummaryProvider(): ProviderClient {
@@ -278,6 +321,87 @@ function deterministicSummaryProvider(): ProviderClient {
       return;
     },
   };
+}
+
+function countedDeterministicSummaryProvider(): { provider: ProviderClient; counter: { count: number } } {
+  const counter = { count: 0 };
+  return {
+    counter,
+    provider: {
+      generate: async (request: GenerateRequest): Promise<GenerateResult> => {
+        counter.count += 1;
+        const childIds = extractChildIds(request);
+        const parentStatement = `Parent(${childIds.join("+")})`;
+
+        return {
+          text: JSON.stringify({
+            parent_statement: parentStatement,
+            why_true_from_children: `${childIds.join(", ")} jointly entail the parent claim.`,
+            new_terms_introduced: [],
+            complexity_score: 3,
+            abstraction_score: 3,
+            evidence_refs: childIds,
+            confidence: 0.9,
+          }),
+          model: "mock",
+          finishReason: "stop",
+          raw: {},
+        };
+      },
+      stream: async function* () {
+        return;
+      },
+    },
+  };
+}
+
+function buildReusableParentSummaries(tree: ExplanationTree): Record<string, ReusableParentSummary> {
+  const summaries: Record<string, ReusableParentSummary> = {};
+  for (const node of Object.values(tree.nodes)) {
+    if (
+      node.kind !== "parent" ||
+      node.whyTrueFromChildren === undefined ||
+      node.complexityScore === undefined ||
+      node.abstractionScore === undefined ||
+      node.confidence === undefined
+    ) {
+      continue;
+    }
+
+    const children: Array<{ id: string; statement: string }> = [];
+    let missingChild = false;
+    for (const childId of node.childIds) {
+      const child = tree.nodes[childId];
+      if (!child) {
+        missingChild = true;
+        break;
+      }
+      children.push({ id: child.id, statement: child.statement });
+    }
+    if (missingChild) {
+      continue;
+    }
+    summaries[node.id] = {
+      childStatementHash: computeChildStatementHash(children),
+      summary: {
+        parent_statement: node.statement,
+        why_true_from_children: node.whyTrueFromChildren,
+        new_terms_introduced: (node.newTermsIntroduced ?? []).slice(),
+        complexity_score: node.complexityScore,
+        abstraction_score: node.abstractionScore,
+        evidence_refs: node.evidenceRefs.slice(),
+        confidence: node.confidence,
+      },
+      policyDiagnostics: node.policyDiagnostics,
+    };
+  }
+  return summaries;
+}
+
+function computeChildStatementHash(children: Array<{ id: string; statement: string }>): string {
+  return createHash("sha256")
+    .update(children.map((child) => `${child.id}:${child.statement}`).join("\n"))
+    .digest("hex");
 }
 
 function extractChildIds(request: GenerateRequest): string[] {

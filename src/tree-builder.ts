@@ -47,6 +47,7 @@ export interface GroupingLayerDiagnostics {
   complexitySpreadByGroup: number[];
   warnings: GroupingWarning[];
   summaryBatches?: SummaryBatchDiagnostics[];
+  summaryReuse?: SummaryReuseDiagnostics;
 }
 
 export interface SummaryBatchDiagnostics {
@@ -54,6 +55,11 @@ export interface SummaryBatchDiagnostics {
   groupIndexes: number[];
   groupCount: number;
   inputNodeCount: number;
+}
+
+export interface SummaryReuseDiagnostics {
+  reusedGroupIndexes: number[];
+  generatedGroupIndexes: number[];
 }
 
 export interface ExplanationTree {
@@ -72,6 +78,21 @@ export interface TreeBuildRequest {
   config: ExplanationConfig;
   maxDepth?: number;
   summaryBatchSize?: number;
+  reusableParentSummaries?: Record<string, ReusableParentSummary>;
+}
+
+export interface ReusableParentSummary {
+  childStatementHash: string;
+  summary: {
+    parent_statement: string;
+    why_true_from_children: string;
+    new_terms_introduced: string[];
+    complexity_score: number;
+    abstraction_score: number;
+    evidence_refs: string[];
+    confidence: number;
+  };
+  policyDiagnostics?: ParentPolicyDiagnostics;
 }
 
 export interface TreeValidationIssue {
@@ -104,6 +125,7 @@ export class TreePolicyError extends Error {
 
 interface PendingSummaryTask {
   groupIndex: number;
+  parentId: string;
   orderedGroupNodeIds: string[];
   children: Array<{ id: string; statement: string; complexity?: number; prerequisiteIds?: string[] }>;
   preSummaryDecision: ParentPolicyDiagnostics["preSummary"];
@@ -160,6 +182,7 @@ export async function buildRecursiveExplanationTree(
 
   const hardDepthLimit = request.maxDepth ?? computeDepthLimit(leaves.length, request.config.maxChildrenPerParent);
   const summaryBatchSize = normalizeSummaryBatchSize(request.summaryBatchSize);
+  const reusableParentSummaries = request.reusableParentSummaries ?? {};
 
   let depth = 0;
   let activeNodeIds = leafIds.slice();
@@ -187,6 +210,8 @@ export async function buildRecursiveExplanationTree(
     const groups = groupingResult.groups;
     const summaryTasks: PendingSummaryTask[] = [];
     const nextLayerByGroupIndex: Array<string | undefined> = new Array(groups.length);
+    const reusedGroupIndexes: number[] = [];
+    const generatedGroupIndexes: number[] = [];
 
     for (let index = 0; index < groups.length; index += 1) {
       const groupNodeIds = groups[index];
@@ -207,6 +232,7 @@ export async function buildRecursiveExplanationTree(
           prerequisiteIds: leafInput?.prerequisiteIds,
         };
       });
+      const parentId = buildParentNodeId(depth, index, orderedGroupNodeIds);
 
       const preSummaryDecision = evaluatePreSummaryPolicy(children, request.config);
       if (!preSummaryDecision.ok) {
@@ -230,13 +256,58 @@ export async function buildRecursiveExplanationTree(
         });
       }
 
+      const reusableParent = reusableParentSummaries[parentId];
+      if (reusableParent && reusableParent.childStatementHash === computeChildStatementHash(children)) {
+        const postSummaryDecision = evaluatePostSummaryPolicy(children, reusableParent.summary, request.config);
+        if (postSummaryDecision.ok) {
+          const policyDiagnostics = reusableParent.policyDiagnostics
+            ? cloneParentPolicyDiagnostics(reusableParent.policyDiagnostics, depth, index)
+            : {
+                depth,
+                groupIndex: index,
+                retriesUsed: 0,
+                preSummary: preSummaryDecision,
+                postSummary: postSummaryDecision,
+              };
+          const parentNode: ExplanationTreeNode = {
+            id: parentId,
+            kind: "parent",
+            statement: reusableParent.summary.parent_statement,
+            childIds: orderedGroupNodeIds.slice(),
+            depth,
+            complexityScore: reusableParent.summary.complexity_score,
+            abstractionScore: reusableParent.summary.abstraction_score,
+            confidence: reusableParent.summary.confidence,
+            whyTrueFromChildren: reusableParent.summary.why_true_from_children,
+            newTermsIntroduced: reusableParent.summary.new_terms_introduced.slice(),
+            evidenceRefs: reusableParent.summary.evidence_refs.slice(),
+            policyDiagnostics,
+          };
+
+          nodes[parentId] = parentNode;
+          policyDiagnosticsByParent[parentId] = policyDiagnostics;
+          nextLayerByGroupIndex[index] = parentId;
+          groupPlan.push({
+            depth,
+            index,
+            inputNodeIds: orderedGroupNodeIds.slice(),
+            outputNodeId: parentId,
+            complexitySpread: groupingResult.diagnostics.complexitySpreadByGroup[index] ?? 0,
+          });
+          reusedGroupIndexes.push(index);
+          continue;
+        }
+      }
+
       summaryTasks.push({
         groupIndex: index,
+        parentId,
         orderedGroupNodeIds,
         children,
         preSummaryDecision,
         complexitySpread: groupingResult.diagnostics.complexitySpreadByGroup[index] ?? 0,
       });
+      generatedGroupIndexes.push(index);
     }
 
     const summaryBatches: SummaryBatchDiagnostics[] = [];
@@ -265,7 +336,7 @@ export async function buildRecursiveExplanationTree(
       for (let taskIndex = 0; taskIndex < batchTasks.length; taskIndex += 1) {
         const task = batchTasks[taskIndex];
         const parentSummary = parentSummaries[taskIndex];
-        const parentId = buildParentNodeId(depth, task.groupIndex, task.orderedGroupNodeIds);
+        const parentId = task.parentId;
         const parentNode: ExplanationTreeNode = {
           id: parentId,
           kind: "parent",
@@ -301,6 +372,13 @@ export async function buildRecursiveExplanationTree(
       complexitySpreadByGroup: groupingResult.diagnostics.complexitySpreadByGroup,
       warnings: groupingResult.diagnostics.warnings,
       summaryBatches,
+      summaryReuse:
+        reusedGroupIndexes.length > 0 || generatedGroupIndexes.length > 0
+          ? {
+              reusedGroupIndexes,
+              generatedGroupIndexes,
+            }
+          : undefined,
     });
 
     if (nextLayerIds.length >= activeNodeIds.length) {
@@ -463,6 +541,38 @@ function buildParentNodeId(depth: number, index: number, childIds: string[]): st
     .digest("hex")
     .slice(0, 16);
   return `p_${depth}_${index}_${digest}`;
+}
+
+function computeChildStatementHash(children: Array<{ id: string; statement: string }>): string {
+  return createHash("sha256")
+    .update(
+      children
+        .map((child) => `${child.id}:${child.statement}`)
+        .join("\n"),
+    )
+    .digest("hex");
+}
+
+function cloneParentPolicyDiagnostics(
+  diagnostics: ParentPolicyDiagnostics,
+  depth: number,
+  groupIndex: number,
+): ParentPolicyDiagnostics {
+  return {
+    depth,
+    groupIndex,
+    retriesUsed: diagnostics.retriesUsed,
+    preSummary: {
+      ok: diagnostics.preSummary.ok,
+      violations: diagnostics.preSummary.violations.map((violation) => ({ ...violation })),
+      metrics: { ...diagnostics.preSummary.metrics },
+    },
+    postSummary: {
+      ok: diagnostics.postSummary.ok,
+      violations: diagnostics.postSummary.violations.map((violation) => ({ ...violation })),
+      metrics: { ...diagnostics.postSummary.metrics },
+    },
+  };
 }
 
 function reorderGroupNodeIdsByPrerequisites(

@@ -1033,6 +1033,8 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
             changedLeafIds: delta.changedLeafIds.slice(0, 16),
             reusedParentSummaryCount: topologyRebuild.reusedParentSummaryCount,
             generatedParentSummaryCount: topologyRebuild.generatedParentSummaryCount,
+            reusedParentNodeCount: topologyRebuild.reusedParentNodeCount,
+            generatedParentNodeCount: topologyRebuild.generatedParentNodeCount,
             previousParentCount: topologyRebuild.previousParentCount,
             nextParentCount: topologyRebuild.nextParentCount,
           },
@@ -1578,13 +1580,17 @@ async function rebuildSnapshotForChangedLeaves(input: {
 }
 
 interface ParentSummaryRecord {
-  parent_statement: string;
-  why_true_from_children: string;
-  new_terms_introduced: string[];
-  complexity_score: number;
-  abstraction_score: number;
-  evidence_refs: string[];
-  confidence: number;
+  childStatementHash: string;
+  summary: {
+    parent_statement: string;
+    why_true_from_children: string;
+    new_terms_introduced: string[];
+    complexity_score: number;
+    abstraction_score: number;
+    evidence_refs: string[];
+    confidence: number;
+  };
+  policyDiagnostics?: ExplanationTree["policyDiagnosticsByParent"][string];
 }
 
 async function rebuildSnapshotWithParentSummaryReuse(input: {
@@ -1599,6 +1605,8 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
       snapshotHash: string;
       reusedParentSummaryCount: number;
       generatedParentSummaryCount: number;
+      reusedParentNodeCount: number;
+      generatedParentNodeCount: number;
       previousParentCount: number;
       nextParentCount: number;
     }
@@ -1610,36 +1618,11 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
     return undefined;
   }
 
-  const reuseCandidates = buildReusableParentSummaryMap(imported.tree);
-  let reusedParentSummaryCount = 0;
-  let generatedParentSummaryCount = 0;
-  const baseProvider = createDeterministicSummaryProvider();
-  const provider: ProviderClient = {
-    generate: async (request) => {
-      const prompt = request.messages[1]?.content ?? "";
-      const children = parseChildrenFromPrompt(prompt);
-      const targetComplexity = parsePromptNumericConstraint(prompt, "target_complexity", 3, 1, 5);
-      const targetAbstraction = parsePromptNumericConstraint(prompt, "target_abstraction", 3, 1, 5);
-      const reuseKey = computeParentSummaryReuseKey(children, targetComplexity, targetAbstraction);
-      const reusable = reuseCandidates.get(reuseKey);
-      if (reusable) {
-        reusedParentSummaryCount += 1;
-        return {
-          text: JSON.stringify(reusable),
-          model: "cache-parent-summary-reuse",
-          finishReason: "stop",
-          raw: { reuseKey },
-        };
-      }
-      generatedParentSummaryCount += 1;
-      return baseProvider.generate(request);
-    },
-    stream: baseProvider.stream,
-  };
-
-  const tree = await buildRecursiveExplanationTree(provider, {
+  const reusableParentSummaries = buildReusableParentSummaryMap(imported.tree);
+  const tree = await buildRecursiveExplanationTree(createDeterministicSummaryProvider(), {
     leaves: mapTheoremLeavesToTreeLeaves(input.leaves),
     config: input.config,
+    reusableParentSummaries,
   });
   const validation = validateExplanationTree(tree, input.config.maxChildrenPerParent);
   if (!validation.ok) {
@@ -1653,19 +1636,22 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
     leaves: input.leaves,
     config: input.config,
   });
+  const reuseStats = summarizeTreeSummaryReuse(tree.groupingDiagnostics);
   return {
     tree,
     snapshot,
     snapshotHash: computeTreeStorageSnapshotHash(snapshot),
-    reusedParentSummaryCount,
-    generatedParentSummaryCount,
+    reusedParentSummaryCount: reuseStats.reusedGroupCount,
+    generatedParentSummaryCount: reuseStats.generatedGroupCount,
+    reusedParentNodeCount: reuseStats.reusedGroupCount,
+    generatedParentNodeCount: reuseStats.generatedGroupCount,
     previousParentCount: Object.values(imported.tree.nodes).filter((node) => node.kind === "parent").length,
     nextParentCount: Object.values(tree.nodes).filter((node) => node.kind === "parent").length,
   };
 }
 
-function buildReusableParentSummaryMap(tree: ExplanationTree): Map<string, ParentSummaryRecord> {
-  const reusable = new Map<string, ParentSummaryRecord>();
+function buildReusableParentSummaryMap(tree: ExplanationTree): Record<string, ParentSummaryRecord> {
+  const reusable: Record<string, ParentSummaryRecord> = {};
   const parents = Object.values(tree.nodes)
     .filter((node): node is ExplanationTree["nodes"][string] & { kind: "parent" } => node.kind === "parent")
     .sort((left, right) => left.id.localeCompare(right.id));
@@ -1692,34 +1678,42 @@ function buildReusableParentSummaryMap(tree: ExplanationTree): Map<string, Paren
       continue;
     }
     const summary: ParentSummaryRecord = {
-      parent_statement: parent.statement,
-      why_true_from_children: parent.whyTrueFromChildren,
-      new_terms_introduced: (parent.newTermsIntroduced ?? []).slice(),
-      complexity_score: parent.complexityScore,
-      abstraction_score: parent.abstractionScore,
-      evidence_refs: parent.evidenceRefs.slice(),
-      confidence: parent.confidence,
+      childStatementHash: computeChildStatementHash(children),
+      summary: {
+        parent_statement: parent.statement,
+        why_true_from_children: parent.whyTrueFromChildren,
+        new_terms_introduced: (parent.newTermsIntroduced ?? []).slice(),
+        complexity_score: parent.complexityScore,
+        abstraction_score: parent.abstractionScore,
+        evidence_refs: parent.evidenceRefs.slice(),
+        confidence: parent.confidence,
+      },
+      policyDiagnostics: parent.policyDiagnostics,
     };
-    const key = computeParentSummaryReuseKey(children, summary.complexity_score, summary.abstraction_score);
-    if (!reusable.has(key)) {
-      reusable.set(key, summary);
-    }
+    reusable[parent.id] = summary;
   }
   return reusable;
 }
 
-function computeParentSummaryReuseKey(
+function computeChildStatementHash(
   children: Array<{ id: string; statement: string }>,
-  targetComplexity: number,
-  targetAbstraction: number,
 ): string {
-  return computeCanonicalRequestHash({
-    targetComplexity,
-    targetAbstraction,
-    children: children
-      .map((child) => ({ id: child.id, statement: child.statement }))
-      .sort((left, right) => left.id.localeCompare(right.id)),
-  });
+  return createHash("sha256")
+    .update(children.map((child) => `${child.id}:${child.statement}`).join("\n"))
+    .digest("hex");
+}
+
+function summarizeTreeSummaryReuse(groupingDiagnostics: ExplanationTree["groupingDiagnostics"]): {
+  reusedGroupCount: number;
+  generatedGroupCount: number;
+} {
+  let reusedGroupCount = 0;
+  let generatedGroupCount = 0;
+  for (const layer of groupingDiagnostics) {
+    reusedGroupCount += layer.summaryReuse?.reusedGroupIndexes.length ?? 0;
+    generatedGroupCount += layer.summaryReuse?.generatedGroupIndexes.length ?? 0;
+  }
+  return { reusedGroupCount, generatedGroupCount };
 }
 
 function parseParentGroupIndex(parentId: string): number {

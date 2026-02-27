@@ -431,6 +431,10 @@ describe("proof service", () => {
       expect(topologyDiagnostic).toBeDefined();
       expect(typeof topologyDiagnostic?.details?.reusedParentSummaryCount).toBe("number");
       expect(typeof topologyDiagnostic?.details?.generatedParentSummaryCount).toBe("number");
+      expect(typeof topologyDiagnostic?.details?.reusedParentNodeCount).toBe("number");
+      expect(typeof topologyDiagnostic?.details?.generatedParentNodeCount).toBe("number");
+      expect((topologyDiagnostic?.details?.reusedParentNodeCount as number) >= 0).toBe(true);
+      expect((topologyDiagnostic?.details?.generatedParentNodeCount as number) >= 0).toBe(true);
     } finally {
       clearProofDatasetCacheForTests();
       if (previousCacheDir === undefined) {

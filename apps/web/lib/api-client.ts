@@ -295,6 +295,7 @@ export interface CacheReportResponse {
         | "cache_hit"
         | "cache_semantic_hit"
         | "cache_incremental_subtree_rebuild"
+        | "cache_incremental_topology_rebuild"
         | "cache_incremental_rebuild"
         | "cache_miss"
         | "cache_write_failed"
