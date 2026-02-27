@@ -52,6 +52,7 @@ Diff semantics:
   - leaf: `leaf:<leaf_id>`
   - parent: `parent:<sorted_support_leaf_ids>`
 - Node support set is computed from reachable descendants only.
+- Cycles in parent graphs are short-circuited deterministically during support collection (no recursive overflow).
 - Changes are classified as `added | removed | changed` and sorted canonically.
 
 `changed` is emitted when signature-matched nodes differ in statement or depth.

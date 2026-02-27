@@ -498,6 +498,9 @@ function collectSupportLeafIds(tree: ExplanationTree, nodeId: string, memo: Map<
     return support.slice();
   }
 
+  // Set an interim value before descending so local cycles short-circuit
+  // deterministically instead of recursing unboundedly.
+  memo.set(nodeId, []);
   const support = new Set<string>();
   for (const childId of node.childIds) {
     const childSupport = collectSupportLeafIds(tree, childId, memo);

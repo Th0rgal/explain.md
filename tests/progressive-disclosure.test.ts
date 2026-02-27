@@ -120,6 +120,22 @@ describe("explanation diff", () => {
     expect(renderExplanationDiffCanonical(reportA)).toBe(renderExplanationDiffCanonical(reportB));
     expect(computeExplanationDiffHash(reportA)).toBe(computeExplanationDiffHash(reportB));
   });
+
+  test("handles cyclic parent graphs without stack overflow", () => {
+    const baseline = sampleCyclicTree();
+    const candidate = sampleCyclicTreeVariant();
+
+    const report = buildExplanationDiffReport(
+      baseline,
+      candidate,
+      baselineConfig(),
+      normalizeConfig({ ...baselineConfig(), language: "fr" }),
+    );
+
+    expect(report.regenerationPlan.scope).toBe("full");
+    expect(report.summary.total).toBeGreaterThan(0);
+    expect(report.changes.some((change) => change.type === "changed")).toBe(true);
+  });
 });
 
 function baselineConfig(): ExplanationConfig {
@@ -277,6 +293,67 @@ function sampleCandidateTreeWithScrambledNodeInsertion(): ExplanationTree {
       "leaf-b": tree.nodes["leaf-b"],
       "p-root-v2": tree.nodes["p-root-v2"],
       "leaf-a": tree.nodes["leaf-a"],
+    },
+  };
+}
+
+function sampleCyclicTree(): ExplanationTree {
+  return {
+    rootId: "p-root",
+    leafIds: ["leaf-a"],
+    configHash: "cfg-cycle-a",
+    groupPlan: [],
+    groupingDiagnostics: [],
+    policyDiagnosticsByParent: {},
+    maxDepth: 2,
+    nodes: {
+      "p-root": {
+        id: "p-root",
+        kind: "parent",
+        statement: "Root",
+        childIds: ["p-a"],
+        depth: 2,
+        evidenceRefs: ["p-a"],
+      },
+      "p-a": {
+        id: "p-a",
+        kind: "parent",
+        statement: "A",
+        childIds: ["p-b", "leaf-a"],
+        depth: 1,
+        evidenceRefs: ["p-b", "leaf-a"],
+      },
+      "p-b": {
+        id: "p-b",
+        kind: "parent",
+        statement: "B",
+        childIds: ["p-a"],
+        depth: 1,
+        evidenceRefs: ["p-a"],
+      },
+      "leaf-a": {
+        id: "leaf-a",
+        kind: "leaf",
+        statement: "Leaf A",
+        childIds: [],
+        depth: 0,
+        evidenceRefs: ["leaf-a"],
+      },
+    },
+  };
+}
+
+function sampleCyclicTreeVariant(): ExplanationTree {
+  const baseline = sampleCyclicTree();
+  return {
+    ...baseline,
+    configHash: "cfg-cycle-b",
+    nodes: {
+      ...baseline.nodes,
+      "p-a": {
+        ...baseline.nodes["p-a"],
+        statement: "A changed",
+      },
     },
   };
 }
