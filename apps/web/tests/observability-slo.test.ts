@@ -19,6 +19,7 @@ describe("observability SLO policy", () => {
         minProofUniqueTraceRate: 0.75,
         maxVerificationFailureRate: 0.3,
         minUiInteractionSuccessRate: 0.6,
+        minUiInteractionKeyboardActionRate: 0,
       },
     });
     const second = evaluateObservabilitySLOs({
@@ -30,6 +31,7 @@ describe("observability SLO policy", () => {
         minProofUniqueTraceRate: 0.75,
         maxVerificationFailureRate: 0.3,
         minUiInteractionSuccessRate: 0.6,
+        minUiInteractionKeyboardActionRate: 0,
       },
     });
 
@@ -39,6 +41,7 @@ describe("observability SLO policy", () => {
     expect(first.metrics.proof.cacheHitRate).toBe(0.5);
     expect(first.metrics.verification.maxP95LatencyMs).toBe(120);
     expect(first.metrics.uiInteraction.successRate).toBe(0.75);
+    expect(first.metrics.uiInteraction.keyboardActionRate).toBe(0);
   });
 
   it("emits machine-checkable failures when thresholds regress", () => {
@@ -58,6 +61,7 @@ describe("observability SLO policy", () => {
         maxVerificationP95LatencyMs: 100,
         maxVerificationMeanLatencyMs: 80,
         minUiInteractionSuccessRate: 0.9,
+        minUiInteractionKeyboardActionRate: 0.1,
         minUiInteractionParentTraceRate: 0.6,
         maxUiInteractionP95DurationMs: 10,
       },
@@ -71,6 +75,7 @@ describe("observability SLO policy", () => {
       "verification_p95_latency_above_max",
       "verification_mean_latency_above_max",
       "ui_interaction_success_rate_below_min",
+      "ui_interaction_keyboard_action_rate_below_min",
       "ui_interaction_parent_trace_rate_below_min",
       "ui_interaction_p95_duration_above_max",
     ]);
@@ -234,6 +239,8 @@ function buildUiInteractionSnapshot(): UiInteractionObservabilityMetricsSnapshot
     requestCount: 4,
     successCount: 3,
     failureCount: 1,
+    keyboardActionCount: 0,
+    keyboardActionRate: 0,
     uniqueTraceCount: 4,
     correlation: {
       parentTraceProvidedCount: 2,

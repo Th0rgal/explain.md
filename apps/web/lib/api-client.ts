@@ -555,6 +555,8 @@ export interface UiInteractionObservabilityMetricsResponse {
   requestCount: number;
   successCount: number;
   failureCount: number;
+  keyboardActionCount: number;
+  keyboardActionRate: number;
   uniqueTraceCount: number;
   correlation: {
     parentTraceProvidedCount: number;
@@ -620,6 +622,7 @@ export interface ObservabilitySloThresholdsInput {
   minVerificationParentTraceRate?: number;
   minUiInteractionRequestCount?: number;
   minUiInteractionSuccessRate?: number;
+  minUiInteractionKeyboardActionRate?: number;
   minUiInteractionParentTraceRate?: number;
   maxUiInteractionP95DurationMs?: number;
 }
@@ -637,6 +640,7 @@ export interface ObservabilitySloReportResponse {
     minVerificationParentTraceRate: number;
     minUiInteractionRequestCount: number;
     minUiInteractionSuccessRate: number;
+    minUiInteractionKeyboardActionRate: number;
     minUiInteractionParentTraceRate: number;
     maxUiInteractionP95DurationMs: number;
   };
@@ -656,6 +660,7 @@ export interface ObservabilitySloReportResponse {
     uiInteraction: {
       requestCount: number;
       successRate: number;
+      keyboardActionRate: number;
       parentTraceProvidedRate: number;
       maxP95DurationMs: number;
     };
@@ -673,6 +678,7 @@ export interface ObservabilitySloReportResponse {
       | "verification_parent_trace_rate_below_min"
       | "ui_interaction_request_count_below_min"
       | "ui_interaction_success_rate_below_min"
+      | "ui_interaction_keyboard_action_rate_below_min"
       | "ui_interaction_parent_trace_rate_below_min"
       | "ui_interaction_p95_duration_above_max";
     message: string;

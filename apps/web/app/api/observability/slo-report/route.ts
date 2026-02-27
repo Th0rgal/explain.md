@@ -35,6 +35,7 @@ function parseThresholds(params: URLSearchParams): Partial<ObservabilitySloThres
     minVerificationParentTraceRate: parseOptionalNumber(params, "minVerificationParentTraceRate"),
     minUiInteractionRequestCount: parseOptionalInteger(params, "minUiInteractionRequestCount"),
     minUiInteractionSuccessRate: parseOptionalNumber(params, "minUiInteractionSuccessRate"),
+    minUiInteractionKeyboardActionRate: parseOptionalNumber(params, "minUiInteractionKeyboardActionRate"),
     minUiInteractionParentTraceRate: parseOptionalNumber(params, "minUiInteractionParentTraceRate"),
     maxUiInteractionP95DurationMs: parseOptionalNumber(params, "maxUiInteractionP95DurationMs"),
   };

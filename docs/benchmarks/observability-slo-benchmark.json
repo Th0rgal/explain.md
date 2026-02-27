@@ -1,8 +1,8 @@
 {
   "schemaVersion": "1.0.0",
   "generatedAt": "2026-02-27T00:00:00.000Z",
-  "requestHash": "52306f6163c9c5060fb6b4f68cc4db9e76335bfc27bf985a55b847e8d92e11ca",
-  "outcomeHash": "207334eb5c0edae3d9a8f7182025a58c6042d6ec9e0d5c0da005dc9a702ffc08",
+  "requestHash": "2ae08aa3116c91222e4d42b732f55682e870106c357b0eb07345eaa3861a60b0",
+  "outcomeHash": "68ca419bf99c6114b6e7312ebab6a7bbbf7c2a0ba5df2b8be05ed1a98db69201",
   "parameters": {
     "profiles": [
       {
@@ -57,6 +57,7 @@
       "minVerificationParentTraceRate": 0.66,
       "minUiInteractionRequestCount": 5,
       "minUiInteractionSuccessRate": 1,
+      "minUiInteractionKeyboardActionRate": 0.2,
       "minUiInteractionParentTraceRate": 0.4,
       "maxUiInteractionP95DurationMs": 25
     },
@@ -71,6 +72,7 @@
       "minVerificationParentTraceRate": 0.9,
       "minUiInteractionRequestCount": 6,
       "minUiInteractionSuccessRate": 1,
+      "minUiInteractionKeyboardActionRate": 0.6,
       "minUiInteractionParentTraceRate": 0.8,
       "maxUiInteractionP95DurationMs": 10
     }
@@ -81,8 +83,8 @@
       "proofId": "seed-verity",
       "leafId": "Verity.ContractSpec.init_sound",
       "configHash": "a75632c3c71bea58a13445a49951b87763ebd9e868fb4f51ac128e6c783e8af7",
-      "requestHash": "5516437eebc9b48362f6efbc454a135c7c0ee985b7037eaf0a8fd2e458e2978d",
-      "outcomeHash": "5235a88b993dcf0a7c7f9c37f5b24ea99cd8b8f02b1814246d865136cb4cf33a",
+      "requestHash": "194b72d999edd0a00312cb7e3f027eb91caab603e2a76b0ae59fa2167e60c011",
+      "outcomeHash": "ed858f70708d576821fd2e3de80afb3f3c0138e32d3a6d55bb1048263dc8aa46",
       "snapshots": {
         "proof": {
           "snapshotHash": "62b0a6c20db7c8cc394be67ac3fe9cc1d383321b74d993968e70753ab8cb3d6a",
@@ -100,9 +102,10 @@
           "maxMeanLatencyMs": 12
         },
         "uiInteraction": {
-          "snapshotHash": "43bfc4b28308b10f623f272e1f83e2b2ab85184369e61d745e2d6a828055a2c0",
+          "snapshotHash": "a234793feed3689f2e514ee1be76cdba34b192aa0ee6f2c9ff7287e91bf249c2",
           "requestCount": 5,
           "successRate": 1,
+          "keyboardActionRate": 0.2,
           "parentTraceProvidedRate": 0.6,
           "maxP95DurationMs": 12
         }
@@ -111,7 +114,7 @@
         "baseline": {
           "thresholdPass": true,
           "thresholdFailureCodes": [],
-          "reportSnapshotHash": "e9da4acb80bc92841dd37cc62d29ade5b32f3a93fb54686afd9f45d5597195fa"
+          "reportSnapshotHash": "a69bab9779ef17c5cbbf6cbac56c3dc4d715b6cdb7451c9507f318a66415bb0d"
         },
         "strictRegression": {
           "thresholdPass": false,
@@ -123,10 +126,11 @@
             "verification_mean_latency_above_max",
             "verification_parent_trace_rate_below_min",
             "ui_interaction_request_count_below_min",
+            "ui_interaction_keyboard_action_rate_below_min",
             "ui_interaction_parent_trace_rate_below_min",
             "ui_interaction_p95_duration_above_max"
           ],
-          "reportSnapshotHash": "b4aaa3f7c40948ad11f70eac3d20a4beb30559abed4e082071bc83b74fbbd8d5"
+          "reportSnapshotHash": "c14e25da086e8dfd6847d618c8cad73b0d95ed2450c3387fb0c18e9c35d8b544"
         }
       }
     },
@@ -135,8 +139,8 @@
       "proofId": "lean-verity-fixture",
       "leafId": "lean:Verity/Loop:loop_preserves:3:1",
       "configHash": "a75632c3c71bea58a13445a49951b87763ebd9e868fb4f51ac128e6c783e8af7",
-      "requestHash": "ce840680c9192ec07024c60afac5c1c6a0483e6eafa9c5dce3d37d9b09540f81",
-      "outcomeHash": "e8c22327677ce69b565881cedcd736de8a8351a88576c3df16aea7e03419bc0e",
+      "requestHash": "3d3e3acd3dfdcffa483870e8e12c74f0486cd66b43eaaa8e2d4879ab071a2641",
+      "outcomeHash": "39a1b3e5efe42a9b6e9527b51ea853e853d80f2fb851f1358506076bf10a7bb6",
       "snapshots": {
         "proof": {
           "snapshotHash": "0f605b3f803e81fcdeeceae94c8afbe228f06b93ca2c8cf04f780a00d5be5807",
@@ -154,9 +158,10 @@
           "maxMeanLatencyMs": 12
         },
         "uiInteraction": {
-          "snapshotHash": "43bfc4b28308b10f623f272e1f83e2b2ab85184369e61d745e2d6a828055a2c0",
+          "snapshotHash": "a234793feed3689f2e514ee1be76cdba34b192aa0ee6f2c9ff7287e91bf249c2",
           "requestCount": 5,
           "successRate": 1,
+          "keyboardActionRate": 0.2,
           "parentTraceProvidedRate": 0.6,
           "maxP95DurationMs": 12
         }
@@ -165,7 +170,7 @@
         "baseline": {
           "thresholdPass": true,
           "thresholdFailureCodes": [],
-          "reportSnapshotHash": "b3bd3d821ce6a067ec688bd903392d5790f23bc4a57907ed032d914151c68bf9"
+          "reportSnapshotHash": "9390ebbfdd1032b2a506a304cd7a439660201bdc9e25ee391e36b22bcab4bea8"
         },
         "strictRegression": {
           "thresholdPass": false,
@@ -176,10 +181,11 @@
             "verification_mean_latency_above_max",
             "verification_parent_trace_rate_below_min",
             "ui_interaction_request_count_below_min",
+            "ui_interaction_keyboard_action_rate_below_min",
             "ui_interaction_parent_trace_rate_below_min",
             "ui_interaction_p95_duration_above_max"
           ],
-          "reportSnapshotHash": "0db8787a2dbb80e490238c7103d7eb51389fd4a88bfe65de824f1ffd933534e2"
+          "reportSnapshotHash": "ddcadefbde9402417736fb66bba723ed88569e48672e3fb3a6d495bd6e9d9855"
         }
       }
     }
@@ -201,9 +207,10 @@
       "maxMeanLatencyMs": 12
     },
     "uiInteraction": {
-      "snapshotHash": "e9f12eb03c02a1ecfafc2d156a8a06def35103370a3dd1061dcc150c211507d9",
+      "snapshotHash": "5fb516b58ba64ad53dbb29feda537757150ee19fd0574e52f367f83c1263f700",
       "requestCount": 10,
       "successRate": 1,
+      "keyboardActionRate": 0.2,
       "parentTraceProvidedRate": 0.6,
       "maxP95DurationMs": 12
     }
@@ -212,12 +219,13 @@
     "baseline": {
       "thresholdPass": true,
       "thresholdFailureCodes": [],
-      "reportSnapshotHash": "82d18c9f74a3c4910d10fdd2f599c7985bcda553f767e77a6848fcf74ce735fe"
+      "reportSnapshotHash": "6162acb11b5dee816f07589201c1482b3efa776cbadff34155f35cff9e1425be"
     },
     "strictRegression": {
       "thresholdPass": false,
       "thresholdFailureCodes": [
         "lean-verity-fixture:proof_request_count_below_min",
+        "lean-verity-fixture:ui_interaction_keyboard_action_rate_below_min",
         "lean-verity-fixture:ui_interaction_p95_duration_above_max",
         "lean-verity-fixture:ui_interaction_parent_trace_rate_below_min",
         "lean-verity-fixture:ui_interaction_request_count_below_min",
@@ -227,6 +235,7 @@
         "lean-verity-fixture:verification_request_count_below_min",
         "seed-verity:proof_cache_hit_rate_below_min",
         "seed-verity:proof_request_count_below_min",
+        "seed-verity:ui_interaction_keyboard_action_rate_below_min",
         "seed-verity:ui_interaction_p95_duration_above_max",
         "seed-verity:ui_interaction_parent_trace_rate_below_min",
         "seed-verity:ui_interaction_request_count_below_min",
@@ -235,7 +244,7 @@
         "seed-verity:verification_parent_trace_rate_below_min",
         "seed-verity:verification_request_count_below_min"
       ],
-      "reportSnapshotHash": "4b32b60fb714a63c4314ca18a1ba6a4834dab88d12064eea266065f8c1aa21c0"
+      "reportSnapshotHash": "42f87b4803195587bb8d14ca846dcfd539b971f6063cb3ae640cdf059b96b1d8"
     },
     "byProfile": [
       {
@@ -243,7 +252,7 @@
         "baseline": {
           "thresholdPass": true,
           "thresholdFailureCodes": [],
-          "reportSnapshotHash": "e9da4acb80bc92841dd37cc62d29ade5b32f3a93fb54686afd9f45d5597195fa"
+          "reportSnapshotHash": "a69bab9779ef17c5cbbf6cbac56c3dc4d715b6cdb7451c9507f318a66415bb0d"
         },
         "strictRegression": {
           "thresholdPass": false,
@@ -255,10 +264,11 @@
             "verification_mean_latency_above_max",
             "verification_parent_trace_rate_below_min",
             "ui_interaction_request_count_below_min",
+            "ui_interaction_keyboard_action_rate_below_min",
             "ui_interaction_parent_trace_rate_below_min",
             "ui_interaction_p95_duration_above_max"
           ],
-          "reportSnapshotHash": "b4aaa3f7c40948ad11f70eac3d20a4beb30559abed4e082071bc83b74fbbd8d5"
+          "reportSnapshotHash": "c14e25da086e8dfd6847d618c8cad73b0d95ed2450c3387fb0c18e9c35d8b544"
         }
       },
       {
@@ -266,7 +276,7 @@
         "baseline": {
           "thresholdPass": true,
           "thresholdFailureCodes": [],
-          "reportSnapshotHash": "b3bd3d821ce6a067ec688bd903392d5790f23bc4a57907ed032d914151c68bf9"
+          "reportSnapshotHash": "9390ebbfdd1032b2a506a304cd7a439660201bdc9e25ee391e36b22bcab4bea8"
         },
         "strictRegression": {
           "thresholdPass": false,
@@ -277,10 +287,11 @@
             "verification_mean_latency_above_max",
             "verification_parent_trace_rate_below_min",
             "ui_interaction_request_count_below_min",
+            "ui_interaction_keyboard_action_rate_below_min",
             "ui_interaction_parent_trace_rate_below_min",
             "ui_interaction_p95_duration_above_max"
           ],
-          "reportSnapshotHash": "0db8787a2dbb80e490238c7103d7eb51389fd4a88bfe65de824f1ffd933534e2"
+          "reportSnapshotHash": "ddcadefbde9402417736fb66bba723ed88569e48672e3fb3a6d495bd6e9d9855"
         }
       }
     ]

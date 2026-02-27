@@ -50,11 +50,11 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 - Observability SLO report contract:
   - `GET /api/observability/slo-report`
   - combines proof-query, verification, and UI-interaction snapshots into deterministic threshold evaluation (`thresholdPass`, `thresholdFailures`, `snapshotHash`)
-  - supports threshold override query params: `minProofRequestCount`, `minVerificationRequestCount`, `minProofCacheHitRate`, `minProofUniqueTraceRate`, `maxVerificationFailureRate`, `maxVerificationP95LatencyMs`, `maxVerificationMeanLatencyMs`, `minVerificationParentTraceRate`, `minUiInteractionRequestCount`, `minUiInteractionSuccessRate`, `minUiInteractionParentTraceRate`, `maxUiInteractionP95DurationMs`
+  - supports threshold override query params: `minProofRequestCount`, `minVerificationRequestCount`, `minProofCacheHitRate`, `minProofUniqueTraceRate`, `maxVerificationFailureRate`, `maxVerificationP95LatencyMs`, `maxVerificationMeanLatencyMs`, `minVerificationParentTraceRate`, `minUiInteractionRequestCount`, `minUiInteractionSuccessRate`, `minUiInteractionKeyboardActionRate`, `minUiInteractionParentTraceRate`, `maxUiInteractionP95DurationMs`
 - UI interaction observability contracts:
   - `POST /api/observability/ui-interactions` records deterministic browser interaction traces with canonical `requestId`/`traceId`
     - keyboard intent flows are recorded as `tree_keyboard`; direct tree action events are emitted only for non-keyboard sources to avoid duplicate interaction counts
-  - `GET /api/observability/ui-interaction-metrics` exports deterministic rolling-window UI interaction aggregates (`requestCount`, success/failure rate, parent-trace rate, per-interaction duration stats) with `snapshotHash`
+  - `GET /api/observability/ui-interaction-metrics` exports deterministic rolling-window UI interaction aggregates (`requestCount`, success/failure rate, `keyboardActionCount`, `keyboardActionRate`, parent-trace rate, per-interaction duration stats) with `snapshotHash`
   - `GET /api/observability/ui-interaction-ledger` exports deterministic durable-retention diagnostics (`persistedEventCount`, `rollingWindowRequestCount`, `droppedFromRollingWindowCount`, `appendFailureCount`, `latestRequestId`, retention `mode`/`pathHash`) with `snapshotHash`
 
 ## Determinism and provenance

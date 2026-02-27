@@ -110,6 +110,7 @@ export interface ObservabilitySloBenchmarkReport {
       snapshotHash: string;
       requestCount: number;
       successRate: number;
+      keyboardActionRate: number;
       parentTraceProvidedRate: number;
       maxP95DurationMs: number;
     };
@@ -158,6 +159,7 @@ interface BenchmarkProfileReport {
       snapshotHash: string;
       requestCount: number;
       successRate: number;
+      keyboardActionRate: number;
       parentTraceProvidedRate: number;
       maxP95DurationMs: number;
     };
@@ -268,6 +270,10 @@ export async function runObservabilitySloBenchmark(
       profileReports.length === 0
         ? 0
         : sum(profileReports.map((profile) => profile.snapshots.uiInteraction.successRate)) / profileReports.length,
+    keyboardActionRate:
+      profileReports.length === 0
+        ? 0
+        : sum(profileReports.map((profile) => profile.snapshots.uiInteraction.keyboardActionRate)) / profileReports.length,
     parentTraceProvidedRate:
       profileReports.length === 0
         ? 0
@@ -419,7 +425,7 @@ async function runBenchmarkProfile(options: {
     });
     recordUiInteractionEvent({
       proofId: profile.proofId,
-      interaction: "tree_expand_toggle",
+      interaction: "tree_keyboard",
       source: "keyboard",
       success: true,
       parentTraceId: "trace-parent-benchmark",
@@ -517,6 +523,7 @@ async function runBenchmarkProfile(options: {
           snapshotHash: uiInteractionMetrics.snapshotHash,
           requestCount: uiInteractionMetrics.requestCount,
           successRate: uiInteractionMetrics.requestCount === 0 ? 0 : uiInteractionMetrics.successCount / uiInteractionMetrics.requestCount,
+          keyboardActionRate: uiInteractionMetrics.keyboardActionRate,
           parentTraceProvidedRate: uiInteractionMetrics.correlation.parentTraceProvidedRate,
           maxP95DurationMs: Math.max(...uiInteractionMetrics.interactions.map((entry) => entry.p95DurationMs), 0),
         },
@@ -598,6 +605,7 @@ function buildBaselineThresholds(): ObservabilitySloThresholds {
     minVerificationParentTraceRate: 0.66,
     minUiInteractionRequestCount: 5,
     minUiInteractionSuccessRate: 1,
+    minUiInteractionKeyboardActionRate: 0.2,
     minUiInteractionParentTraceRate: 0.4,
     maxUiInteractionP95DurationMs: 25,
   };
@@ -615,6 +623,7 @@ function buildStrictThresholds(): ObservabilitySloThresholds {
     minVerificationParentTraceRate: 0.9,
     minUiInteractionRequestCount: 6,
     minUiInteractionSuccessRate: 1,
+    minUiInteractionKeyboardActionRate: 0.6,
     minUiInteractionParentTraceRate: 0.8,
     maxUiInteractionP95DurationMs: 10,
   };

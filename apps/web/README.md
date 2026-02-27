@@ -62,7 +62,7 @@ The tree panel uses incremental root/children/path queries:
     - emits deterministic `requestId` and `traceId`
     - keyboard navigation/activation emits `tree_keyboard`; direct tree actions (`tree_expand_toggle`, `tree_select_leaf`) emit only on non-keyboard sources to prevent duplicate request counting and source drift
   - `GET /api/observability/ui-interaction-metrics`
-    - deterministic rolling-window aggregates (`requestCount`, `successCount`, `failureCount`, `uniqueTraceCount`, parent-trace rate, per-interaction `meanDurationMs`/`p95DurationMs`) + `snapshotHash`
+    - deterministic rolling-window aggregates (`requestCount`, `successCount`, `failureCount`, `keyboardActionCount`, `keyboardActionRate`, `uniqueTraceCount`, parent-trace rate, per-interaction `meanDurationMs`/`p95DurationMs`) + `snapshotHash`
   - `GET /api/observability/ui-interaction-ledger`
     - deterministic durable retention snapshot for UI traces (`persistedEventCount`, `rollingWindowRequestCount`, `droppedFromRollingWindowCount`, `appendFailureCount`, `latestRequestId`, retention mode/path hash) + `snapshotHash`
 - Observability SLO/alert report endpoint:
@@ -79,6 +79,7 @@ The tree panel uses incremental root/children/path queries:
     - `minVerificationParentTraceRate`
     - `minUiInteractionRequestCount`
     - `minUiInteractionSuccessRate`
+    - `minUiInteractionKeyboardActionRate`
     - `minUiInteractionParentTraceRate`
     - `maxUiInteractionP95DurationMs`
 - Query deterministic pedagogy calibration metrics + threshold gates with `/api/proofs/policy-report`.

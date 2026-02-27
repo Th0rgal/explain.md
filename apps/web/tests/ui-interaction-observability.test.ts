@@ -52,6 +52,8 @@ describe("ui interaction observability", () => {
     expect(first.requestCount).toBe(3);
     expect(first.successCount).toBe(2);
     expect(first.failureCount).toBe(1);
+    expect(first.keyboardActionCount).toBe(0);
+    expect(first.keyboardActionRate).toBe(0);
     expect(first.correlation.parentTraceProvidedRate).toBeCloseTo(1 / 3, 5);
     expect(first.interactions.find((entry) => entry.interaction === "config_update")?.requestCount).toBe(1);
     expect(first.interactions.find((entry) => entry.interaction === "verification_run")?.p95DurationMs).toBe(15);

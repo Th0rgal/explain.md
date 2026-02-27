@@ -14,6 +14,7 @@ export interface ObservabilitySloThresholds {
   minVerificationParentTraceRate: number;
   minUiInteractionRequestCount: number;
   minUiInteractionSuccessRate: number;
+  minUiInteractionKeyboardActionRate: number;
   minUiInteractionParentTraceRate: number;
   maxUiInteractionP95DurationMs: number;
 }
@@ -30,6 +31,7 @@ export interface ObservabilitySloThresholdFailure {
     | "verification_parent_trace_rate_below_min"
     | "ui_interaction_request_count_below_min"
     | "ui_interaction_success_rate_below_min"
+    | "ui_interaction_keyboard_action_rate_below_min"
     | "ui_interaction_parent_trace_rate_below_min"
     | "ui_interaction_p95_duration_above_max";
   message: string;
@@ -60,6 +62,7 @@ export interface ObservabilitySloReport {
     uiInteraction: {
       requestCount: number;
       successRate: number;
+      keyboardActionRate: number;
       parentTraceProvidedRate: number;
       maxP95DurationMs: number;
     };
@@ -84,6 +87,7 @@ export const DEFAULT_OBSERVABILITY_SLO_THRESHOLDS: ObservabilitySloThresholds = 
   minVerificationParentTraceRate: 0,
   minUiInteractionRequestCount: 1,
   minUiInteractionSuccessRate: 0.95,
+  minUiInteractionKeyboardActionRate: 0,
   minUiInteractionParentTraceRate: 0,
   maxUiInteractionP95DurationMs: 500,
 };
@@ -112,6 +116,7 @@ export function evaluateObservabilitySLOs(input: {
   const parentTraceProvidedRate = input.verification.correlation.parentTraceProvidedRate;
   const uiInteractionRequestCount = input.uiInteraction.requestCount;
   const uiInteractionSuccessRate = uiInteractionRequestCount === 0 ? 0 : input.uiInteraction.successCount / uiInteractionRequestCount;
+  const uiInteractionKeyboardActionRate = input.uiInteraction.keyboardActionRate;
   const uiInteractionParentTraceRate = input.uiInteraction.correlation.parentTraceProvidedRate;
   const uiInteractionMaxP95DurationMs =
     input.uiInteraction.interactions.length === 0
@@ -190,6 +195,13 @@ export function evaluateObservabilitySLOs(input: {
     message: "UI interaction success rate is below configured minimum.",
   });
   pushFailureIfLessThan(failures, {
+    actual: uiInteractionKeyboardActionRate,
+    expected: thresholds.minUiInteractionKeyboardActionRate,
+    code: "ui_interaction_keyboard_action_rate_below_min",
+    metric: "uiInteraction.keyboardActionRate",
+    message: "UI interaction keyboard-action rate is below configured minimum.",
+  });
+  pushFailureIfLessThan(failures, {
     actual: uiInteractionParentTraceRate,
     expected: thresholds.minUiInteractionParentTraceRate,
     code: "ui_interaction_parent_trace_rate_below_min",
@@ -224,6 +236,7 @@ export function evaluateObservabilitySLOs(input: {
       uiInteraction: {
         requestCount: uiInteractionRequestCount,
         successRate: uiInteractionSuccessRate,
+        keyboardActionRate: uiInteractionKeyboardActionRate,
         parentTraceProvidedRate: uiInteractionParentTraceRate,
         maxP95DurationMs: uiInteractionMaxP95DurationMs,
       },
@@ -277,6 +290,10 @@ function resolveThresholds(overrides: Partial<ObservabilitySloThresholds> | unde
     minUiInteractionSuccessRate: clampUnit(
       overrides?.minUiInteractionSuccessRate,
       DEFAULT_OBSERVABILITY_SLO_THRESHOLDS.minUiInteractionSuccessRate,
+    ),
+    minUiInteractionKeyboardActionRate: clampUnit(
+      overrides?.minUiInteractionKeyboardActionRate,
+      DEFAULT_OBSERVABILITY_SLO_THRESHOLDS.minUiInteractionKeyboardActionRate,
     ),
     minUiInteractionParentTraceRate: clampUnit(
       overrides?.minUiInteractionParentTraceRate,

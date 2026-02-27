@@ -423,6 +423,8 @@ describe("api client", () => {
           requestCount: 3,
           successCount: 3,
           failureCount: 0,
+          keyboardActionCount: 1,
+          keyboardActionRate: 1 / 3,
           uniqueTraceCount: 3,
           correlation: {
             parentTraceProvidedCount: 2,
@@ -537,6 +539,7 @@ describe("api client", () => {
             minVerificationParentTraceRate: 0.5,
             minUiInteractionRequestCount: 2,
             minUiInteractionSuccessRate: 0.95,
+            minUiInteractionKeyboardActionRate: 0.4,
             minUiInteractionParentTraceRate: 0.4,
             maxUiInteractionP95DurationMs: 200,
           },
@@ -556,6 +559,7 @@ describe("api client", () => {
             uiInteraction: {
               requestCount: 3,
               successRate: 1,
+              keyboardActionRate: 2 / 3,
               parentTraceProvidedRate: 2 / 3,
               maxP95DurationMs: 12,
             },
@@ -581,6 +585,7 @@ describe("api client", () => {
       minVerificationParentTraceRate: 0.5,
       minUiInteractionRequestCount: 2,
       minUiInteractionSuccessRate: 0.95,
+      minUiInteractionKeyboardActionRate: 0.4,
       minUiInteractionParentTraceRate: 0.4,
       maxUiInteractionP95DurationMs: 200,
     });
@@ -595,6 +600,7 @@ describe("api client", () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("minVerificationParentTraceRate=0.5");
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("minUiInteractionRequestCount=2");
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("minUiInteractionSuccessRate=0.95");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("minUiInteractionKeyboardActionRate=0.4");
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("minUiInteractionParentTraceRate=0.4");
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("maxUiInteractionP95DurationMs=200");
   });

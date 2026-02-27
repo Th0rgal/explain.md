@@ -54,6 +54,8 @@ export interface UiInteractionObservabilityMetricsSnapshot {
   requestCount: number;
   successCount: number;
   failureCount: number;
+  keyboardActionCount: number;
+  keyboardActionRate: number;
   uniqueTraceCount: number;
   correlation: {
     parentTraceProvidedCount: number;
@@ -177,6 +179,7 @@ export function exportUiInteractionObservabilityMetrics(
   const requestCount = uiInteractionEvents.length;
   const successCount = uiInteractionEvents.filter((event) => event.success).length;
   const failureCount = requestCount - successCount;
+  const keyboardActionCount = uiInteractionEvents.filter((event) => event.interaction === "tree_keyboard").length;
   const uniqueTraceCount = new Set(uiInteractionEvents.map((event) => event.traceId)).size;
   const parentTraceProvidedCount = uiInteractionEvents.filter((event) => event.parentTraceProvided).length;
   const interactionOrder: UiInteractionKind[] = [
@@ -209,6 +212,8 @@ export function exportUiInteractionObservabilityMetrics(
     requestCount,
     successCount,
     failureCount,
+    keyboardActionCount,
+    keyboardActionRate: requestCount === 0 ? 0 : keyboardActionCount / requestCount,
     uniqueTraceCount,
     correlation: {
       parentTraceProvidedCount,
