@@ -10,7 +10,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit --incremental false",
     "test": "vitest run",
-    "benchmark:cache": "tsx scripts/proof-cache-benchmark.ts --out ../../docs/benchmarks/proof-cache-benchmark.json"
+    "benchmark:cache": "tsx scripts/proof-cache-benchmark.ts --out ../../docs/benchmarks/proof-cache-benchmark.json",
+    "benchmark:tree-a11y": "tsx scripts/tree-a11y-evaluation.ts --out ../../docs/benchmarks/tree-a11y-evaluation.json"
   },
   "dependencies": {
     "@react-three/drei": "^9.122.0",

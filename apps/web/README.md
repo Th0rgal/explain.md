@@ -46,6 +46,7 @@ The tree panel uses incremental root/children/path queries:
   - Optional threshold overrides: `maxUnsupportedParentRate`, `maxPrerequisiteViolationRate`, `maxPolicyViolationRate`, `maxTermJumpRate`, `maxComplexitySpreadMean`, `minEvidenceCoverageMean`, `minVocabularyContinuityMean`, `minRepartitionEventRate`, `maxRepartitionEventRate`, `maxRepartitionMaxRound`.
 - Query deterministic cache reuse diagnostics with `/api/proofs/cache-report` (`status`, `cacheKey`, `sourceFingerprint`, `snapshotHash`, `cacheEntryHash`) plus optional `blockedSubtreePlan` for topology-recovery auditing (`cache_topology_recovery_hit`, `cache_blocked_subtree_rebuild_hit`, `cache_topology_removal_subtree_rebuild_hit`, `cache_topology_addition_subtree_insertion_rebuild_hit`, `cache_topology_addition_subtree_regeneration_rebuild_hit`, `cache_topology_mixed_subtree_regeneration_rebuild_hit`, `cache_topology_regeneration_rebuild_hit`, `cache_blocked_subtree_full_rebuild`). Topology-removal hits include machine-checkable subtree recovery counters and `recoveryHash`; addition-only shape hits include `recoveryMode`, `addedLeafCount`, `insertedParentCount`, and `additionRecoveryHash`; mixed-shape hits include removal + regeneration telemetry and `mixedRecoveryHash`; topology-regeneration hits include reuse-mode counters and `regenerationHash`.
 - Run deterministic cache benchmark evidence generation with `npm run benchmark:cache` (writes `docs/benchmarks/proof-cache-benchmark.json` from repo root).
+- Run deterministic assistive-tech interaction benchmark evidence with `npm run benchmark:tree-a11y` (writes `docs/benchmarks/tree-a11y-evaluation.json` from repo root).
 - Use shared config parser (`lib/config-input.ts`) across query routes to keep config semantics consistent.
 - Use shared config parser (`lib/config-input.ts`) across both query and POST routes (`/api/proofs/view`, `/api/proofs/diff`) so regeneration and tree-shape semantics do not drift.
 - Query/config contracts now expose the full pedagogy controls used by tree generation:
@@ -94,6 +95,11 @@ The tree panel uses incremental root/children/path queries:
   - `NEXT_PUBLIC_EXPLAIN_MD_TREE_VIRTUALIZATION_OVERSCAN_ROWS` (default `6`)
 - Diff panel truncation threshold can be configured with:
   - `NEXT_PUBLIC_EXPLAIN_MD_DIFF_MAX_CHANGES` (default `24`, clamped to `1..200`)
+- Tree accessibility benchmark uses a fixed deterministic fixture and key sequence, and records:
+  - per-step keyboard intent (`set-active-index`/`expand`/`collapse`/`noop`)
+  - active-row ARIA metadata (`aria-activedescendant`, `aria-level`, `aria-posinset`, `aria-setsize`)
+  - render-mode diagnostics (`full`/`windowed`/`virtualized`) with hidden row counts
+  - canonical `requestHash` and `outcomeHash` for reproducible CI evidence
 - Job IDs are deterministic and monotonic (`job-000001`, `job-000002`, ...).
 - Reproducibility contract values can be configured with:
   - `EXPLAIN_MD_VERIFICATION_PROJECT_ROOT`

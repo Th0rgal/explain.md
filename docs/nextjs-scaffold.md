@@ -57,6 +57,7 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 - Lean fixture datasets are persisted under `.explain-md/web-proof-cache` (override with `EXPLAIN_MD_WEB_PROOF_CACHE_DIR`) and invalidated by source fingerprint + config hash.
 - Lean fixture root lookup can be overridden with `EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT` for deterministic benchmark/invalidation runs against temporary fixture copies.
 - Deterministic benchmark artifact generation is available via `npm run web:bench:cache` (writes `docs/benchmarks/proof-cache-benchmark.json`).
+- Deterministic assistive-tech interaction benchmark is available via `npm run web:bench:tree-a11y` (writes `docs/benchmarks/tree-a11y-evaluation.json`).
 - The Lean fixture uses a deterministic summary provider (`temperature=0` behavior with fixed evidence-only synthesis), so parent statements remain child-entailed and reproducible.
 - Reproducibility contract for each queued job is derived from the selected theorem leaf:
   - source revision (`EXPLAIN_MD_SOURCE_REVISION` or Vercel commit SHA fallback)
@@ -88,6 +89,9 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - active-row diagnostics remain machine-checkable (`data-tree-active-node-id`, `data-tree-active-row-index`)
   - assistive-tech announcements are deterministic and surfaced on the tree panel as `data-tree-live-message`
   - `Enter` / `Space` applies the active row action (parent expand/collapse, leaf selection)
+  - evaluation harness now emits a deterministic multi-step keyboard transcript with ARIA snapshots and render-mode diagnostics:
+    - hashes: `requestHash`, `outcomeHash`
+    - step contract: `intentKind`, `activeNodeId`, `ariaActivedescendant`, `ariaLevel`, `ariaPosInSet`, `ariaSetSize`, `renderMode`
 - Explanation diff panel rendering is deterministic and provenance-auditable:
   - canonical ordering by `key`, then `type`, then `kind`
   - sorted per-change `supportLeafIds`
