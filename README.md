@@ -19,6 +19,7 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #17 follow-up: browser-callable verification HTTP API with deterministic route payloads, persisted ledger-backed job querying, and command-runner integration.
 - Issue #16: deterministic leaf-detail/provenance contract for theorem inspection, source linking/share references, and verification-job binding for browser panels.
 - Issue #18: deterministic faithfulness/simplicity evaluation harness with per-parent/per-depth quality metrics, threshold gating, and canonical report hashing.
+- Issue #15 (backend contract): deterministic progressive-disclosure projection and config-aware explanation diff contract for root-first UI rendering.
 
 ## Local checks
 ```bash
@@ -55,3 +56,4 @@ EXPLAIN_MD_LIVE_RPC_API_KEY=... npm run test:live:summary
 - [Browser-triggered verification flow](docs/verification-flow.md)
 - [Verification HTTP API service](docs/verification-api.md)
 - [Leaf detail contract](docs/leaf-detail.md)
+- [Progressive disclosure + explanation diff](docs/progressive-disclosure.md)
