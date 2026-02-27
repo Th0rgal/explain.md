@@ -41,7 +41,8 @@ The tree panel uses incremental root/children/path queries:
 - Surface per-parent policy diagnostics (pre/post compliance + metrics) directly in tree rows.
 - Query deterministic pedagogy calibration metrics + threshold gates with `/api/proofs/policy-report`.
   - Optional threshold overrides: `maxUnsupportedParentRate`, `maxPrerequisiteViolationRate`, `maxPolicyViolationRate`, `maxTermJumpRate`, `maxComplexitySpreadMean`, `minEvidenceCoverageMean`, `minVocabularyContinuityMean`.
-- Query deterministic cache reuse diagnostics with `/api/proofs/cache-report` (`status`, `cacheKey`, `sourceFingerprint`, `snapshotHash`, `cacheEntryHash`).
+- Query deterministic cache reuse diagnostics with `/api/proofs/cache-report` (`status`, `cacheKey`, `sourceFingerprint`, `snapshotHash`, `cacheEntryHash`, plus theorem-delta-aware `cache_semantic_hit`/`cache_incremental_subtree_rebuild`/`cache_incremental_topology_rebuild`/`cache_incremental_rebuild` codes and topology reuse counters for stable-id reuse, same-depth child-hash reuse, same-depth child-statement-hash reuse, frontier-disambiguated reuse, ambiguity-skip counters, and frontier-partition recovery/retry-warm-start telemetry).
+- Run deterministic cache benchmark evidence generation with `npm run benchmark:cache` (writes `docs/benchmarks/proof-cache-benchmark.json` from repo root).
 - Use shared config parser (`lib/config-input.ts`) across query routes to keep config semantics consistent.
 - Use shared config parser (`lib/config-input.ts`) across both query and POST routes (`/api/proofs/view`, `/api/proofs/diff`) so regeneration and tree-shape semantics do not drift.
 - Query/config contracts now expose the full pedagogy controls used by tree generation:
@@ -62,6 +63,32 @@ The tree panel uses incremental root/children/path queries:
 - Leaf panel can trigger server-side verification and render status/log diagnostics.
 - Verification history is persisted to `.explain-md/web-verification-ledger.json`.
 - Lean fixture proof datasets are persisted to `.explain-md/web-proof-cache` (override with `EXPLAIN_MD_WEB_PROOF_CACHE_DIR`).
+- Lean fixture project root can be overridden with `EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT` (used by benchmark/invalidation harness).
+- Lean fixture source deep-link base can be overridden with `EXPLAIN_MD_LEAN_FIXTURE_SOURCE_BASE_URL`.
+- Leaf detail responses include `view.shareReference.sourceUrlOrigin` (`leaf` | `source_span` | `missing`) for auditable source-link provenance.
+- Leaf detail panel renders provenance mode and deep-link availability explicitly:
+  - `Leaf-attested URL` (`leaf`)
+  - `Resolved from source span` (`source_span`)
+  - `Missing source URL` (`missing`)
+- Tree panel now supports deterministic keyboard navigation with roving focus:
+  - `ArrowUp` / `ArrowDown`: move focus across visible rows
+  - `ArrowRight`: expand collapsed parent, then descend to first loaded child
+  - `ArrowLeft`: collapse expanded parent, otherwise move to parent row
+  - `Home` / `End`: jump to first/last visible row
+  - `Enter` / `Space`: activate focused row (leaf select, parent selection clear)
+- Tree panel now uses deterministic render windowing for large trees:
+  - full render below threshold, windowed render above threshold
+  - focus/selection anchored window center with stable overscan
+  - explicit browser-auditable diagnostics (`data-tree-render-mode`, rendered/hidden row counts)
+  - window paging controls (`Show previous rows` / `Show next rows`) for mouse-only traversal
+- Diff panel now uses deterministic change highlighting:
+  - grouped sections for `changed`, `added`, and `removed` entries
+  - statement-level before/after emphasis from deterministic common-prefix/common-suffix split
+  - explicit audit attributes (`data-diff-total-changes`, `data-diff-rendered-changes`, `data-diff-truncated-count`)
+- Render-window thresholds are configurable via:
+  - `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_MAX_ROWS` (default `120`)
+  - `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_OVERSCAN_ROWS` (default `24`)
+  - `NEXT_PUBLIC_EXPLAIN_MD_DIFF_RENDER_MAX_CHANGES` (default `24`)
 - Config profiles are persisted to `.explain-md/web-config-profiles.json` (override with `EXPLAIN_MD_WEB_CONFIG_PROFILE_LEDGER`).
 - Job IDs are deterministic and monotonic (`job-000001`, `job-000002`, ...).
 - Reproducibility contract values can be configured with:

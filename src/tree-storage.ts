@@ -5,7 +5,7 @@ import {
   renderTheoremLeafCanonical,
   type TheoremLeafRecord,
 } from "./leaf-schema.js";
-import type { ParentPolicyDiagnostics } from "./pedagogical-policy.js";
+import type { ParentPolicyDiagnostics, PolicyRewriteStrategy } from "./pedagogical-policy.js";
 import type { ExplanationTree, ExplanationTreeNode } from "./tree-builder.js";
 
 export const TREE_STORAGE_SCHEMA_VERSION = "1.0.0";
@@ -833,15 +833,59 @@ function canonicalizePolicyDiagnostics(value: ParentPolicyDiagnostics | undefine
     return undefined;
   }
 
-  const normalizeDecision = (decision: ParentPolicyDiagnostics["preSummary"]): ParentPolicyDiagnostics["preSummary"] => ({
-    ok: decision.ok,
+  return {
+    depth: normalizeNonNegativeInt(value.depth, "node.policyDiagnostics.depth"),
+    groupIndex: normalizeNonNegativeInt(value.groupIndex, "node.policyDiagnostics.groupIndex"),
+    retriesUsed: normalizeNonNegativeInt(value.retriesUsed, "node.policyDiagnostics.retriesUsed"),
+    preSummary: canonicalizePolicyDecision(value.preSummary, "node.policyDiagnostics.preSummary"),
+    postSummary: canonicalizePolicyDecision(value.postSummary, "node.policyDiagnostics.postSummary"),
+    rewriteTrace: normalizePolicyRewriteTrace(value.rewriteTrace),
+  };
+}
+
+function normalizePolicyRewriteTrace(value: ParentPolicyDiagnostics["rewriteTrace"] | undefined): ParentPolicyDiagnostics["rewriteTrace"] {
+  if (value === undefined) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throw new Error("node.policyDiagnostics.rewriteTrace must be an array when provided.");
+  }
+  return value
+    .map((attempt, index) => ({
+      attemptIndex: normalizeNonNegativeInt(
+        attempt?.attemptIndex,
+        `node.policyDiagnostics.rewriteTrace[${index}].attemptIndex`,
+        index,
+      ),
+      strategy: normalizePolicyRewriteStrategy(attempt?.strategy, `node.policyDiagnostics.rewriteTrace[${index}].strategy`),
+      postSummary: canonicalizePolicyDecision(
+        attempt?.postSummary,
+        `node.policyDiagnostics.rewriteTrace[${index}].postSummary`,
+      ),
+      summaryValidationErrorCodes: normalizeOptionalStringArray(
+        attempt?.summaryValidationErrorCodes,
+        `node.policyDiagnostics.rewriteTrace[${index}].summaryValidationErrorCodes`,
+      ),
+    }))
+    .sort((left, right) => left.attemptIndex - right.attemptIndex);
+}
+
+function canonicalizePolicyDecision(
+  value: ParentPolicyDiagnostics["preSummary"] | undefined,
+  fieldName: string,
+): ParentPolicyDiagnostics["preSummary"] {
+  if (!value) {
+    throw new Error(`${fieldName} is required.`);
+  }
+  return {
+    ok: value.ok,
     metrics: {
-      ...decision.metrics,
+      ...value.metrics,
     },
-    violations: decision.violations
-      .map((violation) => ({
+    violations: value.violations
+      .map((violation, index) => ({
         code: violation.code,
-        message: normalizeNonEmpty(violation.message, "node.policyDiagnostics.violation.message"),
+        message: normalizeNonEmpty(violation.message, `${fieldName}.violations[${index}].message`),
         details: normalizeRecord(violation.details),
       }))
       .sort((left, right) => {
@@ -850,15 +894,32 @@ function canonicalizePolicyDiagnostics(value: ParentPolicyDiagnostics | undefine
         }
         return left.message.localeCompare(right.message);
       }),
-  });
-
-  return {
-    depth: normalizeNonNegativeInt(value.depth, "node.policyDiagnostics.depth"),
-    groupIndex: normalizeNonNegativeInt(value.groupIndex, "node.policyDiagnostics.groupIndex"),
-    retriesUsed: normalizeNonNegativeInt(value.retriesUsed, "node.policyDiagnostics.retriesUsed"),
-    preSummary: normalizeDecision(value.preSummary),
-    postSummary: normalizeDecision(value.postSummary),
   };
+}
+
+function normalizePolicyRewriteStrategy(value: string | undefined, fieldName: string): PolicyRewriteStrategy {
+  if (value === "baseline" || value === "evidence_strict" || value === "vocabulary_strict" || value === "strict_all") {
+    return value;
+  }
+  throw new Error(`${fieldName} must be one of baseline|evidence_strict|vocabulary_strict|strict_all.`);
+}
+
+function normalizeOptionalStringArray(value: string[] | undefined, fieldName: string): string[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an array of strings when provided.`);
+  }
+  const normalized = value
+    .map((entry, index) => {
+      if (typeof entry !== "string") {
+        throw new Error(`${fieldName}[${index}] must be a string.`);
+      }
+      return normalizeNonEmpty(entry, `${fieldName}[${index}]`);
+    })
+    .sort((left, right) => left.localeCompare(right));
+  return normalized.length === 0 ? undefined : normalized;
 }
 
 function normalizeRecord(value: Record<string, unknown> | undefined): Record<string, unknown> | undefined {

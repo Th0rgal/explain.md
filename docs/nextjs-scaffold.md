@@ -52,7 +52,7 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 - Dependency graph route exposes deterministic SCC/reachability data and per-declaration support closures for browser-side provenance checks.
 - Parent nodes include policy diagnostics in tree query payloads so browser views can audit complexity/prerequisite/term-budget compliance.
 - Policy report route exposes deterministic quality metrics/threshold outcomes using the evaluation harness, with optional threshold overrides for pedagogy calibration.
-- Cache report route exposes deterministic cache-reuse diagnostics (`status`, `cacheKey`, `sourceFingerprint`, `snapshotHash`, `cacheEntryHash`) for reproducible incremental recompute auditing.
+- Cache report route exposes deterministic cache-reuse diagnostics (`status`, `cacheKey`, `sourceFingerprint`, `snapshotHash`, `cacheEntryHash`) and theorem-delta-aware outcomes (`cache_semantic_hit`, `cache_incremental_subtree_rebuild`, `cache_incremental_topology_rebuild`, `cache_incremental_rebuild`) with auditable topology reuse counters (stable-id reuse, same-depth child-hash reuse, same-depth child-statement-hash reuse, frontier-disambiguated reuse, ambiguity-skip counters, and frontier-partition recovery/retry-warm-start telemetry) for reproducible incremental recompute auditing.
 - Shared config parsing is centralized in `apps/web/lib/config-input.ts` for route consistency across both query and POST contracts.
 - Shared config query parsing now covers the full pedagogy knob surface used by generation and hashing:
   - `abstractionLevel`, `complexityLevel`, `maxChildrenPerParent`
@@ -60,6 +60,27 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - `complexityBandWidth`, `termIntroductionBudget`, `proofDetailMode`
 - Config profiles are persisted/queryable through deterministic API contracts with canonical storage keys, profile `configHash`, and response-level `requestHash` + `ledgerHash`.
 - Lean fixture datasets are persisted under `.explain-md/web-proof-cache` (override with `EXPLAIN_MD_WEB_PROOF_CACHE_DIR`) and invalidated by source fingerprint + config hash.
+- Lean fixture root lookup can be overridden with `EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT` for deterministic benchmark/invalidation runs against temporary fixture copies.
+- Lean fixture source-link base can be overridden with `EXPLAIN_MD_LEAN_FIXTURE_SOURCE_BASE_URL`; leaf-detail falls back to deterministic span-based URLs when leaf records omit `sourceUrl`.
+- Leaf panel renders source-link provenance mode directly from `view.shareReference.sourceUrlOrigin` (`leaf` | `source_span` | `missing`) and shows deterministic deep-link availability.
+- Tree rows expose deterministic keyboard semantics with ARIA tree metadata:
+  - roving tab-focus on statement rows (`role="treeitem"`)
+  - navigation keys (`ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight`, `Home`, `End`)
+  - deterministic activation keys (`Enter`/`Space`) with leaf selection and parent selection-clear behavior
+- Tree rendering applies a deterministic large-tree windowing policy:
+  - below threshold: render all rows (`mode=full`)
+  - above threshold: render anchored window + overscan (`mode=windowed`) centered on focused or selected row
+  - explicit section diagnostics for auditability (`data-tree-render-mode`, `data-tree-rendered-row-count`, `data-tree-hidden-above`, `data-tree-hidden-below`)
+  - deterministic paging controls to move the render window without changing proof data
+- Diff panel applies deterministic change grouping/highlighting:
+  - grouped rendering by `changed`, `added`, `removed`
+  - changed statements split into `prefix`, `changed`, `suffix` spans using deterministic common-prefix/common-suffix extraction
+  - explicit section diagnostics (`data-diff-total-changes`, `data-diff-rendered-changes`, `data-diff-truncated-count`)
+- Windowing thresholds can be set with public env vars:
+  - `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_MAX_ROWS` (default `120`)
+  - `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_OVERSCAN_ROWS` (default `24`)
+  - `NEXT_PUBLIC_EXPLAIN_MD_DIFF_RENDER_MAX_CHANGES` (default `24`)
+- Deterministic benchmark artifact generation is available via `npm run web:bench:cache` (writes `docs/benchmarks/proof-cache-benchmark.json`).
 - The Lean fixture uses a deterministic summary provider (`temperature=0` behavior with fixed evidence-only synthesis), so parent statements remain child-entailed and reproducible.
 - Reproducibility contract for each queued job is derived from the selected theorem leaf:
   - source revision (`EXPLAIN_MD_SOURCE_REVISION` or Vercel commit SHA fallback)

@@ -21,7 +21,8 @@
     "web:build": "npm --prefix apps/web run build",
     "web:lint": "npm --prefix apps/web run lint",
     "web:typecheck": "npm --prefix apps/web run typecheck",
-    "web:test": "npm --prefix apps/web run test"
+    "web:test": "npm --prefix apps/web run test",
+    "web:bench:cache": "npm --prefix apps/web run benchmark:cache"
   },
   "devDependencies": {
     "@types/node": "^24.4.0",

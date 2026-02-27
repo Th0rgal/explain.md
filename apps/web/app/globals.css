@@ -193,6 +193,39 @@ summary {
   font: inherit;
 }
 
+.diff-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.diff-change {
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  margin-bottom: 0.5rem;
+}
+
+.diff-change-changed {
+  border-left: 4px solid var(--accent-2);
+}
+
+.diff-change-added {
+  border-left: 4px solid var(--accent);
+}
+
+.diff-change-removed {
+  border-left: 4px solid var(--danger);
+}
+
+.diff-mark-added {
+  background: rgb(13 122 102 / 18%);
+}
+
+.diff-mark-removed {
+  background: rgb(143 31 46 / 18%);
+}
+
 button,
 input,
 select {
@@ -304,6 +337,10 @@ a:focus-visible {
 
 @media (max-width: 960px) {
   .layout-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .diff-grid {
     grid-template-columns: 1fr;
   }
 

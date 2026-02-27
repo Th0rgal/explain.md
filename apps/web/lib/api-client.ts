@@ -293,6 +293,10 @@ export interface CacheReportResponse {
     diagnostics: Array<{
       code:
         | "cache_hit"
+        | "cache_semantic_hit"
+        | "cache_incremental_subtree_rebuild"
+        | "cache_incremental_topology_rebuild"
+        | "cache_incremental_rebuild"
         | "cache_miss"
         | "cache_write_failed"
         | "cache_read_failed"
@@ -322,6 +326,7 @@ export interface LeafDetailResponse {
       compact: string;
       markdown: string;
       sourceUrl?: string;
+      sourceUrlOrigin: "leaf" | "source_span" | "missing";
     };
     verification: {
       summary: {

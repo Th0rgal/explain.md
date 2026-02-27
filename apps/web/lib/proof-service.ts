@@ -15,6 +15,12 @@ import {
   mapLeanIngestionToTheoremLeaves,
   mapTheoremLeavesToTreeLeaves,
   normalizeConfig,
+  evaluatePreSummaryPolicy,
+  evaluatePostSummaryPolicy,
+  generateParentSummary,
+  SummaryValidationError,
+  TreeFrontierPartitionError,
+  TreePolicyError,
   validateExplanationTree,
   type DependencyGraph,
   type ExplanationTree,
@@ -48,6 +54,7 @@ export const LEAN_FIXTURE_PROOF_ID = "lean-verity-fixture";
 const LEAN_FIXTURE_PROJECT_ROOT = path.resolve(process.cwd(), "tests", "fixtures", "lean-project");
 const LEAN_FIXTURE_PATHS = ["Verity/Core.lean", "Verity/Loop.lean"];
 const LEAN_FIXTURE_SOURCE_BASE_URL =
+  process.env.EXPLAIN_MD_LEAN_FIXTURE_SOURCE_BASE_URL?.trim() ||
   "https://github.com/Th0rgal/explain.md/blob/main/tests/fixtures/lean-project";
 const PROOF_DATASET_CACHE_SCHEMA_VERSION = "1.0.0";
 const DEFAULT_PROOF_DATASET_CACHE_DIR = path.resolve(process.cwd(), ".explain-md", "web-proof-cache");
@@ -87,6 +94,10 @@ type ProofDatasetCacheLayer = "persistent" | "ephemeral";
 export interface ProofDatasetCacheDiagnostic {
   code:
     | "cache_hit"
+    | "cache_semantic_hit"
+    | "cache_incremental_subtree_rebuild"
+    | "cache_incremental_topology_rebuild"
+    | "cache_incremental_rebuild"
     | "cache_miss"
     | "cache_write_failed"
     | "cache_read_failed"
@@ -391,6 +402,7 @@ export async function buildProofLeafDetail(request: LeafDetailRequest) {
   const jobs = request.verificationJobs ?? sampleVerificationJobs(request.proofId, request.leafId);
   const result = buildLeafDetailView(dataset.tree as never, dataset.leaves, request.leafId, {
     verificationJobs: jobs,
+    sourceBaseUrl: resolveProofSourceBaseUrl(request.proofId),
   });
 
   if (!result.view) {
@@ -426,6 +438,7 @@ export function buildSeedLeafDetail(request: LeafDetailRequest) {
   const jobs = request.verificationJobs ?? sampleVerificationJobs(request.proofId, request.leafId);
   const result = buildLeafDetailView(dataset.tree as never, dataset.leaves, request.leafId, {
     verificationJobs: jobs,
+    sourceBaseUrl: resolveProofSourceBaseUrl(request.proofId),
   });
 
   if (!result.view) {
@@ -454,6 +467,13 @@ export function buildSeedLeafDetail(request: LeafDetailRequest) {
     view: result.view,
     detailHash,
   };
+}
+
+function resolveProofSourceBaseUrl(proofId: string): string | undefined {
+  if (proofId === LEAN_FIXTURE_PROOF_ID) {
+    return LEAN_FIXTURE_SOURCE_BASE_URL;
+  }
+  return undefined;
 }
 
 export async function buildProofRootView(proofId: string, configInput: ExplanationConfigInput = {}) {
@@ -770,6 +790,14 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
   const cacheKey = `${proofId}:${configHash}:${sourceFingerprint}`;
   const cached = await readProofDatasetCacheEntry(cachePath);
   const cacheDiagnostics: ProofDatasetCacheDiagnostic[] = [];
+  let rebuiltIngestion:
+    | {
+        ingestionHash: string;
+        theoremLeaves: TheoremLeafRecord[];
+        dependencyGraph: DependencyGraph;
+        dependencyGraphHash: string;
+      }
+    | undefined;
 
   if (cached.entry) {
     if (cached.entry.sourceFingerprint === sourceFingerprint) {
@@ -843,11 +871,237 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
     } else {
       cacheDiagnostics.push({
         code: "cache_miss",
-        message: "Cached dataset source fingerprint mismatch; rebuilding dataset.",
+        message: "Cached dataset source fingerprint mismatch; evaluating theorem-level deltas.",
         details: {
           cachePath,
           expectedSourceFingerprint: cached.entry.sourceFingerprint,
           actualSourceFingerprint: sourceFingerprint,
+        },
+      });
+
+      rebuiltIngestion = ingestFixtureTreeInputs(fixtureProjectRoot, sources);
+      const delta = computeTheoremLeafDelta(cached.entry.snapshot.leafRecords, rebuiltIngestion.theoremLeaves);
+      if (delta.changedLeafCount === 0 && rebuiltIngestion.dependencyGraphHash === cached.entry.dependencyGraphHash) {
+        const imported = importTreeStorageSnapshot(cached.entry.snapshot);
+        const hasImportErrors = imported.diagnostics.some((diagnostic) => diagnostic.severity === "error");
+        const snapshotHash = computeTreeStorageSnapshotHash(cached.entry.snapshot);
+        if (!hasImportErrors && imported.tree && snapshotHash === cached.entry.snapshotHash) {
+          const rebasedSnapshot = exportTreeStorageSnapshot(imported.tree, {
+            proofId,
+            leaves: rebuiltIngestion.theoremLeaves,
+            config,
+          });
+          const rebasedEntry: ProofDatasetCacheEntry = {
+            ...cached.entry,
+            sourceFingerprint,
+            ingestionHash: rebuiltIngestion.ingestionHash,
+            dependencyGraphHash: rebuiltIngestion.dependencyGraphHash,
+            snapshot: rebasedSnapshot,
+            snapshotHash: computeTreeStorageSnapshotHash(rebasedSnapshot),
+          };
+          const cacheWriteError = await writeProofDatasetCacheEntry(cachePath, rebasedEntry);
+          if (cacheWriteError) {
+            cacheDiagnostics.push({
+              code: "cache_write_failed",
+              message: "Failed rebasing persistent cache entry after theorem-level semantic hit.",
+              details: { cachePath, error: cacheWriteError },
+            });
+          }
+          cacheDiagnostics.push({
+            code: "cache_semantic_hit",
+            message:
+              "Reused cached snapshot after source fingerprint mismatch because theorem-level canonical leaves were unchanged.",
+            details: {
+              cachePath,
+              previousSourceFingerprint: cached.entry.sourceFingerprint,
+              sourceFingerprint,
+              unchangedLeafCount: delta.unchangedLeafCount,
+            },
+          });
+
+          return {
+            dataset: {
+              proofId,
+              title: `Lean Verity fixture (${rebuiltIngestion.theoremLeaves.length} declarations, ingestion=${rebuiltIngestion.ingestionHash.slice(0, 8)}, depgraph=${rebuiltIngestion.dependencyGraphHash.slice(0, 8)})`,
+              config,
+              configHash,
+              tree: imported.tree,
+              leaves: rebuiltIngestion.theoremLeaves,
+              dependencyGraph: rebuiltIngestion.dependencyGraph,
+              dependencyGraphHash: rebuiltIngestion.dependencyGraphHash,
+            },
+            queryApi: createTreeQueryApi(rebasedSnapshot),
+            cache: {
+              layer: "persistent",
+              status: "hit",
+              cacheKey,
+              sourceFingerprint,
+              cachePath,
+              snapshotHash: rebasedEntry.snapshotHash,
+              cacheEntryHash: computeProofDatasetCacheEntryHash(rebasedEntry),
+              diagnostics: cacheDiagnostics,
+            },
+          };
+        }
+      }
+
+      if (rebuiltIngestion.dependencyGraphHash === cached.entry.dependencyGraphHash) {
+        const incrementalSnapshot = await rebuildSnapshotForChangedLeaves({
+          snapshot: cached.entry.snapshot,
+          proofId,
+          leaves: rebuiltIngestion.theoremLeaves,
+          changedLeafIds: delta.changedLeafIds,
+          config,
+        });
+
+        if (incrementalSnapshot) {
+          const incrementalEntry: ProofDatasetCacheEntry = {
+            ...cached.entry,
+            sourceFingerprint,
+            ingestionHash: rebuiltIngestion.ingestionHash,
+            dependencyGraphHash: rebuiltIngestion.dependencyGraphHash,
+            snapshot: incrementalSnapshot.snapshot,
+            snapshotHash: incrementalSnapshot.snapshotHash,
+          };
+          const cacheWriteError = await writeProofDatasetCacheEntry(cachePath, incrementalEntry);
+          if (cacheWriteError) {
+            cacheDiagnostics.push({
+              code: "cache_write_failed",
+              message: "Failed writing persistent cache entry after incremental subtree rebuild.",
+              details: { cachePath, error: cacheWriteError },
+            });
+          }
+          cacheDiagnostics.push({
+            code: "cache_incremental_subtree_rebuild",
+            message:
+              "Detected theorem-level statement delta with stable topology; rebuilt affected parent subtrees only.",
+            details: {
+              cachePath,
+              changedLeafCount: delta.changedLeafCount,
+              changedLeafIds: delta.changedLeafIds.slice(0, 16),
+              affectedParentCount: incrementalSnapshot.affectedParentCount,
+              reusedNodeCount: incrementalSnapshot.reusedNodeCount,
+            },
+          });
+
+          return {
+            dataset: {
+              proofId,
+              title: `Lean Verity fixture (${rebuiltIngestion.theoremLeaves.length} declarations, ingestion=${rebuiltIngestion.ingestionHash.slice(0, 8)}, depgraph=${rebuiltIngestion.dependencyGraphHash.slice(0, 8)})`,
+              config,
+              configHash,
+              tree: incrementalSnapshot.tree,
+              leaves: rebuiltIngestion.theoremLeaves,
+              dependencyGraph: rebuiltIngestion.dependencyGraph,
+              dependencyGraphHash: rebuiltIngestion.dependencyGraphHash,
+            },
+            queryApi: createTreeQueryApi(incrementalSnapshot.snapshot),
+            cache: {
+              layer: "persistent",
+              status: "hit",
+              cacheKey,
+              sourceFingerprint,
+              cachePath,
+              snapshotHash: incrementalEntry.snapshotHash,
+              cacheEntryHash: computeProofDatasetCacheEntryHash(incrementalEntry),
+              diagnostics: cacheDiagnostics,
+            },
+          };
+        }
+      }
+
+      const topologyRebuild = await rebuildSnapshotWithParentSummaryReuse({
+        previousSnapshot: cached.entry.snapshot,
+        proofId,
+        leaves: rebuiltIngestion.theoremLeaves,
+        changedLeafIds: delta.changedLeafIds,
+        config,
+      });
+      if (topologyRebuild) {
+        const topologyEntry: ProofDatasetCacheEntry = {
+          ...cached.entry,
+          sourceFingerprint,
+          ingestionHash: rebuiltIngestion.ingestionHash,
+          dependencyGraphHash: rebuiltIngestion.dependencyGraphHash,
+          snapshot: topologyRebuild.snapshot,
+          snapshotHash: topologyRebuild.snapshotHash,
+        };
+        const cacheWriteError = await writeProofDatasetCacheEntry(cachePath, topologyEntry);
+        if (cacheWriteError) {
+          cacheDiagnostics.push({
+            code: "cache_write_failed",
+            message: "Failed writing persistent cache entry after topology-aware rebuild.",
+            details: { cachePath, error: cacheWriteError },
+          });
+        }
+        cacheDiagnostics.push({
+          code: "cache_incremental_topology_rebuild",
+          message: "Detected theorem topology/structure delta; rebuilt tree with deterministic parent-summary reuse.",
+          details: {
+            cachePath,
+            changedLeafCount: delta.changedLeafCount,
+            addedLeafCount: delta.addedLeafCount,
+            removedLeafCount: delta.removedLeafCount,
+            changedLeafIds: delta.changedLeafIds.slice(0, 16),
+            reusedParentSummaryCount: topologyRebuild.reusedParentSummaryCount,
+            generatedParentSummaryCount: topologyRebuild.generatedParentSummaryCount,
+            reusedParentNodeCount: topologyRebuild.reusedParentNodeCount,
+            generatedParentNodeCount: topologyRebuild.generatedParentNodeCount,
+            reusedParentByStableIdCount: topologyRebuild.reusedParentByStableIdCount,
+            reusedParentByChildHashCount: topologyRebuild.reusedParentByChildHashCount,
+            reusedParentByChildStatementHashCount: topologyRebuild.reusedParentByChildStatementHashCount,
+            reusedParentByFrontierChildHashCount: topologyRebuild.reusedParentByFrontierChildHashCount,
+            reusedParentByFrontierChildStatementHashCount: topologyRebuild.reusedParentByFrontierChildStatementHashCount,
+            skippedAmbiguousChildHashReuseCount: topologyRebuild.skippedAmbiguousChildHashReuseCount,
+            skippedAmbiguousChildStatementHashReuseCount: topologyRebuild.skippedAmbiguousChildStatementHashReuseCount,
+            frontierPartitionLeafCount: topologyRebuild.frontierPartitionLeafCount,
+            frontierPartitionBlockedGroupCount: topologyRebuild.frontierPartitionBlockedGroupCount,
+            frontierPartitionRecoveredLeafCount: topologyRebuild.frontierPartitionRecoveredLeafCount,
+            frontierPartitionRecoveredSummaryCount: topologyRebuild.frontierPartitionRecoveredSummaryCount,
+            frontierPartitionRecoveryPassCount: topologyRebuild.frontierPartitionRecoveryPassCount,
+            frontierPartitionRecoveryScheduledGroupCount: topologyRebuild.frontierPartitionRecoveryScheduledGroupCount,
+            frontierPartitionRecoveryStrategy: topologyRebuild.frontierPartitionRecoveryStrategy,
+            frontierPartitionFallbackUsed: topologyRebuild.frontierPartitionFallbackUsed,
+            previousParentCount: topologyRebuild.previousParentCount,
+            nextParentCount: topologyRebuild.nextParentCount,
+          },
+        });
+
+        return {
+          dataset: {
+            proofId,
+            title: `Lean Verity fixture (${rebuiltIngestion.theoremLeaves.length} declarations, ingestion=${rebuiltIngestion.ingestionHash.slice(0, 8)}, depgraph=${rebuiltIngestion.dependencyGraphHash.slice(0, 8)})`,
+            config,
+            configHash,
+            tree: topologyRebuild.tree,
+            leaves: rebuiltIngestion.theoremLeaves,
+            dependencyGraph: rebuiltIngestion.dependencyGraph,
+            dependencyGraphHash: rebuiltIngestion.dependencyGraphHash,
+          },
+          queryApi: createTreeQueryApi(topologyRebuild.snapshot),
+          cache: {
+            layer: "persistent",
+            status: "hit",
+            cacheKey,
+            sourceFingerprint,
+            cachePath,
+            snapshotHash: topologyEntry.snapshotHash,
+            cacheEntryHash: computeProofDatasetCacheEntryHash(topologyEntry),
+            diagnostics: cacheDiagnostics,
+          },
+        };
+      }
+
+      cacheDiagnostics.push({
+        code: "cache_incremental_rebuild",
+        message: "Detected theorem-level delta; rebuilding explanation tree from updated leaves.",
+        details: {
+          cachePath,
+          changedLeafCount: delta.changedLeafCount,
+          addedLeafCount: delta.addedLeafCount,
+          removedLeafCount: delta.removedLeafCount,
+          unchangedLeafCount: delta.unchangedLeafCount,
+          changedLeafIds: delta.changedLeafIds.slice(0, 16),
         },
       });
     }
@@ -867,15 +1121,11 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
     }
   }
 
-  const ingestion = ingestLeanSources(fixtureProjectRoot, sources, {
-    sourceBaseUrl: LEAN_FIXTURE_SOURCE_BASE_URL,
-  });
-  const ingestionHash = computeLeanIngestionHash(ingestion);
-  const theoremLeaves = mapLeanIngestionToTheoremLeaves(ingestion);
-  const dependencyGraph = buildDeclarationDependencyGraph(
-    theoremLeaves.map((leaf) => ({ id: leaf.id, dependencyIds: leaf.dependencyIds })),
-  );
-  const dependencyGraphHash = computeDependencyGraphHash(dependencyGraph);
+  const rebuilt = rebuiltIngestion ?? ingestFixtureTreeInputs(fixtureProjectRoot, sources);
+  const ingestionHash = rebuilt.ingestionHash;
+  const theoremLeaves = rebuilt.theoremLeaves;
+  const dependencyGraph = rebuilt.dependencyGraph;
+  const dependencyGraphHash = rebuilt.dependencyGraphHash;
 
   const tree = await buildRecursiveExplanationTree(createDeterministicSummaryProvider(), {
     leaves: mapTheoremLeavesToTreeLeaves(theoremLeaves),
@@ -940,7 +1190,9 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
 }
 
 async function resolveLeanFixtureProjectRoot(): Promise<string> {
+  const envOverride = process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT;
   const candidates = [
+    ...(envOverride ? [path.resolve(envOverride)] : []),
     LEAN_FIXTURE_PROJECT_ROOT,
     path.resolve(process.cwd(), "..", "tests", "fixtures", "lean-project"),
     path.resolve(process.cwd(), "..", "..", "tests", "fixtures", "lean-project"),
@@ -1062,6 +1314,863 @@ function computeSourceFingerprint(sources: Array<{ relativePath: string; filePat
       }))
       .sort((left, right) => left.relativePath.localeCompare(right.relativePath)),
   });
+}
+
+function ingestFixtureTreeInputs(
+  fixtureProjectRoot: string,
+  sources: Array<{ relativePath: string; filePath: string; content: string }>,
+): {
+  ingestionHash: string;
+  theoremLeaves: TheoremLeafRecord[];
+  dependencyGraph: DependencyGraph;
+  dependencyGraphHash: string;
+} {
+  const ingestion = ingestLeanSources(fixtureProjectRoot, sources, {
+    sourceBaseUrl: LEAN_FIXTURE_SOURCE_BASE_URL,
+  });
+  const theoremLeaves = mapLeanIngestionToTheoremLeaves(ingestion);
+  const dependencyGraph = buildDeclarationDependencyGraph(
+    theoremLeaves.map((leaf) => ({ id: leaf.id, dependencyIds: leaf.dependencyIds })),
+  );
+
+  return {
+    ingestionHash: computeLeanIngestionHash(ingestion),
+    theoremLeaves,
+    dependencyGraph,
+    dependencyGraphHash: computeDependencyGraphHash(dependencyGraph),
+  };
+}
+
+function computeTheoremLeafDelta(
+  previousLeaves: TheoremLeafRecord[],
+  nextLeaves: TheoremLeafRecord[],
+): {
+  changedLeafCount: number;
+  unchangedLeafCount: number;
+  addedLeafCount: number;
+  removedLeafCount: number;
+  changedLeafIds: string[];
+} {
+  const previousById = new Map(previousLeaves.map((leaf) => [leaf.id, computeTheoremLeafSemanticHash(leaf)]));
+  const nextById = new Map(nextLeaves.map((leaf) => [leaf.id, computeTheoremLeafSemanticHash(leaf)]));
+  const changedLeafIds = new Set<string>();
+  let unchangedLeafCount = 0;
+  let addedLeafCount = 0;
+  let removedLeafCount = 0;
+
+  for (const [leafId, nextHash] of nextById) {
+    const previousHash = previousById.get(leafId);
+    if (previousHash === undefined) {
+      addedLeafCount += 1;
+      changedLeafIds.add(leafId);
+      continue;
+    }
+    if (previousHash === nextHash) {
+      unchangedLeafCount += 1;
+    } else {
+      changedLeafIds.add(leafId);
+    }
+  }
+
+  for (const leafId of previousById.keys()) {
+    if (!nextById.has(leafId)) {
+      removedLeafCount += 1;
+      changedLeafIds.add(leafId);
+    }
+  }
+
+  return {
+    changedLeafCount: changedLeafIds.size,
+    unchangedLeafCount,
+    addedLeafCount,
+    removedLeafCount,
+    changedLeafIds: Array.from(changedLeafIds).sort((left, right) => left.localeCompare(right)),
+  };
+}
+
+function computeTheoremLeafSemanticHash(leaf: TheoremLeafRecord): string {
+  return computeCanonicalRequestHash({
+    id: leaf.id,
+    declarationId: leaf.declarationId,
+    modulePath: leaf.modulePath,
+    declarationName: leaf.declarationName,
+    theoremKind: leaf.theoremKind,
+    statementText: leaf.statementText,
+    prettyStatement: leaf.prettyStatement,
+    tags: leaf.tags,
+    dependencyIds: leaf.dependencyIds,
+  });
+}
+
+function computeTheoremLeafStructureHash(leaf: TheoremLeafRecord): string {
+  return computeCanonicalRequestHash({
+    id: leaf.id,
+    declarationId: leaf.declarationId,
+    modulePath: leaf.modulePath,
+    declarationName: leaf.declarationName,
+    theoremKind: leaf.theoremKind,
+    dependencyIds: leaf.dependencyIds,
+  });
+}
+
+async function rebuildSnapshotForChangedLeaves(input: {
+  snapshot: TreeStorageSnapshot;
+  proofId: string;
+  leaves: TheoremLeafRecord[];
+  changedLeafIds: string[];
+  config: ExplanationConfig;
+}): Promise<
+  | {
+      tree: ExplanationTree;
+      snapshot: TreeStorageSnapshot;
+      snapshotHash: string;
+      affectedParentCount: number;
+      reusedNodeCount: number;
+    }
+  | undefined
+> {
+  if (input.changedLeafIds.length === 0) {
+    return undefined;
+  }
+
+  const previousLeafById = new Map(input.snapshot.leafRecords.map((leaf) => [leaf.id, leaf]));
+  const nextLeafById = new Map(input.leaves.map((leaf) => [leaf.id, leaf]));
+  if (previousLeafById.size !== nextLeafById.size) {
+    return undefined;
+  }
+
+  for (const [leafId, previousLeaf] of previousLeafById) {
+    const nextLeaf = nextLeafById.get(leafId);
+    if (!nextLeaf) {
+      return undefined;
+    }
+    if (computeTheoremLeafStructureHash(previousLeaf) !== computeTheoremLeafStructureHash(nextLeaf)) {
+      return undefined;
+    }
+  }
+
+  const imported = importTreeStorageSnapshot(input.snapshot);
+  const hasImportErrors = imported.diagnostics.some((diagnostic) => diagnostic.severity === "error");
+  if (hasImportErrors || !imported.tree) {
+    return undefined;
+  }
+
+  const treeNodes: Record<string, ExplanationTree["nodes"][string]> = {};
+  for (const node of Object.values(imported.tree.nodes)) {
+    treeNodes[node.id] = {
+      ...node,
+      childIds: node.childIds.slice(),
+      evidenceRefs: node.evidenceRefs.slice(),
+      newTermsIntroduced: node.newTermsIntroduced?.slice(),
+      policyDiagnostics: node.policyDiagnostics
+        ? {
+            depth: node.policyDiagnostics.depth,
+            groupIndex: node.policyDiagnostics.groupIndex,
+            retriesUsed: node.policyDiagnostics.retriesUsed,
+            preSummary: {
+              ...node.policyDiagnostics.preSummary,
+              violations: node.policyDiagnostics.preSummary.violations.map((violation) => ({ ...violation })),
+              metrics: { ...node.policyDiagnostics.preSummary.metrics },
+            },
+            postSummary: {
+              ...node.policyDiagnostics.postSummary,
+              violations: node.policyDiagnostics.postSummary.violations.map((violation) => ({ ...violation })),
+              metrics: { ...node.policyDiagnostics.postSummary.metrics },
+            },
+          }
+        : undefined,
+    };
+  }
+
+  const parentByChildId = new Map<string, string>();
+  for (const node of Object.values(treeNodes)) {
+    for (const childId of node.childIds) {
+      parentByChildId.set(childId, node.id);
+    }
+  }
+
+  for (const leafId of input.changedLeafIds) {
+    const node = treeNodes[leafId];
+    const leaf = nextLeafById.get(leafId);
+    if (!node || node.kind !== "leaf" || !leaf) {
+      return undefined;
+    }
+    node.statement = leaf.prettyStatement;
+    node.evidenceRefs = [leaf.id];
+  }
+
+  const affectedParents = collectAncestorParents(input.changedLeafIds, parentByChildId, treeNodes);
+  if (affectedParents.length === 0) {
+    return undefined;
+  }
+
+  const leafById = new Map(
+    input.leaves.map((leaf) => [
+      leaf.id,
+      {
+        prerequisiteIds: leaf.dependencyIds,
+      },
+    ]),
+  );
+  const provider = createDeterministicSummaryProvider();
+  const policyDiagnosticsByParent: ExplanationTree["policyDiagnosticsByParent"] = {
+    ...imported.tree.policyDiagnosticsByParent,
+  };
+
+  for (const parentId of affectedParents) {
+    const parentNode = treeNodes[parentId];
+    if (!parentNode || parentNode.kind !== "parent") {
+      return undefined;
+    }
+    const groupIndex = parentNode.policyDiagnostics?.groupIndex ?? parseParentGroupIndex(parentNode.id);
+    const children = parentNode.childIds.map((childId) => {
+      const child = treeNodes[childId];
+      if (!child) {
+        throw new Error(`Missing child node '${childId}' while rebuilding parent '${parentId}'.`);
+      }
+      return {
+        id: child.id,
+        statement: child.statement,
+        complexity: child.complexityScore,
+        prerequisiteIds: child.kind === "leaf" ? leafById.get(child.id)?.prerequisiteIds : [],
+      };
+    });
+    const preSummaryDecision = evaluatePreSummaryPolicy(children, input.config);
+    if (!preSummaryDecision.ok) {
+      throw new TreePolicyError("Pre-summary pedagogical policy failed during incremental subtree rebuild.", {
+        depth: parentNode.depth,
+        groupIndex,
+        retriesUsed: 0,
+        preSummary: preSummaryDecision,
+        postSummary: {
+          ok: true,
+          violations: [],
+          metrics: {
+            complexitySpread: 0,
+            prerequisiteOrderViolations: 0,
+            introducedTermCount: 0,
+            evidenceCoverageRatio: 1,
+            vocabularyContinuityRatio: 1,
+            vocabularyContinuityFloor: 1,
+          },
+        },
+      });
+    }
+    const parentSummary = await generatePolicyCompliantParentSummary(
+      provider,
+      children,
+      input.config,
+      parentNode.depth,
+      groupIndex,
+      preSummaryDecision,
+    );
+    parentNode.statement = parentSummary.summary.parent_statement;
+    parentNode.complexityScore = parentSummary.summary.complexity_score;
+    parentNode.abstractionScore = parentSummary.summary.abstraction_score;
+    parentNode.confidence = parentSummary.summary.confidence;
+    parentNode.whyTrueFromChildren = parentSummary.summary.why_true_from_children;
+    parentNode.newTermsIntroduced = parentSummary.summary.new_terms_introduced.slice();
+    parentNode.evidenceRefs = parentSummary.summary.evidence_refs.slice();
+    parentNode.policyDiagnostics = parentSummary.policyDiagnostics;
+    policyDiagnosticsByParent[parentId] = parentSummary.policyDiagnostics;
+  }
+
+  const tree: ExplanationTree = {
+    rootId: imported.tree.rootId,
+    leafIds: imported.tree.leafIds.slice(),
+    nodes: treeNodes,
+    configHash: computeConfigHash(input.config),
+    groupPlan: imported.tree.groupPlan.slice(),
+    groupingDiagnostics: imported.tree.groupingDiagnostics.slice(),
+    policyDiagnosticsByParent,
+    maxDepth: imported.tree.maxDepth,
+  };
+  const validation = validateExplanationTree(tree, input.config.maxChildrenPerParent);
+  if (!validation.ok) {
+    throw new Error(
+      `Incremental subtree rebuild validation failed: ${validation.issues.map((issue) => issue.code).join(", ")}`,
+    );
+  }
+
+  const snapshot = exportTreeStorageSnapshot(tree, {
+    proofId: input.proofId,
+    leaves: input.leaves,
+    config: input.config,
+  });
+  return {
+    tree,
+    snapshot,
+    snapshotHash: computeTreeStorageSnapshotHash(snapshot),
+    affectedParentCount: affectedParents.length,
+    reusedNodeCount: Object.keys(treeNodes).length - affectedParents.length,
+  };
+}
+
+interface ParentSummaryRecord {
+  childStatementHash: string;
+  childStatementTextHash?: string;
+  frontierLeafIdHash?: string;
+  frontierLeafStatementHash?: string;
+  summary: {
+    parent_statement: string;
+    why_true_from_children: string;
+    new_terms_introduced: string[];
+    complexity_score: number;
+    abstraction_score: number;
+    evidence_refs: string[];
+    confidence: number;
+  };
+  policyDiagnostics?: ExplanationTree["policyDiagnosticsByParent"][string];
+}
+
+async function rebuildSnapshotWithParentSummaryReuse(input: {
+  previousSnapshot: TreeStorageSnapshot;
+  proofId: string;
+  leaves: TheoremLeafRecord[];
+  changedLeafIds: string[];
+  config: ExplanationConfig;
+}): Promise<
+  | {
+      tree: ExplanationTree;
+      snapshot: TreeStorageSnapshot;
+      snapshotHash: string;
+      reusedParentSummaryCount: number;
+      generatedParentSummaryCount: number;
+      reusedParentNodeCount: number;
+      generatedParentNodeCount: number;
+      reusedParentByStableIdCount: number;
+      reusedParentByChildHashCount: number;
+      reusedParentByChildStatementHashCount: number;
+      reusedParentByFrontierChildHashCount: number;
+      reusedParentByFrontierChildStatementHashCount: number;
+      skippedAmbiguousChildHashReuseCount: number;
+      skippedAmbiguousChildStatementHashReuseCount: number;
+      frontierPartitionLeafCount: number;
+      frontierPartitionBlockedGroupCount: number;
+      frontierPartitionRecoveredLeafCount: number;
+      frontierPartitionRecoveredSummaryCount: number;
+      frontierPartitionRecoveryPassCount: number;
+      frontierPartitionRecoveryScheduledGroupCount: number;
+      frontierPartitionRecoveryStrategy: "minimal_hitting_set_greedy";
+      frontierPartitionFallbackUsed: boolean;
+      previousParentCount: number;
+      nextParentCount: number;
+    }
+  | undefined
+> {
+  const imported = importTreeStorageSnapshot(input.previousSnapshot);
+  const hasImportErrors = imported.diagnostics.some((diagnostic) => diagnostic.severity === "error");
+  if (hasImportErrors || !imported.tree) {
+    return undefined;
+  }
+
+  const reusableParentSummaries = buildReusableParentSummaryMap(imported.tree);
+  const nextLeafIdSet = new Set(input.leaves.map((leaf) => leaf.id));
+  const changedFrontierLeafIds = input.changedLeafIds
+    .filter((leafId) => nextLeafIdSet.has(leafId))
+    .sort((left, right) => left.localeCompare(right));
+  let frontierPartitionFallbackUsed = false;
+  let frontierPartitionBlockedGroupCount = 0;
+  let frontierPartitionRecoveredLeafCount = 0;
+  let frontierPartitionRecoveredSummaryCount = 0;
+  let frontierPartitionRecoveryPassCount = 0;
+  let frontierPartitionRecoveryScheduledGroupCount = 0;
+  let recoveryReusableParentSummaries = { ...reusableParentSummaries };
+
+  let tree: ExplanationTree | undefined;
+  const nextLeafIdSetForRecovery = new Set(input.leaves.map((leaf) => leaf.id));
+  let frontierLeafIds = changedFrontierLeafIds.slice();
+  if (frontierLeafIds.length > 0) {
+    for (;;) {
+      try {
+        tree = await buildRecursiveExplanationTree(createDeterministicSummaryProvider(), {
+          leaves: mapTheoremLeavesToTreeLeaves(input.leaves),
+          config: input.config,
+          reusableParentSummaries: recoveryReusableParentSummaries,
+          generationFrontierLeafIds: frontierLeafIds,
+        });
+        break;
+      } catch (error) {
+        if (!(error instanceof TreeFrontierPartitionError)) {
+          throw error;
+        }
+        frontierPartitionRecoveredSummaryCount += mergeRecoveryReusableSummaries(
+          recoveryReusableParentSummaries,
+          error.reusableParentSummaries,
+        );
+        frontierPartitionBlockedGroupCount += error.blockedGroups.length;
+        const scheduledExpansion = selectMinimalBlockedFrontierExpansion({
+          blockedGroups: error.blockedGroups,
+          frontierLeafIdSet: new Set(frontierLeafIds),
+          availableLeafIdSet: nextLeafIdSetForRecovery,
+        });
+        if (!scheduledExpansion) {
+          frontierPartitionFallbackUsed = true;
+          break;
+        }
+        frontierPartitionRecoveryScheduledGroupCount += scheduledExpansion.scheduledGroupCount;
+        frontierPartitionRecoveryPassCount += 1;
+        frontierPartitionRecoveredLeafCount += scheduledExpansion.expandedLeafIds.length;
+        frontierLeafIds = scheduledExpansion.nextFrontierLeafIds;
+      }
+    }
+  }
+  if (!tree) {
+    tree = await buildRecursiveExplanationTree(createDeterministicSummaryProvider(), {
+      leaves: mapTheoremLeavesToTreeLeaves(input.leaves),
+      config: input.config,
+      reusableParentSummaries: recoveryReusableParentSummaries,
+    });
+  }
+  if (!tree) {
+    throw new Error("Topology-aware rebuild failed to produce a tree.");
+  }
+  const builtTree = tree;
+  const validation = validateExplanationTree(builtTree, input.config.maxChildrenPerParent);
+  if (!validation.ok) {
+    throw new Error(
+      `Topology-aware rebuild validation failed: ${validation.issues.map((issue) => issue.code).join(", ")}`,
+    );
+  }
+
+  const snapshot = exportTreeStorageSnapshot(builtTree, {
+    proofId: input.proofId,
+    leaves: input.leaves,
+    config: input.config,
+  });
+  const reuseStats = summarizeTreeSummaryReuse(builtTree.groupingDiagnostics);
+  return {
+    tree: builtTree,
+    snapshot,
+    snapshotHash: computeTreeStorageSnapshotHash(snapshot),
+    reusedParentSummaryCount: reuseStats.reusedGroupCount,
+    generatedParentSummaryCount: reuseStats.generatedGroupCount,
+    reusedParentNodeCount: reuseStats.reusedGroupCount,
+    generatedParentNodeCount: reuseStats.generatedGroupCount,
+    reusedParentByStableIdCount: reuseStats.reusedByParentIdGroupCount,
+    reusedParentByChildHashCount: reuseStats.reusedByChildHashGroupCount,
+    reusedParentByChildStatementHashCount: reuseStats.reusedByChildStatementHashGroupCount,
+    reusedParentByFrontierChildHashCount: reuseStats.reusedByFrontierChildHashGroupCount,
+    reusedParentByFrontierChildStatementHashCount: reuseStats.reusedByFrontierChildStatementHashGroupCount,
+    skippedAmbiguousChildHashReuseCount: reuseStats.skippedAmbiguousChildHashGroupCount,
+    skippedAmbiguousChildStatementHashReuseCount: reuseStats.skippedAmbiguousChildStatementHashGroupCount,
+    frontierPartitionLeafCount: changedFrontierLeafIds.length,
+    frontierPartitionBlockedGroupCount,
+    frontierPartitionRecoveredLeafCount,
+    frontierPartitionRecoveredSummaryCount,
+    frontierPartitionRecoveryPassCount,
+    frontierPartitionRecoveryScheduledGroupCount,
+    frontierPartitionRecoveryStrategy: "minimal_hitting_set_greedy",
+    frontierPartitionFallbackUsed,
+    previousParentCount: Object.values(imported.tree.nodes).filter((node) => node.kind === "parent").length,
+    nextParentCount: Object.values(builtTree.nodes).filter((node) => node.kind === "parent").length,
+  };
+}
+
+export function selectMinimalBlockedFrontierExpansion(input: {
+  blockedGroups: TreeFrontierPartitionError["blockedGroups"];
+  frontierLeafIdSet: Set<string>;
+  availableLeafIdSet: Set<string>;
+}):
+  | {
+      expandedLeafIds: string[];
+      nextFrontierLeafIds: string[];
+      scheduledGroupCount: number;
+    }
+  | undefined {
+  const frontierLeafIdSet = new Set(input.frontierLeafIdSet);
+  const blockedGroups = input.blockedGroups
+    .map((blockedGroup) => ({
+      blockedGroup,
+      candidateLeafIds: blockedGroup.frontierLeafIds
+        .filter((leafId) => input.availableLeafIdSet.has(leafId) && !frontierLeafIdSet.has(leafId))
+        .sort((left, right) => left.localeCompare(right)),
+    }))
+    .sort((left, right) => compareBlockedGroups(left.blockedGroup, right.blockedGroup));
+
+  if (blockedGroups.length === 0) {
+    return undefined;
+  }
+
+  if (blockedGroups.some((group) => group.candidateLeafIds.length === 0)) {
+    return undefined;
+  }
+
+  const remaining = blockedGroups.slice();
+  const expandedLeafIds = new Set<string>();
+  let scheduledGroupCount = 0;
+
+  while (remaining.length > 0) {
+    const coverage = new Map<string, number>();
+
+    for (const group of remaining) {
+      for (const leafId of group.candidateLeafIds) {
+        coverage.set(leafId, (coverage.get(leafId) ?? 0) + 1);
+      }
+    }
+
+    const selectedLeafId = [...coverage.entries()]
+      .sort((left, right) => {
+        if (left[1] !== right[1]) {
+          return right[1] - left[1];
+        }
+        return left[0].localeCompare(right[0]);
+      })
+      .map((entry) => entry[0])[0];
+
+    if (!selectedLeafId) {
+      return undefined;
+    }
+
+    expandedLeafIds.add(selectedLeafId);
+    let nextIndex = 0;
+    while (nextIndex < remaining.length) {
+      if (remaining[nextIndex].candidateLeafIds.includes(selectedLeafId)) {
+        remaining.splice(nextIndex, 1);
+        scheduledGroupCount += 1;
+      } else {
+        nextIndex += 1;
+      }
+    }
+  }
+
+  const nextFrontier = new Set(frontierLeafIdSet);
+  for (const leafId of expandedLeafIds) {
+    nextFrontier.add(leafId);
+  }
+
+  return {
+    expandedLeafIds: [...expandedLeafIds].sort((left, right) => left.localeCompare(right)),
+    nextFrontierLeafIds: [...nextFrontier].sort((left, right) => left.localeCompare(right)),
+    scheduledGroupCount,
+  };
+}
+
+function compareBlockedGroups(
+  left: TreeFrontierPartitionError["blockedGroups"][number],
+  right: TreeFrontierPartitionError["blockedGroups"][number],
+): number {
+  if (left.depth !== right.depth) {
+    return left.depth - right.depth;
+  }
+  if (left.groupIndex !== right.groupIndex) {
+    return left.groupIndex - right.groupIndex;
+  }
+  return left.parentId.localeCompare(right.parentId);
+}
+
+function mergeRecoveryReusableSummaries(
+  target: Record<string, ParentSummaryRecord>,
+  injected: Record<string, ParentSummaryRecord>,
+): number {
+  let mergedCount = 0;
+  const parentIds = Object.keys(injected).sort((left, right) => left.localeCompare(right));
+  for (const parentId of parentIds) {
+    const nextSummary = injected[parentId];
+    const previousSummary = target[parentId];
+    if (!previousSummary || !areParentSummaryRecordsEqual(previousSummary, nextSummary)) {
+      target[parentId] = nextSummary;
+      mergedCount += 1;
+    }
+  }
+  return mergedCount;
+}
+
+function areParentSummaryRecordsEqual(left: ParentSummaryRecord, right: ParentSummaryRecord): boolean {
+  return JSON.stringify(left, stableReplacer) === JSON.stringify(right, stableReplacer);
+}
+
+function buildReusableParentSummaryMap(tree: ExplanationTree): Record<string, ParentSummaryRecord> {
+  const reusable: Record<string, ParentSummaryRecord> = {};
+  const parents = Object.values(tree.nodes)
+    .filter((node): node is ExplanationTree["nodes"][string] & { kind: "parent" } => node.kind === "parent")
+    .sort((left, right) => left.id.localeCompare(right.id));
+  for (const parent of parents) {
+    if (
+      parent.whyTrueFromChildren === undefined ||
+      parent.complexityScore === undefined ||
+      parent.abstractionScore === undefined ||
+      parent.confidence === undefined
+    ) {
+      continue;
+    }
+    const children: Array<{ id: string; statement: string }> = [];
+    let missingChild = false;
+    for (const childId of parent.childIds) {
+      const child = tree.nodes[childId];
+      if (!child) {
+        missingChild = true;
+        break;
+      }
+      children.push({ id: child.id, statement: child.statement });
+    }
+    if (missingChild) {
+      continue;
+    }
+    const summary: ParentSummaryRecord = {
+      childStatementHash: computeChildStatementHash(children),
+      childStatementTextHash: computeChildStatementTextHash(children),
+      frontierLeafIdHash: computeFrontierLeafIdHash(parent.id, tree.nodes),
+      frontierLeafStatementHash: computeFrontierLeafStatementHash(parent.id, tree.nodes),
+      summary: {
+        parent_statement: parent.statement,
+        why_true_from_children: parent.whyTrueFromChildren,
+        new_terms_introduced: (parent.newTermsIntroduced ?? []).slice(),
+        complexity_score: parent.complexityScore,
+        abstraction_score: parent.abstractionScore,
+        evidence_refs: parent.evidenceRefs.slice(),
+        confidence: parent.confidence,
+      },
+      policyDiagnostics: parent.policyDiagnostics,
+    };
+    reusable[parent.id] = summary;
+  }
+  return reusable;
+}
+
+function computeChildStatementHash(
+  children: Array<{ id: string; statement: string }>,
+): string {
+  return createHash("sha256")
+    .update(children.map((child) => `${child.id}:${child.statement}`).join("\n"))
+    .digest("hex");
+}
+
+function summarizeTreeSummaryReuse(groupingDiagnostics: ExplanationTree["groupingDiagnostics"]): {
+  reusedGroupCount: number;
+  generatedGroupCount: number;
+  reusedByParentIdGroupCount: number;
+  reusedByChildHashGroupCount: number;
+  reusedByChildStatementHashGroupCount: number;
+  reusedByFrontierChildHashGroupCount: number;
+  reusedByFrontierChildStatementHashGroupCount: number;
+  skippedAmbiguousChildHashGroupCount: number;
+  skippedAmbiguousChildStatementHashGroupCount: number;
+} {
+  let reusedGroupCount = 0;
+  let generatedGroupCount = 0;
+  let reusedByParentIdGroupCount = 0;
+  let reusedByChildHashGroupCount = 0;
+  let reusedByChildStatementHashGroupCount = 0;
+  let reusedByFrontierChildHashGroupCount = 0;
+  let reusedByFrontierChildStatementHashGroupCount = 0;
+  let skippedAmbiguousChildHashGroupCount = 0;
+  let skippedAmbiguousChildStatementHashGroupCount = 0;
+  for (const layer of groupingDiagnostics) {
+    reusedGroupCount += layer.summaryReuse?.reusedGroupIndexes.length ?? 0;
+    generatedGroupCount += layer.summaryReuse?.generatedGroupIndexes.length ?? 0;
+    reusedByParentIdGroupCount += layer.summaryReuse?.reusedByParentIdGroupIndexes?.length ?? 0;
+    reusedByChildHashGroupCount += layer.summaryReuse?.reusedByChildHashGroupIndexes?.length ?? 0;
+    reusedByChildStatementHashGroupCount += layer.summaryReuse?.reusedByChildStatementHashGroupIndexes?.length ?? 0;
+    reusedByFrontierChildHashGroupCount += layer.summaryReuse?.reusedByFrontierChildHashGroupIndexes?.length ?? 0;
+    reusedByFrontierChildStatementHashGroupCount +=
+      layer.summaryReuse?.reusedByFrontierChildStatementHashGroupIndexes?.length ?? 0;
+    skippedAmbiguousChildHashGroupCount += layer.summaryReuse?.skippedAmbiguousChildHashGroupIndexes?.length ?? 0;
+    skippedAmbiguousChildStatementHashGroupCount +=
+      layer.summaryReuse?.skippedAmbiguousChildStatementHashGroupIndexes?.length ?? 0;
+  }
+  return {
+    reusedGroupCount,
+    generatedGroupCount,
+    reusedByParentIdGroupCount,
+    reusedByChildHashGroupCount,
+    reusedByChildStatementHashGroupCount,
+    reusedByFrontierChildHashGroupCount,
+    reusedByFrontierChildStatementHashGroupCount,
+    skippedAmbiguousChildHashGroupCount,
+    skippedAmbiguousChildStatementHashGroupCount,
+  };
+}
+
+function computeChildStatementTextHash(children: Array<{ statement: string }>): string {
+  return createHash("sha256")
+    .update(children.map((child, index) => `${index}:${child.statement}`).join("\n"))
+    .digest("hex");
+}
+
+function computeFrontierLeafIdHash(
+  nodeId: string,
+  nodes: Record<string, ExplanationTree["nodes"][string]>,
+): string {
+  const leaves = collectFrontierLeaves(nodeId, nodes).map((leaf) => leaf.id);
+  return createHash("sha256")
+    .update(leaves.map((leafId, index) => `${index}:${leafId}`).join("\n"))
+    .digest("hex");
+}
+
+function computeFrontierLeafStatementHash(
+  nodeId: string,
+  nodes: Record<string, ExplanationTree["nodes"][string]>,
+): string {
+  const statements = collectFrontierLeaves(nodeId, nodes).map((leaf) => leaf.statement);
+  return createHash("sha256")
+    .update(statements.map((statement, index) => `${index}:${statement}`).join("\n"))
+    .digest("hex");
+}
+
+function collectFrontierLeaves(
+  nodeId: string,
+  nodes: Record<string, ExplanationTree["nodes"][string]>,
+): Array<{ id: string; statement: string }> {
+  const node = nodes[nodeId];
+  if (!node) {
+    throw new Error(`Missing node '${nodeId}' while collecting frontier leaves.`);
+  }
+  if (node.kind === "leaf") {
+    return [{ id: node.id, statement: node.statement }];
+  }
+  const leaves: Array<{ id: string; statement: string }> = [];
+  for (const childId of node.childIds) {
+    leaves.push(...collectFrontierLeaves(childId, nodes));
+  }
+  return leaves;
+}
+
+function parseParentGroupIndex(parentId: string): number {
+  const match = parentId.match(/^p_\d+_(\d+)_/);
+  if (!match) {
+    return 0;
+  }
+  const parsed = Number(match[1]);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    return 0;
+  }
+  return parsed;
+}
+
+function collectAncestorParents(
+  changedLeafIds: string[],
+  parentByChildId: Map<string, string>,
+  nodes: Record<string, ExplanationTree["nodes"][string]>,
+): string[] {
+  const affected = new Set<string>();
+  for (const leafId of changedLeafIds) {
+    let cursor = parentByChildId.get(leafId);
+    while (cursor) {
+      affected.add(cursor);
+      cursor = parentByChildId.get(cursor);
+    }
+  }
+  return Array.from(affected).sort((left, right) => {
+    const depthDelta = (nodes[left]?.depth ?? 0) - (nodes[right]?.depth ?? 0);
+    if (depthDelta !== 0) {
+      return depthDelta;
+    }
+    return left.localeCompare(right);
+  });
+}
+
+async function generatePolicyCompliantParentSummary(
+  provider: ProviderClient,
+  children: Array<{ id: string; statement: string; complexity?: number; prerequisiteIds?: string[] }>,
+  config: ExplanationConfig,
+  depth: number,
+  groupIndex: number,
+  preSummaryDecision: ReturnType<typeof evaluatePreSummaryPolicy>,
+): Promise<{
+  summary: Awaited<ReturnType<typeof generateParentSummary>>["summary"];
+  policyDiagnostics: ExplanationTree["policyDiagnosticsByParent"][string];
+}> {
+  const maxAttempts = 2;
+  let lastPostSummary = evaluatePostSummaryPolicy(children, emptySummary(children), config);
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      const result = await generateParentSummary(provider, {
+        children,
+        config,
+        systemPrompt:
+          attempt === 0
+            ? undefined
+            : [
+                "You are a proof-grounded summarizer.",
+                "Use only child-grounded vocabulary except declared new_terms_introduced.",
+                "Cite every child ID in evidence_refs.",
+                "Keep parent claims explicitly entailed by child statements.",
+                "Output strict JSON only.",
+              ].join(" "),
+      });
+
+      const postSummaryDecision = evaluatePostSummaryPolicy(children, result.summary, config);
+      lastPostSummary = postSummaryDecision;
+      if (postSummaryDecision.ok) {
+        return {
+          summary: result.summary,
+          policyDiagnostics: {
+            depth,
+            groupIndex,
+            retriesUsed: attempt,
+            preSummary: preSummaryDecision,
+            postSummary: postSummaryDecision,
+          },
+        };
+      }
+    } catch (error) {
+      if (error instanceof SummaryValidationError) {
+        lastPostSummary = {
+          ok: false,
+          violations: error.diagnostics.violations.map((violation) => mapCriticViolationToPolicyViolation(violation)),
+          metrics: {
+            complexitySpread: 0,
+            prerequisiteOrderViolations: 0,
+            introducedTermCount: 0,
+            evidenceCoverageRatio: 0,
+            vocabularyContinuityRatio: 0,
+            vocabularyContinuityFloor: 1,
+          },
+        };
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  throw new TreePolicyError("Failed to produce a policy-compliant parent summary after deterministic retries.", {
+    depth,
+    groupIndex,
+    retriesUsed: maxAttempts - 1,
+    preSummary: preSummaryDecision,
+    postSummary: lastPostSummary,
+  });
+}
+
+function mapCriticViolationToPolicyViolation(
+  violation: SummaryValidationError["diagnostics"]["violations"][number],
+): ReturnType<typeof evaluatePostSummaryPolicy>["violations"][number] {
+  switch (violation.code) {
+    case "term_budget":
+      return { code: "term_budget", message: violation.message, details: violation.details };
+    case "evidence_refs":
+      return { code: "evidence_coverage", message: violation.message, details: violation.details };
+    case "schema":
+    case "complexity_band":
+    case "unsupported_terms":
+      return { code: "vocabulary_continuity", message: violation.message, details: violation.details };
+    default: {
+      const exhaustiveCheck: never = violation.code;
+      throw new Error(`Unhandled critic violation code: ${String(exhaustiveCheck)}`);
+    }
+  }
+}
+
+function emptySummary(children: Array<{ id: string }>): {
+  parent_statement: string;
+  why_true_from_children: string;
+  new_terms_introduced: string[];
+  complexity_score: number;
+  abstraction_score: number;
+  evidence_refs: string[];
+  confidence: number;
+} {
+  return {
+    parent_statement: "",
+    why_true_from_children: "",
+    new_terms_introduced: [],
+    complexity_score: 0,
+    abstraction_score: 0,
+    evidence_refs: children.map((child) => child.id),
+    confidence: 0,
+  };
 }
 
 function createDeterministicSummaryProvider(): ProviderClient {

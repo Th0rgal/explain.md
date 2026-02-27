@@ -42,11 +42,26 @@ Deterministic cache-reuse diagnostics for proof dataset generation.
 
 ## Determinism + invalidation
 - Persistent cache path is deterministic by `proofId` and `configHash`.
-- Reuse requires a matching `sourceFingerprint` (computed from Lean fixture file paths + content hashes).
+- `sourceFingerprint` is computed from Lean fixture file paths + content hashes.
+- On `sourceFingerprint` mismatch, theorem-level canonical leaf deltas are computed:
+  - empty delta: cached snapshot is reused (`cache_semantic_hit`) and cache entry is rebased to the new fingerprint;
+  - non-empty delta + stable theorem topology (same IDs/dependencies): deterministic affected-ancestor subtree recompute runs with `cache_incremental_subtree_rebuild` diagnostics;
+  - non-empty delta + topology/structure change: deterministic topology-aware rebuild runs with `cache_incremental_topology_rebuild`, reusing parent nodes first by stable parent ID, then by child-grounding hash, and finally by same-depth child-statement hash when deterministic reindexing shifts parent IDs;
+    - when hash-based fallback candidates are ambiguous, reuse is allowed only if ordered descendant-leaf frontier hashes uniquely disambiguate a candidate;
+    - topology rebuild first attempts frontier-partitioned generation (generate only groups that descend from changed leaf IDs), then deterministically retries with a greedy minimal hitting-set frontier expansion across blocked groups (expands the smallest deterministic leaf set that covers blocked groups for the retry pass), while carrying forward reusable summaries from blocked attempts so unchanged generated parents are not regenerated across retries, and only falls back to unrestricted topology reuse if no blocked group can expand the frontier.
+  - final fallback remains deterministic full rebuild (`cache_incremental_rebuild`) when topology-aware reuse cannot be applied.
 - Cache entry integrity is checked by snapshot/dependency hash validation before reuse.
 - On mismatch or invalid entry, the dataset is rebuilt deterministically and cache is overwritten.
+- Topology-rebuild diagnostics include machine-checkable reuse counters (`reusedParentSummaryCount`, `generatedParentSummaryCount`, `reusedParentNodeCount`, `generatedParentNodeCount`, `reusedParentByStableIdCount`, `reusedParentByChildHashCount`, `reusedParentByChildStatementHashCount`, `reusedParentByFrontierChildHashCount`, `reusedParentByFrontierChildStatementHashCount`, `skippedAmbiguousChildHashReuseCount`, `skippedAmbiguousChildStatementHashReuseCount`) plus frontier-partition telemetry (`frontierPartitionLeafCount`, `frontierPartitionBlockedGroupCount`, `frontierPartitionRecoveredLeafCount`, `frontierPartitionRecoveredSummaryCount`, `frontierPartitionRecoveryPassCount`, `frontierPartitionRecoveryScheduledGroupCount`, `frontierPartitionRecoveryStrategy`, `frontierPartitionFallbackUsed`).
 
 ## Environment
 - `EXPLAIN_MD_WEB_PROOF_CACHE_DIR`
   - overrides persistent cache directory
   - default: `.explain-md/web-proof-cache`
+- `EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT`
+  - overrides Lean fixture project root lookup used for ingestion/cache fingerprinting
+  - useful for deterministic benchmark/invalidation runs on temporary fixture copies
+
+## Benchmark evidence
+- Run `npm run web:bench:cache` to generate a machine-checkable benchmark artifact at `docs/benchmarks/proof-cache-benchmark.json`.
+- Benchmark command and output contract are documented in [proof-cache-benchmark.md](./proof-cache-benchmark.md).

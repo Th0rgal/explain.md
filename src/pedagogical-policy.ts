@@ -30,12 +30,22 @@ export interface PolicyDecision {
   metrics: PolicyMetrics;
 }
 
+export type PolicyRewriteStrategy = "baseline" | "evidence_strict" | "vocabulary_strict" | "strict_all";
+
+export interface PolicyRewriteAttempt {
+  attemptIndex: number;
+  strategy: PolicyRewriteStrategy;
+  postSummary: PolicyDecision;
+  summaryValidationErrorCodes?: string[];
+}
+
 export interface ParentPolicyDiagnostics {
   depth: number;
   groupIndex: number;
   retriesUsed: number;
   preSummary: PolicyDecision;
   postSummary: PolicyDecision;
+  rewriteTrace?: PolicyRewriteAttempt[];
 }
 
 const STOP_WORDS = new Set<string>([

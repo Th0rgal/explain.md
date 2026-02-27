@@ -29,6 +29,10 @@ import {
   type VerificationJobResponse,
   type VerificationJobsResponse,
 } from "../lib/api-client";
+import { buildExplanationDiffPanelView } from "../lib/explanation-diff-view";
+import { buildLeafSourceProvenanceView } from "../lib/leaf-provenance";
+import { resolveTreeKeyboardIntent } from "../lib/tree-keyboard-navigation";
+import { computeTreeRenderWindow } from "../lib/tree-render-window";
 import { buildTreeScene, isWholeTreeLoaded } from "../lib/tree-scene";
 
 const ProofTree3D = dynamic(() => import("./proof-tree-3d").then((module) => module.ProofTree3D), {
@@ -48,6 +52,9 @@ const DEFAULT_CONFIG: ProofConfigInput = {
 };
 
 const DEFAULT_PROFILE_USER_ID = "local-user";
+const TREE_RENDER_MAX_VISIBLE_ROWS = Number.parseInt(process.env.NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_MAX_ROWS ?? "120", 10);
+const TREE_RENDER_OVERSCAN_ROWS = Number.parseInt(process.env.NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_OVERSCAN_ROWS ?? "24", 10);
+const DIFF_RENDER_MAX_CHANGES = Number.parseInt(process.env.NEXT_PUBLIC_EXPLAIN_MD_DIFF_RENDER_MAX_CHANGES ?? "24", 10);
 
 interface ProofExplorerProps {
   proofId: string;
@@ -75,6 +82,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
   const [pathResult, setPathResult] = useState<NodePathResponse | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedLeafId, setSelectedLeafId] = useState<string | null>(null);
+  const [focusedTreeNodeId, setFocusedTreeNodeId] = useState<string | null>(null);
   const [leafDetail, setLeafDetail] = useState<LeafDetailResponse | null>(null);
   const [verificationJobs, setVerificationJobs] = useState<VerificationJobsResponse | null>(null);
   const [selectedVerificationJobId, setSelectedVerificationJobId] = useState<string | null>(null);
@@ -84,10 +92,19 @@ export function ProofExplorer(props: ProofExplorerProps) {
   const [isHydrating3d, setIsHydrating3d] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const treeNodeButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const isHydrating3dRef = useRef<boolean>(false);
   const nodesByIdRef = useRef<Record<string, TreeNodeRecord>>({});
   const childrenByParentIdRef = useRef<Record<string, NodeChildrenState>>({});
   const profileProjectId = useMemo(() => props.proofId, [props.proofId]);
+  const leafSourceProvenance = useMemo(
+    () => (leafDetail?.view ? buildLeafSourceProvenanceView(leafDetail.view.shareReference) : undefined),
+    [leafDetail],
+  );
+  const diffPanelView = useMemo(
+    () => (diff ? buildExplanationDiffPanelView(diff.report, { maxChanges: DIFF_RENDER_MAX_CHANGES }) : null),
+    [diff],
+  );
 
   useEffect(() => {
     nodesByIdRef.current = nodesById;
@@ -449,6 +466,60 @@ export function ProofExplorer(props: ProofExplorerProps) {
     return rows;
   }, [childrenByParentId, expandedNodeIds, nodesById, root]);
 
+  const keyboardRows = useMemo(
+    () =>
+      visibleRows.map((row) => ({
+        nodeId: row.node.id,
+        nodeKind: row.node.kind,
+        parentId: row.parentId,
+        isExpanded: expandedNodeIds.includes(row.node.id),
+        loadedChildIds: childrenByParentId[row.node.id]?.childIds ?? [],
+      })),
+    [childrenByParentId, expandedNodeIds, visibleRows],
+  );
+
+  const focusRowIndex = useMemo(
+    () => (focusedTreeNodeId ? visibleRows.findIndex((row) => row.node.id === focusedTreeNodeId) : -1),
+    [focusedTreeNodeId, visibleRows],
+  );
+  const selectedRowIndex = useMemo(
+    () => (selectedLeafId ? visibleRows.findIndex((row) => row.node.id === selectedLeafId) : -1),
+    [selectedLeafId, visibleRows],
+  );
+  const renderAnchorIndex = focusRowIndex >= 0 ? focusRowIndex : selectedRowIndex >= 0 ? selectedRowIndex : 0;
+  const renderWindow = useMemo(
+    () =>
+      computeTreeRenderWindow({
+        totalRowCount: visibleRows.length,
+        anchorRowIndex: renderAnchorIndex,
+        maxVisibleRows: TREE_RENDER_MAX_VISIBLE_ROWS,
+        overscanRows: TREE_RENDER_OVERSCAN_ROWS,
+      }),
+    [renderAnchorIndex, visibleRows.length],
+  );
+  const renderedRows = useMemo(() => visibleRows.slice(renderWindow.startIndex, renderWindow.endIndex), [renderWindow, visibleRows]);
+
+  useEffect(() => {
+    if (visibleRows.length === 0) {
+      setFocusedTreeNodeId(null);
+      return;
+    }
+
+    setFocusedTreeNodeId((current) => {
+      if (current && visibleRows.some((row) => row.node.id === current)) {
+        return current;
+      }
+      return visibleRows[0]?.node.id ?? null;
+    });
+  }, [visibleRows]);
+
+  useEffect(() => {
+    if (!focusedTreeNodeId) {
+      return;
+    }
+    treeNodeButtonRefs.current[focusedTreeNodeId]?.focus();
+  }, [focusedTreeNodeId]);
+
   const pathNodeIds = useMemo(() => {
     if (!pathResult?.path.ok) {
       return [] as string[];
@@ -479,14 +550,22 @@ export function ProofExplorer(props: ProofExplorerProps) {
   }
 
   function toggleExpansion(nodeId: string): void {
+    const isExpanded = expandedNodeIds.includes(nodeId);
+    setNodeExpanded(nodeId, !isExpanded);
+  }
+
+  function setNodeExpanded(nodeId: string, expanded: boolean): void {
     const node = nodesById[nodeId];
     setExpandedNodeIds((current) => {
-      if (current.includes(nodeId)) {
+      if (!expanded) {
         return current.filter((value) => value !== nodeId);
+      }
+      if (current.includes(nodeId)) {
+        return current;
       }
       return [...current, nodeId].sort((left, right) => left.localeCompare(right));
     });
-    if (node?.kind === "parent" && !childrenByParentId[nodeId]) {
+    if (expanded && node?.kind === "parent" && !childrenByParentId[nodeId]) {
       void loadChildrenPage(nodeId);
     }
   }
@@ -661,6 +740,46 @@ export function ProofExplorer(props: ProofExplorerProps) {
     setConfig(selected.config as ProofConfigInput);
   }
 
+  function handleTreeKeyDown(nodeId: string, key: string): void {
+    const intent = resolveTreeKeyboardIntent(key, nodeId, keyboardRows);
+    if (intent.kind === "noop") {
+      return;
+    }
+
+    if (intent.kind === "move_focus") {
+      setFocusedTreeNodeId(intent.nodeId);
+      return;
+    }
+
+    if (intent.kind === "set_expanded") {
+      setNodeExpanded(intent.nodeId, intent.expanded);
+      if (intent.expanded) {
+        setFocusedTreeNodeId(intent.nodeId);
+      }
+      return;
+    }
+
+    if (intent.kind === "activate_leaf") {
+      void selectLeaf(intent.nodeId);
+      return;
+    }
+
+    setSelectedLeafId(null);
+  }
+
+  function shiftRenderWindow(direction: -1 | 1): void {
+    if (visibleRows.length === 0) {
+      return;
+    }
+    const currentIndex = focusRowIndex >= 0 ? focusRowIndex : 0;
+    const stepSize = Math.max(1, Math.floor(TREE_RENDER_MAX_VISIBLE_ROWS));
+    const nextIndex = Math.max(0, Math.min(visibleRows.length - 1, currentIndex + direction * stepSize));
+    const nextRow = visibleRows[nextIndex];
+    if (nextRow) {
+      setFocusedTreeNodeId(nextRow.node.id);
+    }
+  }
+
   if (isLoading) {
     return <div className="panel">Loading seeded explanation tree...</div>;
   }
@@ -823,10 +942,22 @@ export function ProofExplorer(props: ProofExplorerProps) {
         {profileError ? <p className="meta">Profile error: {profileError}</p> : null}
       </section>
 
-      <section className="panel tree" aria-label="Root-first explanation tree">
+      <section
+        className="panel tree"
+        aria-label="Root-first explanation tree"
+        data-tree-render-mode={renderWindow.mode}
+        data-tree-rendered-row-count={renderWindow.renderedRowCount}
+        data-tree-total-row-count={visibleRows.length}
+        data-tree-hidden-above={renderWindow.hiddenAboveCount}
+        data-tree-hidden-below={renderWindow.hiddenBelowCount}
+      >
         <h2>{viewMode === "tree3d" ? "3D Tree" : "Tree"}</h2>
         <p className="meta">Config hash: {treeConfigHash || root?.configHash || "unavailable"}</p>
         <p className="meta">Snapshot hash: {treeSnapshotHash || root?.snapshotHash || "unavailable"}</p>
+        <p className="meta">
+          Render mode: {renderWindow.mode} | rows {renderWindow.renderedRowCount}/{visibleRows.length} | hidden above{" "}
+          {renderWindow.hiddenAboveCount} | hidden below {renderWindow.hiddenBelowCount}
+        </p>
 
         {viewMode === "tree3d" ? (
           <ProofTree3D
@@ -837,76 +968,127 @@ export function ProofExplorer(props: ProofExplorerProps) {
             }}
           />
         ) : (
-          <ul className="tree-list" role="tree">
-            {visibleRows.map((row) => {
-              const { node } = row;
-              const childrenState = childrenByParentId[node.id];
-              const isExpanded = expandedNodeIds.includes(node.id);
-              const indentStyle = { paddingLeft: `${row.depthFromRoot * 1.25}rem` };
-              const isSelected = selectedNodeId === node.id;
-              return (
-                <li
-                  key={node.id}
-                  role="treeitem"
-                  aria-expanded={node.kind === "parent" ? isExpanded : undefined}
-                  aria-selected={isSelected}
-                >
-                  <div className="tree-row" style={indentStyle}>
-                    {node.kind === "parent" ? (
-                      <button type="button" onClick={() => toggleExpansion(node.id)} aria-label={`Toggle ${node.id}`}>
-                        {isExpanded ? "Collapse" : "Expand"}
+          <>
+            {renderWindow.hiddenAboveCount > 0 ? (
+              <div className="tree-row">
+                <button type="button" onClick={() => shiftRenderWindow(-1)}>
+                  Show previous rows
+                </button>
+                <span className="meta">{renderWindow.hiddenAboveCount} rows above current window</span>
+              </div>
+            ) : null}
+            <ul className="tree-list" role="tree">
+              {renderedRows.map((row) => {
+                const { node } = row;
+                const childrenState = childrenByParentId[node.id];
+                const isExpanded = expandedNodeIds.includes(node.id);
+                const indentStyle = { paddingLeft: `${row.depthFromRoot * 1.25}rem` };
+                const isSelectedLeaf = node.kind === "leaf" && selectedLeafId === node.id;
+                const siblingIds = row.parentId ? childrenByParentId[row.parentId]?.childIds ?? [] : [node.id];
+                const siblingIndex = siblingIds.indexOf(node.id);
+                const setSize = siblingIds.length || 1;
+                const posInSet = siblingIndex >= 0 ? siblingIndex + 1 : 1;
+                return (
+                  <li
+                    key={node.id}
+                    role="none"
+                  >
+                    <div className="tree-row" style={indentStyle}>
+                      {node.kind === "parent" ? (
+                        <button type="button" onClick={() => toggleExpansion(node.id)} aria-label={`Toggle ${node.id}`} tabIndex={-1}>
+                          {isExpanded ? "Collapse" : "Expand"}
+                        </button>
+                      ) : (
+                        <span className="leaf-pill">Leaf</span>
+                      )}
+                      <button
+                        type="button"
+                        className="statement-button"
+                        ref={(element) => {
+                          treeNodeButtonRefs.current[node.id] = element;
+                        }}
+                        role="treeitem"
+                        aria-level={row.depthFromRoot + 1}
+                        aria-setsize={setSize}
+                        aria-posinset={posInSet}
+                        aria-expanded={node.kind === "parent" ? isExpanded : undefined}
+                        aria-selected={isSelectedLeaf}
+                        tabIndex={focusedTreeNodeId === node.id ? 0 : -1}
+                        onFocus={() => setFocusedTreeNodeId(node.id)}
+                        onKeyDown={(event) => {
+                          const handledKeys = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "Enter", " "]);
+                          if (!handledKeys.has(event.key)) {
+                            return;
+                          }
+                          event.preventDefault();
+                          handleTreeKeyDown(node.id, event.key);
+                        }}
+                        onClick={() => (node.kind === "leaf" ? selectLeaf(node.id) : setSelectedLeafId(null))}
+                      >
+                        {node.statement}
                       </button>
-                    ) : (
-                      <span className="leaf-pill">Leaf</span>
-                    )}
-                    <button
-                      type="button"
-                      className="statement-button"
-                      aria-pressed={isSelected}
-                      onClick={() => {
-                        void selectNode(node.id, node.kind);
-                      }}
-                    >
-                      {node.statement}
-                    </button>
-                    {node.kind === "parent" && childrenState ? (
-                      <span className="meta">
-                        {childrenState.childIds.length}/{childrenState.totalChildren} loaded
-                      </span>
+                      {node.kind === "parent" && childrenState ? (
+                        <span className="meta">
+                          {childrenState.childIds.length}/{childrenState.totalChildren} loaded
+                        </span>
+                      ) : null}
+                    </div>
+                    {node.kind === "parent" && isExpanded && childrenState?.hasMore ? (
+                      <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
+                        <button type="button" onClick={() => loadChildrenPage(node.id)} disabled={childrenState.loading}>
+                          {childrenState.loading ? "Loading…" : "Load more"}
+                        </button>
+                        <span className="meta">{row.hiddenChildCount} hidden children</span>
+                      </div>
                     ) : null}
-                  </div>
-                  {node.kind === "parent" && isExpanded && childrenState?.hasMore ? (
-                    <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
-                      <button type="button" onClick={() => void loadChildrenPage(node.id)} disabled={childrenState.loading}>
-                        {childrenState.loading ? "Loading…" : "Load more"}
-                      </button>
-                      <span className="meta">{row.hiddenChildCount} hidden children</span>
-                    </div>
-                  ) : null}
-                  {node.kind === "parent" && isExpanded && childrenState?.diagnostics.length ? (
-                    <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
-                      <span className="meta">{childrenState.diagnostics.map((diagnostic) => diagnostic.code).join(", ")}</span>
-                    </div>
-                  ) : null}
-                  {node.kind === "parent" && node.policyDiagnostics ? (
-                    <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
-                      <span className="meta">
-                        Policy pre/post: {node.policyDiagnostics.preSummary.ok ? "ok" : "violating"}/
-                        {node.policyDiagnostics.postSummary.ok ? "ok" : "violating"} | spread=
-                        {node.policyDiagnostics.preSummary.metrics.complexitySpread} | new-terms=
-                        {node.policyDiagnostics.postSummary.metrics.introducedTermCount}
-                      </span>
-                    </div>
-                  ) : null}
-                  {node.kind === "leaf" && pathNodeIds.includes(node.id) ? (
-                    <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
-                      <span className="meta">Included in selected ancestry path</span>
-                    </div>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
+                    {node.kind === "parent" && isExpanded && childrenState?.diagnostics.length ? (
+                      <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
+                        <span className="meta">{childrenState.diagnostics.map((diagnostic) => diagnostic.code).join(", ")}</span>
+                      </div>
+                    ) : null}
+                    {node.kind === "parent" && node.policyDiagnostics ? (
+                      <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
+                        <span className="meta">
+                          Policy pre/post: {node.policyDiagnostics.preSummary.ok ? "ok" : "violating"}/
+                          {node.policyDiagnostics.postSummary.ok ? "ok" : "violating"} | spread=
+                          {node.policyDiagnostics.preSummary.metrics.complexitySpread} | new-terms=
+                          {node.policyDiagnostics.postSummary.metrics.introducedTermCount}
+                        </span>
+                      </div>
+                    ) : null}
+                    {node.kind === "leaf" && pathNodeIds.includes(node.id) ? (
+                      <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
+                        <span className="meta">Included in selected ancestry path</span>
+                      </div>
+                    ) : null}
+                    {node.kind === "parent" && isExpanded && !childrenState ? (
+                      <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
+                        <span className="meta">Loading children...</span>
+                      </div>
+                    ) : null}
+                    {node.kind === "parent" && isExpanded && childrenState && childrenState.totalChildren === 0 ? (
+                      <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
+                        <span className="meta">No children</span>
+                      </div>
+                    ) : null}
+                    {node.kind === "parent" && isExpanded && childrenState && !childrenState.hasMore && childrenState.totalChildren > 0 ? (
+                      <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
+                        <span className="meta">All children loaded</span>
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+            {renderWindow.hiddenBelowCount > 0 ? (
+              <div className="tree-row">
+                <button type="button" onClick={() => shiftRenderWindow(1)}>
+                  Show next rows
+                </button>
+                <span className="meta">{renderWindow.hiddenBelowCount} rows below current window</span>
+              </div>
+            ) : null}
+          </>
         )}
 
         <p className="meta">Whole-tree loaded: {wholeTreeLoaded ? "yes" : "no"}</p>
@@ -916,13 +1098,65 @@ export function ProofExplorer(props: ProofExplorerProps) {
         <h2>Diff</h2>
         <p className="meta">Diff hash: {diff?.diffHash ?? "unavailable"}</p>
         <p className="meta">Changed statements: {diff?.report.summary.changed ?? 0}</p>
-        <ul>
-          {(diff?.report.changes ?? []).slice(0, 8).map((change) => (
-            <li key={change.key}>
-              <strong>{change.type}</strong> {change.kind} ({change.supportLeafIds.join(", ")})
-            </li>
-          ))}
-        </ul>
+        <p
+          className="meta"
+          data-diff-total-changes={diffPanelView?.totalChanges ?? 0}
+          data-diff-rendered-changes={diffPanelView?.renderedChanges ?? 0}
+          data-diff-truncated-count={diffPanelView?.truncatedChangeCount ?? 0}
+        >
+          Rendered changes: {diffPanelView?.renderedChanges ?? 0}/{diffPanelView?.totalChanges ?? 0} | truncated:{" "}
+          {diffPanelView?.truncatedChangeCount ?? 0}
+        </p>
+        {diffPanelView ? (
+          <div className="diff-grid">
+            <div>
+              <h3>Changed ({diffPanelView.changed.length})</h3>
+              <ul>
+                {diffPanelView.changed.map((change) => (
+                  <li key={change.key} className="diff-change diff-change-changed">
+                    <p className="meta">
+                      {change.kind} | support leaves ({change.supportLeafCount}): {change.supportLeafIds.join(", ") || "none"}
+                    </p>
+                    <p>
+                      <strong>Before:</strong> {change.statementDelta?.prefix}
+                      <mark className="diff-mark-removed">{change.statementDelta?.beforeChanged || "(none)"}</mark>
+                      {change.statementDelta?.suffix}
+                    </p>
+                    <p>
+                      <strong>After:</strong> {change.statementDelta?.prefix}
+                      <mark className="diff-mark-added">{change.statementDelta?.afterChanged || "(none)"}</mark>
+                      {change.statementDelta?.suffix}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h3>Added ({diffPanelView.added.length})</h3>
+              <ul>
+                {diffPanelView.added.map((change) => (
+                  <li key={change.key} className="diff-change diff-change-added">
+                    <p className="meta">
+                      {change.kind} | support leaves ({change.supportLeafCount}): {change.supportLeafIds.join(", ") || "none"}
+                    </p>
+                    <p>{change.statementAfter ?? "(missing candidate statement)"}</p>
+                  </li>
+                ))}
+              </ul>
+              <h3>Removed ({diffPanelView.removed.length})</h3>
+              <ul>
+                {diffPanelView.removed.map((change) => (
+                  <li key={change.key} className="diff-change diff-change-removed">
+                    <p className="meta">
+                      {change.kind} | support leaves ({change.supportLeafCount}): {change.supportLeafIds.join(", ") || "none"}
+                    </p>
+                    <p>{change.statementBefore ?? "(missing baseline statement)"}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section className="panel diff" aria-label="Policy calibration report">
@@ -964,6 +1198,24 @@ export function ProofExplorer(props: ProofExplorerProps) {
         {pathResult?.path.path.length ? <p className="meta">Ancestry: {pathResult.path.path.map((node) => node.id).join(" -> ")}</p> : null}
         {leafDetail?.view && (
           <>
+            <p className="meta" aria-label="Source URL provenance">
+              Source URL provenance: {leafSourceProvenance?.originLabel ?? "unavailable"}
+            </p>
+            <p className="meta">{leafSourceProvenance?.originDescription ?? "Source provenance unavailable."}</p>
+            {leafSourceProvenance?.deepLinkAvailable ? (
+              <p>
+                <a
+                  href={leafSourceProvenance.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Open source link (${leafSourceProvenance.originLabel})`}
+                >
+                  Open source span
+                </a>
+              </p>
+            ) : (
+              <p className="meta">Source deep-link unavailable for this leaf.</p>
+            )}
             <p>
               <strong>{leafDetail.view.leaf.id}</strong>
             </p>

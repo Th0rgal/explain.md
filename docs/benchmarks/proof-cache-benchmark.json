@@ -1,0 +1,89 @@
+{
+  "schemaVersion": "1.0.0",
+  "generatedAt": "2026-02-27T11:56:31.137Z",
+  "proofId": "lean-verity-fixture",
+  "configHash": "1b1e2b9ff73897b141a9f88c8d23a3b884495340813865fd955fa8fc3eaa4da2",
+  "requestHash": "e6f53e14545f9579927084e1924992e7294f331551f9b89f4e93dc25669d6696",
+  "outcomeHash": "8c21571832c4ac08244f38c32b7b0dd128f4c6fc77cb944eae0297cfe7cfebde",
+  "parameters": {
+    "coldIterations": 3,
+    "warmIterations": 3,
+    "mutationTargetPath": "Verity/Core.lean"
+  },
+  "paths": {
+    "fixtureProjectRootHash": "9dac218e184db37c6f837b6491ec4e075dc791d5ac166254c6b13e57a115aaa5",
+    "cacheDirHash": "35f37f19488ccbbaef0b5a10726ae337f296fdb596a9117b45cf0df10d27b50b"
+  },
+  "scenarios": {
+    "coldNoPersistentCache": {
+      "iterations": 3,
+      "statuses": [
+        "miss",
+        "miss",
+        "miss"
+      ],
+      "meanMs": 10.788,
+      "medianMs": 4.599,
+      "minMs": 3.458,
+      "maxMs": 24.308
+    },
+    "warmPersistentCache": {
+      "iterations": 3,
+      "statuses": [
+        "hit",
+        "hit",
+        "hit"
+      ],
+      "meanMs": 2.201,
+      "medianMs": 2.655,
+      "minMs": 1.036,
+      "maxMs": 2.911
+    },
+    "semanticNoop": {
+      "beforeChangeStatus": "hit",
+      "afterChangeStatus": "hit",
+      "afterChangeDiagnostics": [
+        "cache_miss",
+        "cache_semantic_hit"
+      ],
+      "afterChangeSnapshotHash": "7a452c77177ec47e9c602b9068cb0f5223386278de9ba674d2822bdb132b4ec4"
+    },
+    "invalidation": {
+      "beforeChangeStatus": "hit",
+      "afterChangeStatus": "hit",
+      "afterChangeDiagnostics": [
+        "cache_incremental_subtree_rebuild",
+        "cache_miss"
+      ],
+      "afterChangeSnapshotHash": "6d82a245190ac7ac68063a9f778311c7ef4b62480843fc31410a5328efdff595",
+      "recoveryStatus": "hit",
+      "recoverySnapshotHash": "6d82a245190ac7ac68063a9f778311c7ef4b62480843fc31410a5328efdff595"
+    },
+    "topologyChange": {
+      "beforeChangeStatus": "hit",
+      "afterChangeStatus": "hit",
+      "afterChangeDiagnostics": [
+        "cache_incremental_topology_rebuild",
+        "cache_miss"
+      ],
+      "afterChangeSnapshotHash": "40996c1ce2f9bdae613d9c4e1b905a1a654a9732ec5e0e8afa6dadaf9050f454",
+      "reusedParentByStableIdCount": 0,
+      "reusedParentByChildHashCount": 0,
+      "reusedParentByChildStatementHashCount": 0,
+      "reusedParentByFrontierChildHashCount": 0,
+      "reusedParentByFrontierChildStatementHashCount": 0,
+      "skippedAmbiguousChildHashReuseCount": 0,
+      "skippedAmbiguousChildStatementHashReuseCount": 0,
+      "frontierPartitionLeafCount": 1,
+      "frontierPartitionBlockedGroupCount": 0,
+      "frontierPartitionRecoveredLeafCount": 0,
+      "frontierPartitionRecoveredSummaryCount": 0,
+      "frontierPartitionRecoveryPassCount": 0,
+      "frontierPartitionRecoveryScheduledGroupCount": 0,
+      "frontierPartitionRecoveryStrategy": "minimal_hitting_set_greedy",
+      "frontierPartitionFallbackUsed": false,
+      "recoveryStatus": "hit",
+      "recoverySnapshotHash": "40996c1ce2f9bdae613d9c4e1b905a1a654a9732ec5e0e8afa6dadaf9050f454"
+    }
+  }
+}
