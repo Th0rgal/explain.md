@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import {
   fetchConfigProfiles,
   fetchDiff,
@@ -27,6 +27,7 @@ import {
   type VerificationJobsResponse,
 } from "../lib/api-client";
 import { formatPolicyThresholdFailure } from "../lib/policy-thresholds";
+import { resolveTreeKeyboardIndex } from "../lib/tree-keyboard-navigation";
 import { planTreeRenderWindow, resolveTreeRenderSettings } from "../lib/tree-render-window";
 
 export const DEFAULT_CONFIG: ProofConfigInput = {
@@ -66,6 +67,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
   const [treeSnapshotHash, setTreeSnapshotHash] = useState<string>("");
   const [nodesById, setNodesById] = useState<Record<string, TreeNodeRecord>>({});
   const [childrenByParentId, setChildrenByParentId] = useState<Record<string, NodeChildrenState>>({});
+  const [activeTreeNodeId, setActiveTreeNodeId] = useState<string | null>(null);
   const [renderAnchorRowIndex, setRenderAnchorRowIndex] = useState<number>(0);
   const [diff, setDiff] = useState<DiffResponse | null>(null);
   const [policyReport, setPolicyReport] = useState<PolicyReportResponse | null>(null);
@@ -148,6 +150,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
             : {},
         );
         setExpandedNodeIds(rootNode.kind === "parent" ? [rootNode.id] : []);
+        setActiveTreeNodeId(rootNode.id);
         setDiff(diffData);
         setPolicyReport(policyData);
       } catch (loadError) {
@@ -339,6 +342,17 @@ export function ProofExplorer(props: ProofExplorerProps) {
   }, [visibleRows.length]);
 
   useEffect(() => {
+    if (visibleRows.length === 0) {
+      setActiveTreeNodeId(null);
+      return;
+    }
+    const hasCurrent = activeTreeNodeId ? visibleRows.some((row) => row.node.id === activeTreeNodeId) : false;
+    if (!hasCurrent) {
+      setActiveTreeNodeId(visibleRows[0]?.node.id ?? null);
+    }
+  }, [activeTreeNodeId, visibleRows]);
+
+  useEffect(() => {
     if (!selectedLeafId) {
       return;
     }
@@ -480,6 +494,50 @@ export function ProofExplorer(props: ProofExplorerProps) {
     } finally {
       setIsVerifying(false);
     }
+  }
+
+  async function handleTreeKeyDown(event: KeyboardEvent<HTMLUListElement>): Promise<void> {
+    if (visibleRows.length === 0) {
+      return;
+    }
+
+    const currentIndex = Math.max(
+      0,
+      visibleRows.findIndex((row) => row.node.id === activeTreeNodeId),
+    );
+    const nextIndex = resolveTreeKeyboardIndex({
+      currentIndex,
+      totalRows: visibleRows.length,
+      key: event.key,
+      pageSize: TREE_RENDER_SETTINGS.maxVisibleRows,
+    });
+
+    if (nextIndex !== null) {
+      event.preventDefault();
+      const nextNodeId = visibleRows[nextIndex]?.node.id ?? null;
+      if (nextNodeId) {
+        setActiveTreeNodeId(nextNodeId);
+        setRenderAnchorRowIndex(nextIndex);
+      }
+      return;
+    }
+
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
+    const activeRow = visibleRows[currentIndex];
+    if (!activeRow) {
+      return;
+    }
+
+    setActiveTreeNodeId(activeRow.node.id);
+    if (activeRow.node.kind === "parent") {
+      toggleExpansion(activeRow.node.id);
+      return;
+    }
+    await selectLeaf(activeRow.node.id);
   }
 
   async function refreshProfiles(): Promise<void> {
@@ -693,6 +751,8 @@ export function ProofExplorer(props: ProofExplorerProps) {
         data-tree-rendered-rows={renderWindow.renderedRowCount}
         data-tree-hidden-above={renderWindow.hiddenAboveCount}
         data-tree-hidden-below={renderWindow.hiddenBelowCount}
+        data-tree-active-node-id={activeTreeNodeId ?? "none"}
+        data-tree-active-row-index={visibleRows.findIndex((row) => row.node.id === activeTreeNodeId)}
       >
         <h2>Tree</h2>
         <p className="meta">Config hash: {treeConfigHash || root?.configHash || "unavailable"}</p>
@@ -728,19 +788,29 @@ export function ProofExplorer(props: ProofExplorerProps) {
             </span>
           </div>
         ) : null}
-        <ul className="tree-list" role="tree">
+        <ul
+          className="tree-list"
+          role="tree"
+          tabIndex={0}
+          aria-activedescendant={activeTreeNodeId ? `treeitem-${activeTreeNodeId}` : undefined}
+          onKeyDown={(event) => {
+            void handleTreeKeyDown(event);
+          }}
+        >
           {renderedRows.map((row) => {
             const { node } = row;
             const childrenState = childrenByParentId[node.id];
             const isExpanded = expandedNodeIds.includes(node.id);
             const indentStyle = { paddingLeft: `${row.depthFromRoot * 1.25}rem` };
             const isSelectedLeaf = node.kind === "leaf" && selectedLeafId === node.id;
+            const isActiveRow = node.id === activeTreeNodeId;
             return (
               <li
                 key={node.id}
+                id={`treeitem-${node.id}`}
                 role="treeitem"
                 aria-expanded={node.kind === "parent" ? isExpanded : undefined}
-                aria-selected={isSelectedLeaf}
+                aria-selected={isSelectedLeaf || isActiveRow}
               >
                 <div className="tree-row" style={indentStyle}>
                   {node.kind === "parent" ? (
@@ -753,8 +823,15 @@ export function ProofExplorer(props: ProofExplorerProps) {
                   <button
                     type="button"
                     className="statement-button"
-                    aria-pressed={isSelectedLeaf}
-                    onClick={() => (node.kind === "leaf" ? selectLeaf(node.id) : setSelectedLeafId(null))}
+                    aria-pressed={isSelectedLeaf || isActiveRow}
+                    onClick={() => {
+                      setActiveTreeNodeId(node.id);
+                      if (node.kind === "leaf") {
+                        void selectLeaf(node.id);
+                      } else {
+                        setSelectedLeafId(null);
+                      }
+                    }}
                   >
                     {node.statement}
                   </button>
