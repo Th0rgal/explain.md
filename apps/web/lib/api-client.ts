@@ -530,6 +530,68 @@ export interface VerificationObservabilityMetricsResponse {
   snapshotHash: string;
 }
 
+export interface ObservabilitySloThresholdsInput {
+  minProofRequestCount?: number;
+  minVerificationRequestCount?: number;
+  minProofCacheHitRate?: number;
+  minProofUniqueTraceRate?: number;
+  maxVerificationFailureRate?: number;
+  maxVerificationP95LatencyMs?: number;
+  maxVerificationMeanLatencyMs?: number;
+  minVerificationParentTraceRate?: number;
+}
+
+export interface ObservabilitySloReportResponse {
+  schemaVersion: "1.0.0";
+  thresholds: {
+    minProofRequestCount: number;
+    minVerificationRequestCount: number;
+    minProofCacheHitRate: number;
+    minProofUniqueTraceRate: number;
+    maxVerificationFailureRate: number;
+    maxVerificationP95LatencyMs: number;
+    maxVerificationMeanLatencyMs: number;
+    minVerificationParentTraceRate: number;
+  };
+  metrics: {
+    proof: {
+      requestCount: number;
+      cacheHitRate: number;
+      uniqueTraceRate: number;
+    };
+    verification: {
+      requestCount: number;
+      failureRate: number;
+      maxP95LatencyMs: number;
+      maxMeanLatencyMs: number;
+      parentTraceProvidedRate: number;
+    };
+  };
+  thresholdPass: boolean;
+  thresholdFailures: Array<{
+    code:
+      | "proof_request_count_below_min"
+      | "verification_request_count_below_min"
+      | "proof_cache_hit_rate_below_min"
+      | "proof_unique_trace_rate_below_min"
+      | "verification_failure_rate_above_max"
+      | "verification_p95_latency_above_max"
+      | "verification_mean_latency_above_max"
+      | "verification_parent_trace_rate_below_min";
+    message: string;
+    details: {
+      metric: string;
+      actual: number;
+      expected: number;
+      comparator: ">=" | "<=";
+    };
+  }>;
+  proofSnapshotHash: string;
+  verificationSnapshotHash: string;
+  generatedAt: string;
+  snapshotHash: string;
+}
+
 export interface ConfigProfilesResponse {
   projectId: string;
   userId: string;
@@ -719,6 +781,21 @@ export async function fetchVerificationObservabilityMetrics(): Promise<Verificat
 
 export async function fetchProofQueryObservabilityMetrics(): Promise<ProofQueryObservabilityMetricsResponse> {
   return requestJson<ProofQueryObservabilityMetricsResponse>("/api/observability/proof-query-metrics");
+}
+
+export async function fetchObservabilitySloReport(
+  thresholds: ObservabilitySloThresholdsInput = {},
+): Promise<ObservabilitySloReportResponse> {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(thresholds)) {
+    if (value !== undefined) {
+      params.set(key, String(value));
+    }
+  }
+  const query = params.toString();
+  return requestJson<ObservabilitySloReportResponse>(
+    `/api/observability/slo-report${query.length > 0 ? `?${query}` : ""}`,
+  );
 }
 
 export async function fetchConfigProfiles(projectId: string, userId: string): Promise<ConfigProfilesResponse> {

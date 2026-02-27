@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   fetchCacheReport,
   fetchConfigProfiles,
+  fetchObservabilitySloReport,
   fetchProofQueryObservabilityMetrics,
   fetchVerificationObservabilityMetrics,
   fetchDiff,
@@ -308,7 +309,7 @@ describe("api client", () => {
   });
 
   it("fetches observability metrics export endpoint", async () => {
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn(async (_input: string) =>
       buildMockResponse({
         ok: true,
         data: {
@@ -359,6 +360,66 @@ describe("api client", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith("/api/observability/proof-query-metrics", undefined);
+  });
+
+  it("fetches observability SLO report with threshold overrides", async () => {
+    const fetchMock = vi.fn(async (_input: string) =>
+      buildMockResponse({
+        ok: true,
+        data: {
+          schemaVersion: "1.0.0",
+          thresholds: {
+            minProofRequestCount: 1,
+            minVerificationRequestCount: 1,
+            minProofCacheHitRate: 0.2,
+            minProofUniqueTraceRate: 0.9,
+            maxVerificationFailureRate: 0.1,
+            maxVerificationP95LatencyMs: 300,
+            maxVerificationMeanLatencyMs: 250,
+            minVerificationParentTraceRate: 0.5,
+          },
+          metrics: {
+            proof: {
+              requestCount: 2,
+              cacheHitRate: 0.5,
+              uniqueTraceRate: 1,
+            },
+            verification: {
+              requestCount: 2,
+              failureRate: 0,
+              maxP95LatencyMs: 80,
+              maxMeanLatencyMs: 70,
+              parentTraceProvidedRate: 1,
+            },
+          },
+          thresholdPass: true,
+          thresholdFailures: [],
+          proofSnapshotHash: "a".repeat(64),
+          verificationSnapshotHash: "b".repeat(64),
+          generatedAt: "2026-02-27T00:00:00.000Z",
+          snapshotHash: "c".repeat(64),
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchObservabilitySloReport({
+      minProofCacheHitRate: 0.2,
+      minProofUniqueTraceRate: 0.9,
+      maxVerificationFailureRate: 0.1,
+      maxVerificationP95LatencyMs: 300,
+      maxVerificationMeanLatencyMs: 250,
+      minVerificationParentTraceRate: 0.5,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/api/observability/slo-report?");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("minProofCacheHitRate=0.2");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("minProofUniqueTraceRate=0.9");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("maxVerificationFailureRate=0.1");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("maxVerificationP95LatencyMs=300");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("maxVerificationMeanLatencyMs=250");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("minVerificationParentTraceRate=0.5");
   });
 
   it("encodes dependency graph query contract deterministically", async () => {

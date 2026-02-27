@@ -31,6 +31,7 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - `GET /api/verification/jobs/:jobId`
   - `GET /api/observability/verification-metrics`
   - `GET /api/observability/proof-query-metrics`
+  - `GET /api/observability/slo-report`
 - Verification state is persisted in a canonical ledger at `.explain-md/web-verification-ledger.json`.
 - Leaf detail uses persisted verification jobs from the ledger, so panel metadata is queryable and stable across reloads.
 - Verification requests emit deterministic hashes (`requestHash`, `queuedJobHash`, `finalJobHash`) and deterministic sequential job IDs (`job-000001`, ...).
@@ -43,6 +44,10 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 - Dashboard export contract:
   - `GET /api/observability/verification-metrics`
   - rolling-window aggregates with `requestCount`, `failureCount`, per-query `meanLatencyMs`/`p95LatencyMs`, and canonical `snapshotHash`
+- Observability SLO report contract:
+  - `GET /api/observability/slo-report`
+  - combines proof-query and verification snapshots into deterministic threshold evaluation (`thresholdPass`, `thresholdFailures`, `snapshotHash`)
+  - supports threshold override query params: `minProofRequestCount`, `minVerificationRequestCount`, `minProofCacheHitRate`, `minProofUniqueTraceRate`, `maxVerificationFailureRate`, `maxVerificationP95LatencyMs`, `maxVerificationMeanLatencyMs`, `minVerificationParentTraceRate`
 
 ## Determinism and provenance
 - Two deterministic datasets are exposed through one contract:
