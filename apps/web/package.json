@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit --incremental false",
-    "test": "vitest run"
+    "test": "vitest run",
+    "benchmark:cache": "tsx scripts/proof-cache-benchmark.ts --out ../../docs/benchmarks/proof-cache-benchmark.json"
   },
   "dependencies": {
     "next": "^14.2.32",
@@ -22,6 +23,7 @@
     "@types/react-dom": "^18.3.7",
     "eslint": "^8.57.1",
     "eslint-config-next": "^14.2.32",
+    "tsx": "^4.20.5",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"
   }

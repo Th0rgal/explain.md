@@ -940,7 +940,9 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
 }
 
 async function resolveLeanFixtureProjectRoot(): Promise<string> {
+  const envOverride = process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT;
   const candidates = [
+    ...(envOverride ? [path.resolve(envOverride)] : []),
     LEAN_FIXTURE_PROJECT_ROOT,
     path.resolve(process.cwd(), "..", "tests", "fixtures", "lean-project"),
     path.resolve(process.cwd(), "..", "..", "tests", "fixtures", "lean-project"),

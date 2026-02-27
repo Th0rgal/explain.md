@@ -40,6 +40,7 @@ The tree panel uses incremental root/children/path queries:
 - Query deterministic pedagogy calibration metrics + threshold gates with `/api/proofs/policy-report`.
   - Optional threshold overrides: `maxUnsupportedParentRate`, `maxPrerequisiteViolationRate`, `maxPolicyViolationRate`, `maxTermJumpRate`, `maxComplexitySpreadMean`, `minEvidenceCoverageMean`, `minVocabularyContinuityMean`.
 - Query deterministic cache reuse diagnostics with `/api/proofs/cache-report` (`status`, `cacheKey`, `sourceFingerprint`, `snapshotHash`, `cacheEntryHash`).
+- Run deterministic cache benchmark evidence generation with `npm run benchmark:cache` (writes `docs/benchmarks/proof-cache-benchmark.json` from repo root).
 - Use shared config parser (`lib/config-input.ts`) across query routes to keep config semantics consistent.
 - Use shared config parser (`lib/config-input.ts`) across both query and POST routes (`/api/proofs/view`, `/api/proofs/diff`) so regeneration and tree-shape semantics do not drift.
 - Query/config contracts now expose the full pedagogy controls used by tree generation:
@@ -57,6 +58,7 @@ The tree panel uses incremental root/children/path queries:
 - Leaf panel can trigger server-side verification and render status/log diagnostics.
 - Verification history is persisted to `.explain-md/web-verification-ledger.json`.
 - Lean fixture proof datasets are persisted to `.explain-md/web-proof-cache` (override with `EXPLAIN_MD_WEB_PROOF_CACHE_DIR`).
+- Lean fixture project root can be overridden with `EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT` (used by benchmark/invalidation harness).
 - Config profiles are persisted to `.explain-md/web-config-profiles.json` (override with `EXPLAIN_MD_WEB_CONFIG_PROFILE_LEDGER`).
 - Job IDs are deterministic and monotonic (`job-000001`, `job-000002`, ...).
 - Reproducibility contract values can be configured with:

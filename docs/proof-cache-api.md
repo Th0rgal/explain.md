@@ -50,3 +50,10 @@ Deterministic cache-reuse diagnostics for proof dataset generation.
 - `EXPLAIN_MD_WEB_PROOF_CACHE_DIR`
   - overrides persistent cache directory
   - default: `.explain-md/web-proof-cache`
+- `EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT`
+  - overrides Lean fixture project root lookup used for ingestion/cache fingerprinting
+  - useful for deterministic benchmark/invalidation runs on temporary fixture copies
+
+## Benchmark evidence
+- Run `npm run web:bench:cache` to generate a machine-checkable benchmark artifact at `docs/benchmarks/proof-cache-benchmark.json`.
+- Benchmark command and output contract are documented in [proof-cache-benchmark.md](./proof-cache-benchmark.md).
