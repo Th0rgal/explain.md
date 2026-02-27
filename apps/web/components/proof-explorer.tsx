@@ -396,9 +396,8 @@ export function ProofExplorer(props: ProofExplorerProps) {
           setError(hydrateError instanceof Error ? hydrateError.message : String(hydrateError));
         }
       } finally {
-        if (!cancelled) {
-          setIsHydrating3d(false);
-        }
+        setIsHydrating3d(false);
+        isHydrating3dRef.current = false;
       }
     }
 
