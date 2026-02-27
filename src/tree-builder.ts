@@ -794,6 +794,7 @@ function mapCriticViolationToPolicyViolation(
     case "unsupported_terms":
       return { code: "entailment", message: violation.message, details: violation.details };
     case "secret_leak":
+    case "prompt_injection":
       return { code: "entailment", message: violation.message, details: violation.details };
     default: {
       const exhaustiveCheck: never = violation.code;

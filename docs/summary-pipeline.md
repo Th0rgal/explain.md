@@ -44,6 +44,10 @@ Children are normalized and sorted by `id` before generation to keep prompt cons
   - raw provider output is scanned for secret-like token patterns before JSON parsing.
   - parsed summary fields are scanned for secret-like token patterns during critic validation.
   - detected leaks fail with `secret_leak` diagnostics.
+- Prompt-injection detection:
+  - raw provider output is scanned for prompt-injection-like directives before JSON parsing.
+  - parsed summary fields are scanned for prompt-injection-like directives during critic validation.
+  - detected directives fail with `prompt_injection` diagnostics.
 
 Failures raise `SummaryValidationError` with machine-readable `diagnostics`.
 
@@ -58,14 +62,17 @@ Failures raise `SummaryValidationError` with machine-readable `diagnostics`.
 - Child statement text is treated as untrusted data:
   - control characters are stripped
   - secret-like tokens are deterministically redacted to `[REDACTED_SECRET]`
+  - prompt-injection-like directives and boundary-marker tokens are deterministically redacted to `[REDACTED_INSTRUCTION]`
 - Model output is treated as untrusted:
   - secret-like tokens in raw output or parsed summary fields are rejected deterministically.
+  - prompt-injection-like directives in raw output or parsed summary fields are rejected deterministically.
 - Prompt includes explicit boundary rules and untrusted payload markers:
   - `UNTRUSTED_CHILDREN_JSON_BEGIN`
   - `UNTRUSTED_CHILDREN_JSON_END`
 - Prompt diagnostics include sanitization counters:
   - `sanitization_stripped_control_chars`
   - `sanitization_redacted_secrets`
+  - `sanitization_redacted_instructions`
 
 ## Live Smoke Check
 ```bash
