@@ -5,6 +5,9 @@ import {
   evaluatePostSummaryPolicy,
   evaluatePreSummaryPolicy,
   type ParentPolicyDiagnostics,
+  type PolicyRewriteAttempt,
+  type PolicyRewriteStrategy,
+  type PolicyViolationCode,
 } from "./pedagogical-policy.js";
 import type { ProviderClient } from "./openai-provider.js";
 import { generateParentSummary, SummaryValidationError } from "./summary-pipeline.js";
@@ -310,6 +313,7 @@ export async function buildRecursiveExplanationTree(
               vocabularyContinuityFloor: 1,
             },
           },
+          rewriteTrace: [],
         });
       }
 
@@ -386,6 +390,7 @@ export async function buildRecursiveExplanationTree(
                 retriesUsed: 0,
                 preSummary: preSummaryDecision,
                 postSummary: postSummaryDecision,
+                rewriteTrace: [],
               };
           const parentNode: ExplanationTreeNode = {
             id: parentId,
@@ -998,6 +1003,16 @@ function cloneParentPolicyDiagnostics(
       violations: diagnostics.postSummary.violations.map((violation) => ({ ...violation })),
       metrics: { ...diagnostics.postSummary.metrics },
     },
+    rewriteTrace: (diagnostics.rewriteTrace ?? []).map((attempt) => ({
+      attemptIndex: attempt.attemptIndex,
+      strategy: attempt.strategy,
+      postSummary: {
+        ok: attempt.postSummary.ok,
+        violations: attempt.postSummary.violations.map((violation) => ({ ...violation })),
+        metrics: { ...attempt.postSummary.metrics },
+      },
+      summaryValidationErrorCodes: attempt.summaryValidationErrorCodes?.slice(),
+    })),
   };
 }
 
@@ -1087,42 +1102,47 @@ async function generatePolicyCompliantParentSummary(
   groupIndex: number,
   preSummaryDecision: ParentPolicyDiagnostics["preSummary"],
 ): Promise<{ summary: Awaited<ReturnType<typeof generateParentSummary>>["summary"]; policyDiagnostics: ParentPolicyDiagnostics }> {
-  const maxAttempts = 2;
-  let retriesUsed = 0;
+  const maxAttempts = 4;
+  const attemptedStrategies: PolicyRewriteStrategy[] = [];
+  const rewriteTrace: PolicyRewriteAttempt[] = [];
   let lastPostSummary = evaluatePostSummaryPolicy(children, emptySummary(children), config);
+  let nextStrategy: PolicyRewriteStrategy = "baseline";
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const strategy = nextStrategy;
+    attemptedStrategies.push(strategy);
     try {
       const result = await generateParentSummary(provider, {
         children,
         config,
-        systemPrompt:
-          attempt === 0
-            ? undefined
-            : [
-                "You are a proof-grounded summarizer.",
-                "Use only child-grounded vocabulary except declared new_terms_introduced.",
-                "Cite every child ID in evidence_refs.",
-                "Keep parent claims explicitly entailed by child statements.",
-                "Output strict JSON only.",
-              ].join(" "),
+        systemPrompt: buildPolicyRewriteSystemPrompt(strategy),
       });
 
       const postSummaryDecision = evaluatePostSummaryPolicy(children, result.summary, config);
       lastPostSummary = postSummaryDecision;
+      rewriteTrace.push({
+        attemptIndex: attempt,
+        strategy,
+        postSummary: postSummaryDecision,
+      });
       if (postSummaryDecision.ok) {
-        retriesUsed = attempt;
         return {
           summary: result.summary,
           policyDiagnostics: {
             depth,
             groupIndex,
-            retriesUsed,
+            retriesUsed: attempt,
             preSummary: preSummaryDecision,
             postSummary: postSummaryDecision,
+            rewriteTrace,
           },
         };
       }
+      const candidate = selectNextRewriteStrategy(postSummaryDecision.violations, attemptedStrategies);
+      if (candidate === undefined) {
+        break;
+      }
+      nextStrategy = candidate;
     } catch (error) {
       if (error instanceof SummaryValidationError) {
         lastPostSummary = {
@@ -1137,6 +1157,19 @@ async function generatePolicyCompliantParentSummary(
             vocabularyContinuityFloor: 1,
           },
         };
+        rewriteTrace.push({
+          attemptIndex: attempt,
+          strategy,
+          postSummary: lastPostSummary,
+          summaryValidationErrorCodes: error.diagnostics.violations.map((violation) => violation.code).sort((a, b) =>
+            a.localeCompare(b),
+          ),
+        });
+        const candidate = selectNextRewriteStrategy(lastPostSummary.violations, attemptedStrategies);
+        if (candidate === undefined) {
+          break;
+        }
+        nextStrategy = candidate;
       } else {
         throw error;
       }
@@ -1146,10 +1179,71 @@ async function generatePolicyCompliantParentSummary(
   throw new TreePolicyError("Failed to produce a policy-compliant parent summary after deterministic retries.", {
     depth,
     groupIndex,
-    retriesUsed: maxAttempts - 1,
+    retriesUsed: Math.max(0, rewriteTrace.length - 1),
     preSummary: preSummaryDecision,
     postSummary: lastPostSummary,
+    rewriteTrace,
   });
+}
+
+function buildPolicyRewriteSystemPrompt(strategy: PolicyRewriteStrategy): string | undefined {
+  if (strategy === "baseline") {
+    return undefined;
+  }
+
+  const instructions: string[] = [
+    "You are a proof-grounded summarizer.",
+    "Keep parent claims explicitly entailed by child statements.",
+    "Output strict JSON only.",
+  ];
+
+  if (strategy === "evidence_strict") {
+    instructions.push("Cite every child ID exactly once in evidence_refs.");
+    instructions.push("Never omit any child ID from evidence_refs.");
+  } else if (strategy === "vocabulary_strict") {
+    instructions.push("Use only child-grounded vocabulary except declared new_terms_introduced.");
+    instructions.push("Minimize new_terms_introduced and keep wording lexically close to children.");
+  } else {
+    instructions.push("Cite every child ID exactly once in evidence_refs.");
+    instructions.push("Use only child-grounded vocabulary except declared new_terms_introduced.");
+    instructions.push("Minimize new_terms_introduced and keep wording lexically close to children.");
+  }
+
+  return instructions.join(" ");
+}
+
+function selectNextRewriteStrategy(
+  violations: ParentPolicyDiagnostics["postSummary"]["violations"],
+  attempted: PolicyRewriteStrategy[],
+): PolicyRewriteStrategy | undefined {
+  const attemptedSet = new Set(attempted);
+  const candidates = buildRewriteStrategyCandidates(violations);
+  for (const candidate of candidates) {
+    if (!attemptedSet.has(candidate)) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+function buildRewriteStrategyCandidates(
+  violations: ParentPolicyDiagnostics["postSummary"]["violations"],
+): PolicyRewriteStrategy[] {
+  const violationCodes = new Set<PolicyViolationCode>(violations.map((violation) => violation.code));
+  const hasEvidenceCoverage = violationCodes.has("evidence_coverage");
+  const hasVocabularyDrift =
+    violationCodes.has("term_budget") || violationCodes.has("vocabulary_continuity") || violationCodes.has("sibling_complexity_spread");
+
+  if (hasEvidenceCoverage && hasVocabularyDrift) {
+    return ["strict_all", "evidence_strict", "vocabulary_strict", "baseline"];
+  }
+  if (hasEvidenceCoverage) {
+    return ["evidence_strict", "strict_all", "vocabulary_strict", "baseline"];
+  }
+  if (hasVocabularyDrift) {
+    return ["vocabulary_strict", "strict_all", "evidence_strict", "baseline"];
+  }
+  return ["strict_all", "evidence_strict", "vocabulary_strict", "baseline"];
 }
 
 function mapCriticViolationToPolicyViolation(

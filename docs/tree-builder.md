@@ -27,7 +27,7 @@ Issue: #9
   - `reusedByFrontierChildStatementHashGroupIndexes` when child-statement-hash fallback was ambiguous and deterministically resolved by ordered descendant-leaf frontier hash.
   - `skippedAmbiguousChildHashGroupIndexes` when child-hash fallback has multiple deterministic candidates at a depth and reuse is intentionally skipped.
   - `skippedAmbiguousChildStatementHashGroupIndexes` when child-statement-hash fallback has multiple deterministic candidates at a depth and reuse is intentionally skipped.
-- Policy diagnostics are attached per parent (`preSummary`, `postSummary`, `retriesUsed`).
+- Policy diagnostics are attached per parent (`preSummary`, `postSummary`, `retriesUsed`, `rewriteTrace`).
 
 ## Tree validity checks
 `validateExplanationTree` enforces:
@@ -49,7 +49,9 @@ Issue: #9
   - `new_terms_introduced` must satisfy `termIntroductionBudget`
   - vocabulary continuity ratio must satisfy deterministic audience/detail floor
 - Rewrite loop:
-  - the builder retries once with a stricter deterministic system prompt
+  - the builder executes a bounded deterministic rewrite loop (up to 4 attempts)
+  - retry prompt strategy is chosen deterministically from prior violation codes (`evidence_strict`, `vocabulary_strict`, `strict_all`)
+  - every attempt is recorded in `rewriteTrace` with strategy + post-summary decision
   - if still non-compliant, the builder fails with `TreePolicyError` and machine-readable diagnostics
 
 ## Degenerate and boundary cases

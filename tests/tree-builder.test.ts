@@ -147,6 +147,31 @@ describe("tree builder", () => {
     expect(diagnostics.postSummary.violations.map((violation) => violation.code)).toContain("evidence_coverage");
   });
 
+  test("records deterministic policy rewrite trace with targeted retry strategies", async () => {
+    const config = normalizeConfig({ maxChildrenPerParent: 2, termIntroductionBudget: 0 });
+    const tree = await buildRecursiveExplanationTree(rewriteAwarePolicyProvider(), {
+      config,
+      leaves: [
+        { id: "l1", statement: "Invariant holds at initialization." },
+        { id: "l2", statement: "Invariant is preserved by transition." },
+      ],
+    });
+
+    const root = tree.nodes[tree.rootId];
+    expect(root.kind).toBe("parent");
+    const diagnostics = root.policyDiagnostics;
+    expect(diagnostics).toBeDefined();
+    expect(diagnostics?.retriesUsed).toBe(2);
+    expect(diagnostics?.rewriteTrace?.map((attempt) => attempt.strategy)).toEqual([
+      "baseline",
+      "evidence_strict",
+      "vocabulary_strict",
+    ]);
+    expect(diagnostics?.rewriteTrace?.[0]?.postSummary.ok).toBe(false);
+    expect(diagnostics?.rewriteTrace?.[1]?.postSummary.violations.map((violation) => violation.code)).toContain("term_budget");
+    expect(diagnostics?.rewriteTrace?.[2]?.postSummary.ok).toBe(true);
+  });
+
   test("builds when prerequisite order is topological but not lexical by id", async () => {
     const config = normalizeConfig({ maxChildrenPerParent: 2, complexityBandWidth: 2 });
     const tree = await buildRecursiveExplanationTree(deterministicSummaryProvider(), {
@@ -780,6 +805,69 @@ function nonCompliantEvidenceProvider(): ProviderClient {
       finishReason: "stop",
       raw: {},
     }),
+    stream: async function* () {
+      return;
+    },
+  };
+}
+
+function rewriteAwarePolicyProvider(): ProviderClient {
+  return {
+    generate: async (request: GenerateRequest): Promise<GenerateResult> => {
+      const childIds = extractChildIds(request);
+      const systemPrompt = request.messages[0]?.content ?? "";
+      const evidenceStrict = systemPrompt.includes("Cite every child ID exactly once in evidence_refs.");
+      const vocabularyStrict = systemPrompt.includes("Use only child-grounded vocabulary except declared new_terms_introduced.");
+
+      if (!evidenceStrict && !vocabularyStrict) {
+        return {
+          text: JSON.stringify({
+            parent_statement: `Parent(${childIds.join("+")})`,
+            why_true_from_children: `${childIds.join(", ")} jointly entail the parent claim.`,
+            new_terms_introduced: [],
+            complexity_score: 3,
+            abstraction_score: 3,
+            evidence_refs: [childIds[0]],
+            confidence: 0.9,
+          }),
+          model: "mock",
+          finishReason: "stop",
+          raw: {},
+        };
+      }
+
+      if (evidenceStrict && !vocabularyStrict) {
+        return {
+          text: JSON.stringify({
+            parent_statement: `Parent(${childIds.join("+")})`,
+            why_true_from_children: `${childIds.join(", ")} jointly entail the parent claim.`,
+            new_terms_introduced: ["novel-term"],
+            complexity_score: 3,
+            abstraction_score: 3,
+            evidence_refs: childIds,
+            confidence: 0.9,
+          }),
+          model: "mock",
+          finishReason: "stop",
+          raw: {},
+        };
+      }
+
+      return {
+        text: JSON.stringify({
+          parent_statement: `Parent(${childIds.join("+")})`,
+          why_true_from_children: `${childIds.join(", ")} jointly entail the parent claim.`,
+          new_terms_introduced: [],
+          complexity_score: 3,
+          abstraction_score: 3,
+          evidence_refs: childIds,
+          confidence: 0.9,
+        }),
+        model: "mock",
+        finishReason: "stop",
+        raw: {},
+      };
+    },
     stream: async function* () {
       return;
     },
