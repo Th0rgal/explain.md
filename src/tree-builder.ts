@@ -86,6 +86,7 @@ export interface TreeBuildRequest {
   maxDepth?: number;
   summaryBatchSize?: number;
   reusableParentSummaries?: Record<string, ReusableParentSummary>;
+  generationFrontierLeafIds?: string[];
 }
 
 export interface ReusableParentSummary {
@@ -130,6 +131,22 @@ export class TreePolicyError extends Error {
     super(message);
     this.name = "TreePolicyError";
     this.diagnostics = diagnostics;
+  }
+}
+
+export interface FrontierGenerationBlockedGroup {
+  depth: number;
+  groupIndex: number;
+  parentId: string;
+}
+
+export class TreeFrontierPartitionError extends Error {
+  public readonly blockedGroups: FrontierGenerationBlockedGroup[];
+
+  public constructor(message: string, blockedGroups: FrontierGenerationBlockedGroup[]) {
+    super(message);
+    this.name = "TreeFrontierPartitionError";
+    this.blockedGroups = blockedGroups;
   }
 }
 
@@ -204,6 +221,7 @@ export async function buildRecursiveExplanationTree(
   const hardDepthLimit = request.maxDepth ?? computeDepthLimit(leaves.length, request.config.maxChildrenPerParent);
   const summaryBatchSize = normalizeSummaryBatchSize(request.summaryBatchSize);
   const reusableParentSummaries = request.reusableParentSummaries ?? {};
+  const generationFrontierLeafIdSet = normalizeGenerationFrontierLeafIdSet(request.generationFrontierLeafIds);
   const reusableSummaryPools = buildReusableSummaryPools(reusableParentSummaries);
   const consumedReusableSummaryKeys = new Set<string>();
   const frontierSignatureMemo = new Map<string, { leafIds: string[]; leafStatements: string[] }>();
@@ -290,6 +308,9 @@ export async function buildRecursiveExplanationTree(
       const childStatementHash = computeChildStatementHash(children);
       const childStatementTextHash = computeChildStatementTextHash(children);
       const frontierHashes = computeFrontierHashesForGroup(orderedGroupNodeIds, nodes, frontierSignatureMemo);
+      const canGenerateSummary =
+        generationFrontierLeafIdSet === undefined ||
+        groupIntersectsGenerationFrontier(orderedGroupNodeIds, nodes, frontierSignatureMemo, generationFrontierLeafIdSet);
       let reusableParent = reusableParentSummaries[parentId];
       let reusableParentKey = parentId;
       let reuseMatchKind: "parent_id" | "child_hash" | "child_statement_hash" = "parent_id";
@@ -400,6 +421,13 @@ export async function buildRecursiveExplanationTree(
           }
           continue;
         }
+      }
+
+      if (!canGenerateSummary) {
+        throw new TreeFrontierPartitionError(
+          "Deterministic frontier-partition mode blocked summary generation outside changed frontier.",
+          [{ depth, groupIndex: index, parentId }],
+        );
       }
 
       summaryTasks.push({
@@ -517,6 +545,34 @@ export async function buildRecursiveExplanationTree(
   }
 
   return tree;
+}
+
+function normalizeGenerationFrontierLeafIdSet(leafIds: string[] | undefined): Set<string> | undefined {
+  if (!leafIds) {
+    return undefined;
+  }
+  const normalized = leafIds.map((leafId) => leafId.trim()).filter((leafId) => leafId.length > 0);
+  if (normalized.length === 0) {
+    return undefined;
+  }
+  return new Set(normalized);
+}
+
+function groupIntersectsGenerationFrontier(
+  orderedGroupNodeIds: string[],
+  nodes: Record<string, ExplanationTreeNode>,
+  memo: Map<string, { leafIds: string[]; leafStatements: string[] }>,
+  frontierLeafIdSet: Set<string>,
+): boolean {
+  for (const nodeId of orderedGroupNodeIds) {
+    const frontier = collectLeafFrontier(nodeId, nodes, memo);
+    for (const leafId of frontier.leafIds) {
+      if (frontierLeafIdSet.has(leafId)) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 function buildReusableSummaryPools(

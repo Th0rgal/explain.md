@@ -74,6 +74,10 @@ Request shape:
   - when stable IDs do not match (for example after deterministic topology reindexing), reuse falls back first to deterministic same-depth child-grounding hash matching, then to same-depth child-statement hash matching
   - statement-hash fallback deterministically re-bases `evidence_refs` to current child IDs before policy validation
   - ambiguous fallback matches are deterministically resolved only when ordered descendant-leaf frontier hashes uniquely identify one candidate; otherwise reuse is skipped
+- `generationFrontierLeafIds?`: optional deterministic generation frontier (leaf IDs)
+  - when set, parent-summary generation is allowed only for groups whose descendant leaf frontier intersects this set
+  - groups outside the frontier must reuse an existing parent summary or the build fails fast with `TreeFrontierPartitionError`
+  - this enables minimal-subtree topology recompute scheduling with explicit fallback control in callers
 
 Output includes:
 - `rootId`, `leafIds`, `nodes`, `configHash`, `groupPlan`, `groupingDiagnostics`, `maxDepth`

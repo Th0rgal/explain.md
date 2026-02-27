@@ -74,6 +74,9 @@ export interface ProofCacheBenchmarkReport {
       reusedParentByFrontierChildStatementHashCount: number;
       skippedAmbiguousChildHashReuseCount: number;
       skippedAmbiguousChildStatementHashReuseCount: number;
+      frontierPartitionLeafCount: number;
+      frontierPartitionBlockedGroupCount: number;
+      frontierPartitionFallbackUsed: boolean;
       recoveryStatus: "hit" | "miss";
       recoverySnapshotHash: string;
     };
@@ -213,6 +216,15 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
         afterTopologyChange.cache.diagnostics,
         "skippedAmbiguousChildStatementHashReuseCount",
       ),
+      frontierPartitionLeafCount: readNumericTopologyDetail(afterTopologyChange.cache.diagnostics, "frontierPartitionLeafCount"),
+      frontierPartitionBlockedGroupCount: readNumericTopologyDetail(
+        afterTopologyChange.cache.diagnostics,
+        "frontierPartitionBlockedGroupCount",
+      ),
+      frontierPartitionFallbackUsed: readBooleanTopologyDetail(
+        afterTopologyChange.cache.diagnostics,
+        "frontierPartitionFallbackUsed",
+      ),
       recoveryStatus: topologyRecovery.cache.status,
       recoverySnapshotHash: topologyRecovery.cache.snapshotHash,
     };
@@ -249,6 +261,9 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
         reusedParentByFrontierChildStatementHashCount: topologyChange.reusedParentByFrontierChildStatementHashCount,
         skippedAmbiguousChildHashReuseCount: topologyChange.skippedAmbiguousChildHashReuseCount,
         skippedAmbiguousChildStatementHashReuseCount: topologyChange.skippedAmbiguousChildStatementHashReuseCount,
+        frontierPartitionLeafCount: topologyChange.frontierPartitionLeafCount,
+        frontierPartitionBlockedGroupCount: topologyChange.frontierPartitionBlockedGroupCount,
+        frontierPartitionFallbackUsed: topologyChange.frontierPartitionFallbackUsed,
         recoveryStatus: topologyChange.recoveryStatus,
         snapshotChangedOnMutation: topologyChange.afterChangeSnapshotHash !== beforeTopologyChange.cache.snapshotHash,
       },
@@ -311,11 +326,21 @@ function readNumericTopologyDetail(
     | "reusedParentByFrontierChildHashCount"
     | "reusedParentByFrontierChildStatementHashCount"
     | "skippedAmbiguousChildHashReuseCount"
-    | "skippedAmbiguousChildStatementHashReuseCount",
+    | "skippedAmbiguousChildStatementHashReuseCount"
+    | "frontierPartitionLeafCount"
+    | "frontierPartitionBlockedGroupCount",
 ): number {
   const topologyDiagnostic = diagnostics.find((diagnostic) => diagnostic.code === "cache_incremental_topology_rebuild");
   const value = topologyDiagnostic?.details?.[key];
   return typeof value === "number" ? value : 0;
+}
+
+function readBooleanTopologyDetail(
+  diagnostics: Array<{ code: string; details?: Record<string, unknown> }>,
+  key: "frontierPartitionFallbackUsed",
+): boolean {
+  const topologyDiagnostic = diagnostics.find((diagnostic) => diagnostic.code === "cache_incremental_topology_rebuild");
+  return topologyDiagnostic?.details?.[key] === true;
 }
 
 async function captureCacheReportDuration(proofId: string, config: ExplanationConfigInput): Promise<ScenarioSample> {

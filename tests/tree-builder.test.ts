@@ -4,6 +4,7 @@ import { normalizeConfig } from "../src/config-contract.js";
 import type { GenerateRequest, GenerateResult, ProviderClient } from "../src/openai-provider.js";
 import {
   buildRecursiveExplanationTree,
+  TreeFrontierPartitionError,
   TreePolicyError,
   validateExplanationTree,
   type ExplanationTree,
@@ -569,6 +570,32 @@ describe("tree builder", () => {
     );
     expect(reusedByFrontierGroups.length).toBeGreaterThan(0);
     expect(skippedAmbiguousGroups).toHaveLength(0);
+  });
+
+  test("fails deterministically when frontier-partition mode blocks generation outside changed frontier", async () => {
+    const config = normalizeConfig({ maxChildrenPerParent: 2, complexityBandWidth: 2 });
+    const provider = countedDeterministicSummaryProvider();
+
+    const thrown = await captureError(() =>
+      buildRecursiveExplanationTree(provider.provider, {
+        config,
+        generationFrontierLeafIds: ["l7"],
+        leaves: [
+          { id: "l1", statement: "Leaf one." },
+          { id: "l2", statement: "Leaf two." },
+          { id: "l3", statement: "Leaf three." },
+          { id: "l4", statement: "Leaf four." },
+          { id: "l5", statement: "Leaf five." },
+          { id: "l6", statement: "Leaf six." },
+          { id: "l7", statement: "Leaf seven." },
+        ],
+      }),
+    );
+
+    expect(thrown).toBeInstanceOf(TreeFrontierPartitionError);
+    const partitionError = thrown as TreeFrontierPartitionError;
+    expect(partitionError.blockedGroups.length).toBeGreaterThan(0);
+    expect(provider.counter.count).toBe(0);
   });
 });
 

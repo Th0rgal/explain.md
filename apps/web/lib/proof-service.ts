@@ -19,6 +19,7 @@ import {
   evaluatePostSummaryPolicy,
   generateParentSummary,
   SummaryValidationError,
+  TreeFrontierPartitionError,
   TreePolicyError,
   validateExplanationTree,
   type DependencyGraph,
@@ -94,7 +95,7 @@ export interface ProofDatasetCacheDiagnostic {
     | "cache_hit"
     | "cache_semantic_hit"
     | "cache_incremental_subtree_rebuild"
-        | "cache_incremental_topology_rebuild"
+    | "cache_incremental_topology_rebuild"
     | "cache_incremental_rebuild"
     | "cache_miss"
     | "cache_write_failed"
@@ -1003,6 +1004,7 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
         previousSnapshot: cached.entry.snapshot,
         proofId,
         leaves: rebuiltIngestion.theoremLeaves,
+        changedLeafIds: delta.changedLeafIds,
         config,
       });
       if (topologyRebuild) {
@@ -1042,6 +1044,9 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
             reusedParentByFrontierChildStatementHashCount: topologyRebuild.reusedParentByFrontierChildStatementHashCount,
             skippedAmbiguousChildHashReuseCount: topologyRebuild.skippedAmbiguousChildHashReuseCount,
             skippedAmbiguousChildStatementHashReuseCount: topologyRebuild.skippedAmbiguousChildStatementHashReuseCount,
+            frontierPartitionLeafCount: topologyRebuild.frontierPartitionLeafCount,
+            frontierPartitionBlockedGroupCount: topologyRebuild.frontierPartitionBlockedGroupCount,
+            frontierPartitionFallbackUsed: topologyRebuild.frontierPartitionFallbackUsed,
             previousParentCount: topologyRebuild.previousParentCount,
             nextParentCount: topologyRebuild.nextParentCount,
           },
@@ -1607,6 +1612,7 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
   previousSnapshot: TreeStorageSnapshot;
   proofId: string;
   leaves: TheoremLeafRecord[];
+  changedLeafIds: string[];
   config: ExplanationConfig;
 }): Promise<
   | {
@@ -1624,6 +1630,9 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
       reusedParentByFrontierChildStatementHashCount: number;
       skippedAmbiguousChildHashReuseCount: number;
       skippedAmbiguousChildStatementHashReuseCount: number;
+      frontierPartitionLeafCount: number;
+      frontierPartitionBlockedGroupCount: number;
+      frontierPartitionFallbackUsed: boolean;
       previousParentCount: number;
       nextParentCount: number;
     }
@@ -1636,11 +1645,33 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
   }
 
   const reusableParentSummaries = buildReusableParentSummaryMap(imported.tree);
-  const tree = await buildRecursiveExplanationTree(createDeterministicSummaryProvider(), {
-    leaves: mapTheoremLeavesToTreeLeaves(input.leaves),
-    config: input.config,
-    reusableParentSummaries,
-  });
+  const nextLeafIdSet = new Set(input.leaves.map((leaf) => leaf.id));
+  const changedFrontierLeafIds = input.changedLeafIds
+    .filter((leafId) => nextLeafIdSet.has(leafId))
+    .sort((left, right) => left.localeCompare(right));
+  let frontierPartitionFallbackUsed = false;
+  let frontierPartitionBlockedGroupCount = 0;
+
+  let tree: ExplanationTree;
+  try {
+    tree = await buildRecursiveExplanationTree(createDeterministicSummaryProvider(), {
+      leaves: mapTheoremLeavesToTreeLeaves(input.leaves),
+      config: input.config,
+      reusableParentSummaries,
+      generationFrontierLeafIds: changedFrontierLeafIds,
+    });
+  } catch (error) {
+    if (!(error instanceof TreeFrontierPartitionError)) {
+      throw error;
+    }
+    frontierPartitionFallbackUsed = true;
+    frontierPartitionBlockedGroupCount = error.blockedGroups.length;
+    tree = await buildRecursiveExplanationTree(createDeterministicSummaryProvider(), {
+      leaves: mapTheoremLeavesToTreeLeaves(input.leaves),
+      config: input.config,
+      reusableParentSummaries,
+    });
+  }
   const validation = validateExplanationTree(tree, input.config.maxChildrenPerParent);
   if (!validation.ok) {
     throw new Error(
@@ -1669,6 +1700,9 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
     reusedParentByFrontierChildStatementHashCount: reuseStats.reusedByFrontierChildStatementHashGroupCount,
     skippedAmbiguousChildHashReuseCount: reuseStats.skippedAmbiguousChildHashGroupCount,
     skippedAmbiguousChildStatementHashReuseCount: reuseStats.skippedAmbiguousChildStatementHashGroupCount,
+    frontierPartitionLeafCount: changedFrontierLeafIds.length,
+    frontierPartitionBlockedGroupCount,
+    frontierPartitionFallbackUsed,
     previousParentCount: Object.values(imported.tree.nodes).filter((node) => node.kind === "parent").length,
     nextParentCount: Object.values(tree.nodes).filter((node) => node.kind === "parent").length,
   };
