@@ -57,6 +57,10 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 - Lean fixture root lookup can be overridden with `EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT` for deterministic benchmark/invalidation runs against temporary fixture copies.
 - Lean fixture source-link base can be overridden with `EXPLAIN_MD_LEAN_FIXTURE_SOURCE_BASE_URL`; leaf-detail falls back to deterministic span-based URLs when leaf records omit `sourceUrl`.
 - Leaf panel renders source-link provenance mode directly from `view.shareReference.sourceUrlOrigin` (`leaf` | `source_span` | `missing`) and shows deterministic deep-link availability.
+- Tree rows expose deterministic keyboard semantics with ARIA tree metadata:
+  - roving tab-focus on statement rows (`role="treeitem"`)
+  - navigation keys (`ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight`, `Home`, `End`)
+  - deterministic activation keys (`Enter`/`Space`) with leaf selection and parent selection-clear behavior
 - Deterministic benchmark artifact generation is available via `npm run web:bench:cache` (writes `docs/benchmarks/proof-cache-benchmark.json`).
 - The Lean fixture uses a deterministic summary provider (`temperature=0` behavior with fixed evidence-only synthesis), so parent statements remain child-entailed and reproducible.
 - Reproducibility contract for each queued job is derived from the selected theorem leaf:

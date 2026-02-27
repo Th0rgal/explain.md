@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchConfigProfiles,
   fetchDiff,
@@ -27,6 +27,7 @@ import {
   type VerificationJobsResponse,
 } from "../lib/api-client";
 import { buildLeafSourceProvenanceView } from "../lib/leaf-provenance";
+import { resolveTreeKeyboardIntent } from "../lib/tree-keyboard-navigation";
 
 const DEFAULT_CONFIG: ProofConfigInput = {
   abstractionLevel: 3,
@@ -63,6 +64,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
   const [policyReport, setPolicyReport] = useState<PolicyReportResponse | null>(null);
   const [pathResult, setPathResult] = useState<NodePathResponse | null>(null);
   const [selectedLeafId, setSelectedLeafId] = useState<string | null>(null);
+  const [focusedTreeNodeId, setFocusedTreeNodeId] = useState<string | null>(null);
   const [leafDetail, setLeafDetail] = useState<LeafDetailResponse | null>(null);
   const [verificationJobs, setVerificationJobs] = useState<VerificationJobsResponse | null>(null);
   const [selectedVerificationJobId, setSelectedVerificationJobId] = useState<string | null>(null);
@@ -71,6 +73,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const treeNodeButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const profileProjectId = useMemo(() => props.proofId, [props.proofId]);
   const leafSourceProvenance = useMemo(
     () => (leafDetail?.view ? buildLeafSourceProvenanceView(leafDetail.view.shareReference) : undefined),
@@ -310,6 +313,39 @@ export function ProofExplorer(props: ProofExplorerProps) {
     return rows;
   }, [childrenByParentId, expandedNodeIds, nodesById, root]);
 
+  const keyboardRows = useMemo(
+    () =>
+      visibleRows.map((row) => ({
+        nodeId: row.node.id,
+        nodeKind: row.node.kind,
+        parentId: row.parentId,
+        isExpanded: expandedNodeIds.includes(row.node.id),
+        loadedChildIds: childrenByParentId[row.node.id]?.childIds ?? [],
+      })),
+    [childrenByParentId, expandedNodeIds, visibleRows],
+  );
+
+  useEffect(() => {
+    if (visibleRows.length === 0) {
+      setFocusedTreeNodeId(null);
+      return;
+    }
+
+    setFocusedTreeNodeId((current) => {
+      if (current && visibleRows.some((row) => row.node.id === current)) {
+        return current;
+      }
+      return visibleRows[0]?.node.id ?? null;
+    });
+  }, [visibleRows]);
+
+  useEffect(() => {
+    if (!focusedTreeNodeId) {
+      return;
+    }
+    treeNodeButtonRefs.current[focusedTreeNodeId]?.focus();
+  }, [focusedTreeNodeId]);
+
   function updateConfig<Key extends keyof ProofConfigInput>(key: Key, value: ProofConfigInput[Key]): void {
     setConfig((current) => ({
       ...current,
@@ -318,14 +354,22 @@ export function ProofExplorer(props: ProofExplorerProps) {
   }
 
   function toggleExpansion(nodeId: string): void {
+    const isExpanded = expandedNodeIds.includes(nodeId);
+    setNodeExpanded(nodeId, !isExpanded);
+  }
+
+  function setNodeExpanded(nodeId: string, expanded: boolean): void {
     const node = nodesById[nodeId];
     setExpandedNodeIds((current) => {
-      if (current.includes(nodeId)) {
+      if (!expanded) {
         return current.filter((value) => value !== nodeId);
+      }
+      if (current.includes(nodeId)) {
+        return current;
       }
       return [...current, nodeId].sort((left, right) => left.localeCompare(right));
     });
-    if (node?.kind === "parent" && !childrenByParentId[nodeId]) {
+    if (expanded && node?.kind === "parent" && !childrenByParentId[nodeId]) {
       void loadChildrenPage(nodeId);
     }
   }
@@ -491,6 +535,33 @@ export function ProofExplorer(props: ProofExplorerProps) {
     setConfig(selected.config as ProofConfigInput);
   }
 
+  function handleTreeKeyDown(nodeId: string, key: string): void {
+    const intent = resolveTreeKeyboardIntent(key, nodeId, keyboardRows);
+    if (intent.kind === "noop") {
+      return;
+    }
+
+    if (intent.kind === "move_focus") {
+      setFocusedTreeNodeId(intent.nodeId);
+      return;
+    }
+
+    if (intent.kind === "set_expanded") {
+      setNodeExpanded(intent.nodeId, intent.expanded);
+      if (intent.expanded) {
+        setFocusedTreeNodeId(intent.nodeId);
+      }
+      return;
+    }
+
+    if (intent.kind === "activate_leaf") {
+      void selectLeaf(intent.nodeId);
+      return;
+    }
+
+    setSelectedLeafId(null);
+  }
+
   if (isLoading) {
     return <div className="panel">Loading seeded explanation tree...</div>;
   }
@@ -645,16 +716,18 @@ export function ProofExplorer(props: ProofExplorerProps) {
             const isExpanded = expandedNodeIds.includes(node.id);
             const indentStyle = { paddingLeft: `${row.depthFromRoot * 1.25}rem` };
             const isSelectedLeaf = node.kind === "leaf" && selectedLeafId === node.id;
+            const siblingIds = row.parentId ? childrenByParentId[row.parentId]?.childIds ?? [] : [node.id];
+            const siblingIndex = siblingIds.indexOf(node.id);
+            const setSize = siblingIds.length || 1;
+            const posInSet = siblingIndex >= 0 ? siblingIndex + 1 : 1;
             return (
               <li
                 key={node.id}
-                role="treeitem"
-                aria-expanded={node.kind === "parent" ? isExpanded : undefined}
-                aria-selected={isSelectedLeaf}
+                role="none"
               >
                 <div className="tree-row" style={indentStyle}>
                   {node.kind === "parent" ? (
-                    <button type="button" onClick={() => toggleExpansion(node.id)} aria-label={`Toggle ${node.id}`}>
+                    <button type="button" onClick={() => toggleExpansion(node.id)} aria-label={`Toggle ${node.id}`} tabIndex={-1}>
                       {isExpanded ? "Collapse" : "Expand"}
                     </button>
                   ) : (
@@ -663,7 +736,25 @@ export function ProofExplorer(props: ProofExplorerProps) {
                   <button
                     type="button"
                     className="statement-button"
-                    aria-pressed={isSelectedLeaf}
+                    ref={(element) => {
+                      treeNodeButtonRefs.current[node.id] = element;
+                    }}
+                    role="treeitem"
+                    aria-level={row.depthFromRoot + 1}
+                    aria-setsize={setSize}
+                    aria-posinset={posInSet}
+                    aria-expanded={node.kind === "parent" ? isExpanded : undefined}
+                    aria-selected={isSelectedLeaf}
+                    tabIndex={focusedTreeNodeId === node.id ? 0 : -1}
+                    onFocus={() => setFocusedTreeNodeId(node.id)}
+                    onKeyDown={(event) => {
+                      const handledKeys = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "Enter", " "]);
+                      if (!handledKeys.has(event.key)) {
+                        return;
+                      }
+                      event.preventDefault();
+                      handleTreeKeyDown(node.id, event.key);
+                    }}
                     onClick={() => (node.kind === "leaf" ? selectLeaf(node.id) : setSelectedLeafId(null))}
                   >
                     {node.statement}

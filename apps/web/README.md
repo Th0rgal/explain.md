@@ -65,6 +65,12 @@ The tree panel uses incremental root/children/path queries:
   - `Leaf-attested URL` (`leaf`)
   - `Resolved from source span` (`source_span`)
   - `Missing source URL` (`missing`)
+- Tree panel now supports deterministic keyboard navigation with roving focus:
+  - `ArrowUp` / `ArrowDown`: move focus across visible rows
+  - `ArrowRight`: expand collapsed parent, then descend to first loaded child
+  - `ArrowLeft`: collapse expanded parent, otherwise move to parent row
+  - `Home` / `End`: jump to first/last visible row
+  - `Enter` / `Space`: activate focused row (leaf select, parent selection clear)
 - Config profiles are persisted to `.explain-md/web-config-profiles.json` (override with `EXPLAIN_MD_WEB_CONFIG_PROFILE_LEDGER`).
 - Job IDs are deterministic and monotonic (`job-000001`, `job-000002`, ...).
 - Reproducibility contract values can be configured with:
