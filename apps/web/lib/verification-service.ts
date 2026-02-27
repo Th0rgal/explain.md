@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import {
   VerificationWorkflow,
+  buildVerificationReplayDescriptor,
   buildLeanVerificationContract,
   computeVerificationJobHash,
   createVerificationTargetFromLeaf,
@@ -106,9 +107,18 @@ export interface VerifyLeafResponse {
   requestHash: string;
   queuedJob: VerificationJob;
   queuedJobHash: string;
+  queuedJobReplay: VerificationJobReplay;
   finalJob: VerificationJob;
   finalJobHash: string;
+  finalJobReplay: VerificationJobReplay;
   observability: VerificationQueryObservability;
+}
+
+export interface VerificationJobReplay {
+  jobId: string;
+  jobHash: string;
+  reproducibilityHash: string;
+  replayCommand: string;
 }
 
 export interface VerificationJobsResponse {
@@ -117,6 +127,7 @@ export interface VerificationJobsResponse {
   requestHash: string;
   jobs: VerificationJob[];
   jobHashes: Array<{ jobId: string; hash: string }>;
+  jobReplays: VerificationJobReplay[];
   observability: VerificationQueryObservability;
 }
 
@@ -124,6 +135,7 @@ export interface VerificationJobResponse {
   requestHash: string;
   job: VerificationJob;
   jobHash: string;
+  jobReplay: VerificationJobReplay;
   observability: VerificationQueryObservability;
 }
 
@@ -171,8 +183,10 @@ export async function verifyLeafProof(request: VerifyLeafRequest): Promise<Verif
       requestHash,
       queuedJob,
       queuedJobHash: computeVerificationJobHash(queuedJob),
+      queuedJobReplay: buildVerificationJobReplay(queuedJob),
       finalJob,
       finalJobHash: computeVerificationJobHash(finalJob),
+      finalJobReplay: buildVerificationJobReplay(finalJob),
       observability,
     };
   } catch (error) {
@@ -230,6 +244,7 @@ export async function listLeafVerificationJobs(
         jobId: job.jobId,
         hash: computeVerificationJobHash(job),
       })),
+      jobReplays: jobs.map((job) => buildVerificationJobReplay(job)),
       observability,
     };
   } catch (error) {
@@ -288,6 +303,7 @@ export async function getVerificationJobById(
       requestHash,
       job,
       jobHash: computeVerificationJobHash(job),
+      jobReplay: buildVerificationJobReplay(job),
       observability,
     };
   } catch (error) {
@@ -593,6 +609,16 @@ function parsePositiveInt(raw: string | undefined): number | undefined {
   }
 
   return numeric;
+}
+
+function buildVerificationJobReplay(job: VerificationJob): VerificationJobReplay {
+  const descriptor = buildVerificationReplayDescriptor(job.reproducibility);
+  return {
+    jobId: job.jobId,
+    jobHash: computeVerificationJobHash(job),
+    reproducibilityHash: descriptor.reproducibilityHash,
+    replayCommand: descriptor.replayCommand,
+  };
 }
 
 function computeRequestHash(input: Record<string, unknown>): string {

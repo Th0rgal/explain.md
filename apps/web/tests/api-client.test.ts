@@ -150,8 +150,24 @@ describe("api client", () => {
             createdAt: "2026-02-27T00:00:00.000Z",
             updatedAt: "2026-02-27T00:00:00.000Z",
             logs: [],
+            reproducibility: {
+              sourceRevision: "rev-a",
+              workingDirectory: "/tmp/project",
+              command: "lake",
+              args: ["env", "lean", "Verity/Core.lean"],
+              env: {},
+              toolchain: {
+                leanVersion: "4.12.0",
+              },
+            },
           },
           queuedJobHash: "a".repeat(64),
+          queuedJobReplay: {
+            jobId: "job-000001",
+            jobHash: "a".repeat(64),
+            reproducibilityHash: "e".repeat(64),
+            replayCommand: "cd /tmp/project && lake env lean Verity/Core.lean",
+          },
           finalJob: {
             jobId: "job-000001",
             queueSequence: 0,
@@ -159,8 +175,24 @@ describe("api client", () => {
             createdAt: "2026-02-27T00:00:00.000Z",
             updatedAt: "2026-02-27T00:00:01.000Z",
             logs: [],
+            reproducibility: {
+              sourceRevision: "rev-a",
+              workingDirectory: "/tmp/project",
+              command: "lake",
+              args: ["env", "lean", "Verity/Core.lean"],
+              env: {},
+              toolchain: {
+                leanVersion: "4.12.0",
+              },
+            },
           },
           finalJobHash: "b".repeat(64),
+          finalJobReplay: {
+            jobId: "job-000001",
+            jobHash: "b".repeat(64),
+            reproducibilityHash: "f".repeat(64),
+            replayCommand: "cd /tmp/project && lake env lean Verity/Core.lean",
+          },
         },
       }),
     );
@@ -273,6 +305,7 @@ describe("api client", () => {
             requestHash: "req-jobs",
             jobs: [],
             jobHashes: [],
+            jobReplays: [],
           },
         });
       }
@@ -287,8 +320,24 @@ describe("api client", () => {
             createdAt: "2026-02-27T00:00:00.000Z",
             updatedAt: "2026-02-27T00:00:00.000Z",
             logs: [],
+            reproducibility: {
+              sourceRevision: "rev-a",
+              workingDirectory: "/tmp/project",
+              command: "lake",
+              args: ["env", "lean", "Verity/Core.lean"],
+              env: {},
+              toolchain: {
+                leanVersion: "4.12.0",
+              },
+            },
           },
           jobHash: "c".repeat(64),
+          jobReplay: {
+            jobId: "job id",
+            jobHash: "c".repeat(64),
+            reproducibilityHash: "d".repeat(64),
+            replayCommand: "cd /tmp/project && lake env lean Verity/Core.lean",
+          },
         },
       });
     });

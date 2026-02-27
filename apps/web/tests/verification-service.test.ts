@@ -46,6 +46,9 @@ describe("verification service", () => {
     expect(second.queuedJob.jobId).toBe("job-000002");
     expect(first.finalJobHash).toHaveLength(64);
     expect(second.finalJobHash).toHaveLength(64);
+    expect(first.queuedJobReplay.reproducibilityHash).toHaveLength(64);
+    expect(first.queuedJobReplay.replayCommand).toContain("lake env lean");
+    expect(first.finalJobReplay.jobHash).toBe(first.finalJobHash);
   });
 
   it("resumes ids from persisted ledger after service reset", async () => {
@@ -87,6 +90,8 @@ describe("verification service", () => {
     const jobs = await listLeafVerificationJobs(SEED_PROOF_ID, "Verity.ContractSpec.loop_preserves");
     expect(jobs.jobs).toHaveLength(2);
     expect(jobs.jobHashes).toHaveLength(2);
+    expect(jobs.jobReplays).toHaveLength(2);
+    expect(jobs.jobReplays[0].reproducibilityHash).toHaveLength(64);
   });
 
   it("reports timeout status when runner signals timeout", async () => {
@@ -143,6 +148,8 @@ describe("verification service", () => {
     expect(verify.observability.traceId).toHaveLength(64);
     expect(jobs.requestHash).toHaveLength(64);
     expect(jobDetail?.requestHash).toHaveLength(64);
+    expect(jobDetail?.jobReplay.jobHash).toBe(jobDetail?.jobHash);
+    expect(jobDetail?.jobReplay.replayCommand).toContain("lake env lean");
   });
 
   it("exports dashboard-ready verification observability metrics", async () => {

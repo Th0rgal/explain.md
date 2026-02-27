@@ -89,6 +89,10 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - Lean command contract (`lake env lean <file>`)
   - working directory (`EXPLAIN_MD_VERIFICATION_PROJECT_ROOT` fallback: repository root)
   - toolchain tags (`EXPLAIN_MD_VERIFICATION_LEAN_VERSION`, optional `EXPLAIN_MD_VERIFICATION_LAKE_VERSION`)
+- Verification job payloads also include deterministic replay artifacts for browser auditability:
+  - `jobHash` (full canonical job hash, includes lifecycle/result fields)
+  - `reproducibilityHash` (canonical reproducibility-contract hash)
+  - `replayCommand` (deterministic shell command string for local replay)
 
 ## State management
 - Baseline strategy: local React state (`useState`) with deterministic API payloads.

@@ -1265,8 +1265,17 @@ export function ProofExplorer(props: ProofExplorerProps) {
             {selectedVerificationJob && (
               <div>
                 <p className="meta">Selected job hash: {selectedVerificationJob.jobHash}</p>
+                <p className="meta">Reproducibility hash: {selectedVerificationJob.jobReplay.reproducibilityHash}</p>
+                <p className="meta">Source revision: {selectedVerificationJob.job.reproducibility.sourceRevision}</p>
+                <p className="meta">
+                  Toolchain: Lean {selectedVerificationJob.job.reproducibility.toolchain.leanVersion}
+                  {selectedVerificationJob.job.reproducibility.toolchain.lakeVersion
+                    ? ` / Lake ${selectedVerificationJob.job.reproducibility.toolchain.lakeVersion}`
+                    : ""}
+                </p>
                 <p className="meta">Exit code: {selectedVerificationJob.job.result?.exitCode ?? "none"}</p>
                 <p className="meta">Duration: {selectedVerificationJob.job.result?.durationMs ?? "none"}ms</p>
+                <p className="meta">Replay command: {selectedVerificationJob.jobReplay.replayCommand}</p>
                 <ul>
                   {selectedVerificationJob.job.logs.slice(0, 6).map((logLine) => (
                     <li key={`${selectedVerificationJob.job.jobId}:${logLine.index}`}>

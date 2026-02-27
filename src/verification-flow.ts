@@ -30,6 +30,11 @@ export interface VerificationReproducibilityContract {
   toolchain: VerificationToolchainInfo;
 }
 
+export interface VerificationReplayDescriptor {
+  reproducibilityHash: string;
+  replayCommand: string;
+}
+
 export interface VerificationLogLine {
   index: number;
   stream: "stdout" | "stderr" | "system";
@@ -285,6 +290,45 @@ export function buildLeanVerificationContract(params: {
   });
 }
 
+export function renderVerificationReproducibilityCanonical(contract: VerificationReproducibilityContract): string {
+  const normalized = canonicalizeReproducibilityContract(contract);
+  const lines = [
+    `source_revision=${normalized.sourceRevision}`,
+    `working_directory=${normalized.workingDirectory}`,
+    `command=${normalized.command}`,
+    `args=${normalized.args.join("\u001f")}`,
+    `toolchain_lean=${normalized.toolchain.leanVersion}`,
+    `toolchain_lake=${normalized.toolchain.lakeVersion ?? "none"}`,
+    `env=${Object.entries(normalized.env)
+      .map(([key, value]) => `${key}=${value}`)
+      .join("\u001f") || "none"}`,
+  ];
+
+  return lines.join("\n");
+}
+
+export function computeVerificationReproducibilityHash(contract: VerificationReproducibilityContract): string {
+  return createHash("sha256").update(renderVerificationReproducibilityCanonical(contract)).digest("hex");
+}
+
+export function renderVerificationReplayCommand(contract: VerificationReproducibilityContract): string {
+  const normalized = canonicalizeReproducibilityContract(contract);
+  const envPrefix = Object.entries(normalized.env)
+    .map(([key, value]) => `${key}=${escapeShellToken(value)}`)
+    .join(" ");
+  const commandTokens = [normalized.command, ...normalized.args].map((token) => escapeShellToken(token)).join(" ");
+  const executable = envPrefix.length > 0 ? `${envPrefix} ${commandTokens}` : commandTokens;
+  return `cd ${escapeShellToken(normalized.workingDirectory)} && ${executable}`;
+}
+
+export function buildVerificationReplayDescriptor(contract: VerificationReproducibilityContract): VerificationReplayDescriptor {
+  const normalized = canonicalizeReproducibilityContract(contract);
+  return {
+    reproducibilityHash: computeVerificationReproducibilityHash(normalized),
+    replayCommand: renderVerificationReplayCommand(normalized),
+  };
+}
+
 export function renderVerificationJobCanonical(job: VerificationJob): string {
   const normalized = canonicalizeVerificationJob(job);
   const lines = [
@@ -519,6 +563,13 @@ function normalizeTimeoutMs(value: number): number {
     throw new Error("timeoutMs must be > 0.");
   }
   return normalized;
+}
+
+function escapeShellToken(value: string): string {
+  if (/^[A-Za-z0-9_./:@%+=,-]+$/.test(value)) {
+    return value;
+  }
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 function normalizePositiveInt(value: number, field: string): number {

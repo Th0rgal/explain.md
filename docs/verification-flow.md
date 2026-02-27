@@ -34,6 +34,10 @@ Issue: #17
 - Canonical render + hash support:
   - `renderVerificationJobCanonical(job)`
   - `computeVerificationJobHash(job)`
+  - `renderVerificationReproducibilityCanonical(contract)`
+  - `computeVerificationReproducibilityHash(contract)`
+  - `renderVerificationReplayCommand(contract)`
+  - `buildVerificationReplayDescriptor(contract)`
 - JSON ledger roundtrip is canonicalized:
   - `writeVerificationLedger(path, ledger)`
   - `readVerificationLedger(path)`

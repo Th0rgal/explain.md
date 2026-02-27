@@ -108,6 +108,10 @@ The tree panel uses incremental root/children/path queries:
   - `requestId`, `traceId`, `query`, optional `parentTraceId`
   - fixed spans: `request_parse`, `workflow_execute`, `response_materialization`
   - explicit latency and queue/status metrics (`latencyMs`, `queueDepth`, status counters)
+- Verification responses now include deterministic replay artifacts per job:
+  - `jobHash` (full job canonical hash)
+  - `reproducibilityHash` (hash over reproducibility contract only)
+  - `replayCommand` (`cd <workingDirectory> && ...`) for browser-visible command replay
 - Verification routes support trace correlation through `parentTraceId`:
   - `POST /api/proofs/leaves/:leafId/verify` request body
   - `GET /api/proofs/leaves/:leafId/verification-jobs?parentTraceId=<trace>`

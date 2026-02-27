@@ -464,8 +464,25 @@ export interface VerificationJobsResponse {
       stream: "stdout" | "stderr" | "system";
       message: string;
     }>;
+    reproducibility: {
+      sourceRevision: string;
+      workingDirectory: string;
+      command: string;
+      args: string[];
+      env: Record<string, string>;
+      toolchain: {
+        leanVersion: string;
+        lakeVersion?: string;
+      };
+    };
   }>;
   jobHashes: Array<{ jobId: string; hash: string }>;
+  jobReplays: Array<{
+    jobId: string;
+    jobHash: string;
+    reproducibilityHash: string;
+    replayCommand: string;
+  }>;
   observability?: VerificationQueryObservability;
 }
 
@@ -473,8 +490,10 @@ export interface VerifyLeafResponse {
   requestHash: string;
   queuedJob: VerificationJobsResponse["jobs"][number];
   queuedJobHash: string;
+  queuedJobReplay: VerificationJobsResponse["jobReplays"][number];
   finalJob: VerificationJobsResponse["jobs"][number];
   finalJobHash: string;
+  finalJobReplay: VerificationJobsResponse["jobReplays"][number];
   observability?: VerificationQueryObservability;
 }
 
@@ -482,6 +501,7 @@ export interface VerificationJobResponse {
   requestHash: string;
   job: VerificationJobsResponse["jobs"][number];
   jobHash: string;
+  jobReplay: VerificationJobsResponse["jobReplays"][number];
   observability?: VerificationQueryObservability;
 }
 
