@@ -63,6 +63,17 @@ Deterministic cache-reuse diagnostics for proof dataset generation.
   - if no declarations are blocked and dependency topology is unchanged, cache reuse is recovered with diagnostic `cache_topology_recovery_hit`.
   - this recovery path rebases snapshot leaves to current ingestion output so source spans/source URLs stay provenance-accurate.
   - if declarations are blocked but topology and cached leaf IDs are still reusable, ancestor parents are recomputed deterministically on cached topology with diagnostic `cache_blocked_subtree_rebuild_hit`.
+  - if declaration shape changes are removal-only, deterministic subtree recompute runs on cached topology and emits `cache_topology_removal_subtree_rebuild_hit` with machine-checkable recovery telemetry:
+    - `removedLeafCount`
+    - `touchedParentCount`
+    - `recomputedParentCount`
+    - `collapsedParentCount`
+    - `droppedParentCount`
+    - `recoveryHash`
+  - if declaration shape changes are mixed (both additions and removals), deterministic two-stage recovery runs and emits `cache_topology_mixed_subtree_regeneration_rebuild_hit`:
+    - stage 1 (removal prune): `removedLeafCount`, `touchedParentCount`, `recomputedParentCount`, `collapsedParentCount`, `droppedParentCount`, `removalRecoveryHash`
+    - stage 2 (regeneration from stage-1 tree): `reusableParentSummaryCount`, `reusedParentSummaryCount`, `reusedParentSummaryByGroundingCount`, `reusedParentSummaryByStatementSignatureCount`, `generatedParentSummaryCount`, `skippedAmbiguousStatementSignatureReuseCount`, `skippedUnrebasableStatementSignatureReuseCount`, `regenerationHash`
+    - combined audit hash: `mixedRecoveryHash`
   - if declaration shape changes (added/removed IDs), deterministic topology regeneration runs with reusable cached parent summaries and emits `cache_topology_regeneration_rebuild_hit` with machine-checkable reuse telemetry:
     - `reusableParentSummaryCount`
     - `reusedParentSummaryCount`

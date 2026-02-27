@@ -62,6 +62,14 @@ export interface ProofCacheBenchmarkReport {
       beforeChangeStatus: "hit" | "miss";
       afterChangeStatus: "hit" | "miss";
       afterChangeDiagnostics: string[];
+      afterChangeRemovalRecovery?: {
+        removedLeafCount: number;
+        touchedParentCount: number;
+        recomputedParentCount: number;
+        collapsedParentCount: number;
+        droppedParentCount: number;
+        recoveryHash: string;
+      };
       afterChangeRegenerationRecovery?: {
         reusableParentSummaryCount: number;
         reusedParentSummaryCount: number;
@@ -71,6 +79,39 @@ export interface ProofCacheBenchmarkReport {
         skippedAmbiguousStatementSignatureReuseCount: number;
         skippedUnrebasableStatementSignatureReuseCount: number;
         regenerationHash: string;
+      };
+      afterChangeTopologyPlan?: {
+        fullRebuildRequired: boolean;
+        topologyShapeChanged: boolean;
+        addedDeclarationCount: number;
+        removedDeclarationCount: number;
+        blockedDeclarationCount: number;
+        planHash: string;
+      };
+      afterChangeSnapshotHash: string;
+      recoveryStatus: "hit" | "miss";
+      recoverySnapshotHash: string;
+    };
+    mixedTopologyShapeInvalidation: {
+      beforeChangeStatus: "hit" | "miss";
+      afterChangeStatus: "hit" | "miss";
+      afterChangeDiagnostics: string[];
+      afterChangeMixedRecovery?: {
+        removedLeafCount: number;
+        touchedParentCount: number;
+        recomputedParentCount: number;
+        collapsedParentCount: number;
+        droppedParentCount: number;
+        reusableParentSummaryCount: number;
+        reusedParentSummaryCount: number;
+        reusedParentSummaryByGroundingCount: number;
+        reusedParentSummaryByStatementSignatureCount: number;
+        generatedParentSummaryCount: number;
+        skippedAmbiguousStatementSignatureReuseCount: number;
+        skippedUnrebasableStatementSignatureReuseCount: number;
+        removalRecoveryHash: string;
+        regenerationHash: string;
+        mixedRecoveryHash: string;
       };
       afterChangeTopologyPlan?: {
         fullRebuildRequired: boolean;
@@ -200,6 +241,7 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
       beforeChangeStatus: beforeShapeChange.cache.status,
       afterChangeStatus: afterShapeChange.cache.status,
       afterChangeDiagnostics: afterShapeChange.cache.diagnostics.map((diagnostic) => diagnostic.code).sort(),
+      afterChangeRemovalRecovery: extractTopologyRemovalRecoveryDiagnostics(afterShapeChange.cache.diagnostics),
       afterChangeRegenerationRecovery: extractTopologyRegenerationRecoveryDiagnostics(afterShapeChange.cache.diagnostics),
       afterChangeTopologyPlan: afterShapeChange.cache.blockedSubtreePlan
         ? {
@@ -214,6 +256,48 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
       afterChangeSnapshotHash: afterShapeChange.cache.snapshotHash,
       recoveryStatus: afterShapeRecovery.cache.status,
       recoverySnapshotHash: afterShapeRecovery.cache.snapshotHash,
+    };
+
+    clearProofDatasetCacheForTests();
+    const beforeMixedShapeChange = await buildProofCacheReportView({ proofId, config: normalizedConfig });
+    const mixedShapeMutationPath = path.join(fixtureProjectRoot, "Verity", "Loop.lean");
+    const mixedShapeBefore = await fs.readFile(mixedShapeMutationPath, "utf8");
+    const mixedRemovalTarget = "mutual\n  theorem unsupported_demo : True := by\n    trivial\nend\n";
+    const mixedShapeAddition = "\n\ntheorem cache_shape_mixed_added : True := by\n  trivial\n";
+    let afterMixedShapeChange: Awaited<ReturnType<typeof buildProofCacheReportView>>;
+    let afterMixedShapeRecovery: Awaited<ReturnType<typeof buildProofCacheReportView>>;
+    try {
+      if (!mixedShapeBefore.includes(mixedRemovalTarget)) {
+        throw new Error(`benchmark mixed topology removal target not found in Verity/Loop.lean`);
+      }
+      const mixedMutated = mixedShapeBefore.replace(mixedRemovalTarget, "").trimEnd() + mixedShapeAddition;
+      await fs.writeFile(mixedShapeMutationPath, mixedMutated, "utf8");
+      clearProofDatasetCacheForTests();
+      afterMixedShapeChange = await buildProofCacheReportView({ proofId, config: normalizedConfig });
+      clearProofDatasetCacheForTests();
+      afterMixedShapeRecovery = await buildProofCacheReportView({ proofId, config: normalizedConfig });
+    } finally {
+      await fs.writeFile(mixedShapeMutationPath, mixedShapeBefore, "utf8");
+    }
+
+    const mixedTopologyShapeInvalidation = {
+      beforeChangeStatus: beforeMixedShapeChange.cache.status,
+      afterChangeStatus: afterMixedShapeChange.cache.status,
+      afterChangeDiagnostics: afterMixedShapeChange.cache.diagnostics.map((diagnostic) => diagnostic.code).sort(),
+      afterChangeMixedRecovery: extractTopologyMixedRecoveryDiagnostics(afterMixedShapeChange.cache.diagnostics),
+      afterChangeTopologyPlan: afterMixedShapeChange.cache.blockedSubtreePlan
+        ? {
+            fullRebuildRequired: afterMixedShapeChange.cache.blockedSubtreePlan.fullRebuildRequired,
+            topologyShapeChanged: afterMixedShapeChange.cache.blockedSubtreePlan.topologyShapeChanged,
+            addedDeclarationCount: afterMixedShapeChange.cache.blockedSubtreePlan.addedDeclarationIds.length,
+            removedDeclarationCount: afterMixedShapeChange.cache.blockedSubtreePlan.removedDeclarationIds.length,
+            blockedDeclarationCount: afterMixedShapeChange.cache.blockedSubtreePlan.blockedDeclarationIds.length,
+            planHash: afterMixedShapeChange.cache.blockedSubtreePlan.planHash,
+          }
+        : undefined,
+      afterChangeSnapshotHash: afterMixedShapeChange.cache.snapshotHash,
+      recoveryStatus: afterMixedShapeRecovery.cache.status,
+      recoverySnapshotHash: afterMixedShapeRecovery.cache.snapshotHash,
     };
 
     const requestHash = computeStableHash({
@@ -240,11 +324,22 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
         beforeChangeStatus: topologyShapeInvalidation.beforeChangeStatus,
         afterChangeStatus: topologyShapeInvalidation.afterChangeStatus,
         afterChangeDiagnostics: topologyShapeInvalidation.afterChangeDiagnostics,
+        afterChangeRemovalRecovery: topologyShapeInvalidation.afterChangeRemovalRecovery,
         afterChangeRegenerationRecovery: topologyShapeInvalidation.afterChangeRegenerationRecovery,
         afterChangeTopologyPlan: topologyShapeInvalidation.afterChangeTopologyPlan,
         recoveryStatus: topologyShapeInvalidation.recoveryStatus,
         snapshotChangedOnMutation:
           topologyShapeInvalidation.afterChangeSnapshotHash !== beforeShapeChange.cache.snapshotHash,
+      },
+      mixedTopologyShapeInvalidation: {
+        beforeChangeStatus: mixedTopologyShapeInvalidation.beforeChangeStatus,
+        afterChangeStatus: mixedTopologyShapeInvalidation.afterChangeStatus,
+        afterChangeDiagnostics: mixedTopologyShapeInvalidation.afterChangeDiagnostics,
+        afterChangeMixedRecovery: mixedTopologyShapeInvalidation.afterChangeMixedRecovery,
+        afterChangeTopologyPlan: mixedTopologyShapeInvalidation.afterChangeTopologyPlan,
+        recoveryStatus: mixedTopologyShapeInvalidation.recoveryStatus,
+        snapshotChangedOnMutation:
+          mixedTopologyShapeInvalidation.afterChangeSnapshotHash !== beforeMixedShapeChange.cache.snapshotHash,
       },
     });
 
@@ -269,6 +364,7 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
         warmPersistentCache: warmSummary,
         invalidation,
         topologyShapeInvalidation,
+        mixedTopologyShapeInvalidation,
       },
     };
   } finally {
@@ -349,6 +445,57 @@ function extractTopologyRegenerationRecoveryDiagnostics(
       regeneration.details.skippedUnrebasableStatementSignatureReuseCount ?? 0,
     ),
     regenerationHash: String(regeneration.details.regenerationHash ?? ""),
+  };
+}
+
+function extractTopologyRemovalRecoveryDiagnostics(
+  diagnostics: Array<{ code: string; details?: Record<string, unknown> }>,
+): ProofCacheBenchmarkReport["scenarios"]["topologyShapeInvalidation"]["afterChangeRemovalRecovery"] {
+  const recovery = diagnostics.find((diagnostic) => diagnostic.code === "cache_topology_removal_subtree_rebuild_hit");
+  if (!recovery?.details) {
+    return undefined;
+  }
+  return {
+    removedLeafCount: Number(recovery.details.removedLeafCount ?? 0),
+    touchedParentCount: Number(recovery.details.touchedParentCount ?? 0),
+    recomputedParentCount: Number(recovery.details.recomputedParentCount ?? 0),
+    collapsedParentCount: Number(recovery.details.collapsedParentCount ?? 0),
+    droppedParentCount: Number(recovery.details.droppedParentCount ?? 0),
+    recoveryHash: String(recovery.details.recoveryHash ?? ""),
+  };
+}
+
+function extractTopologyMixedRecoveryDiagnostics(
+  diagnostics: Array<{ code: string; details?: Record<string, unknown> }>,
+): ProofCacheBenchmarkReport["scenarios"]["mixedTopologyShapeInvalidation"]["afterChangeMixedRecovery"] {
+  const mixedRecovery = diagnostics.find(
+    (diagnostic) => diagnostic.code === "cache_topology_mixed_subtree_regeneration_rebuild_hit",
+  );
+  if (!mixedRecovery?.details) {
+    return undefined;
+  }
+  return {
+    removedLeafCount: Number(mixedRecovery.details.removedLeafCount ?? 0),
+    touchedParentCount: Number(mixedRecovery.details.touchedParentCount ?? 0),
+    recomputedParentCount: Number(mixedRecovery.details.recomputedParentCount ?? 0),
+    collapsedParentCount: Number(mixedRecovery.details.collapsedParentCount ?? 0),
+    droppedParentCount: Number(mixedRecovery.details.droppedParentCount ?? 0),
+    reusableParentSummaryCount: Number(mixedRecovery.details.reusableParentSummaryCount ?? 0),
+    reusedParentSummaryCount: Number(mixedRecovery.details.reusedParentSummaryCount ?? 0),
+    reusedParentSummaryByGroundingCount: Number(mixedRecovery.details.reusedParentSummaryByGroundingCount ?? 0),
+    reusedParentSummaryByStatementSignatureCount: Number(
+      mixedRecovery.details.reusedParentSummaryByStatementSignatureCount ?? 0,
+    ),
+    generatedParentSummaryCount: Number(mixedRecovery.details.generatedParentSummaryCount ?? 0),
+    skippedAmbiguousStatementSignatureReuseCount: Number(
+      mixedRecovery.details.skippedAmbiguousStatementSignatureReuseCount ?? 0,
+    ),
+    skippedUnrebasableStatementSignatureReuseCount: Number(
+      mixedRecovery.details.skippedUnrebasableStatementSignatureReuseCount ?? 0,
+    ),
+    removalRecoveryHash: String(mixedRecovery.details.removalRecoveryHash ?? ""),
+    regenerationHash: String(mixedRecovery.details.regenerationHash ?? ""),
+    mixedRecoveryHash: String(mixedRecovery.details.mixedRecoveryHash ?? ""),
   };
 }
 
