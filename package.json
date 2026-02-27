@@ -14,6 +14,7 @@
     "eval:domain-adapters": "npm run -s build && node scripts/eval-domain-adapters.mjs",
     "eval:tree-pipeline": "npm run -s build && node scripts/eval-tree-pipeline.mjs",
     "eval:leaf-detail": "npm run -s build && node scripts/eval-leaf-detail.mjs",
+    "eval:quality": "npm run -s build && node scripts/eval-quality-harness.mjs",
     "serve:verification": "npm run -s build && node scripts/verification-server.mjs"
   },
   "devDependencies": {
