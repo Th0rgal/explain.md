@@ -40,6 +40,10 @@ Canonical plain-text rendering with stable ordering for audits.
   - `leaf`: original leaf already carried a URL.
   - `source_span`: URL resolved deterministically from `sourceBaseUrl` + `sourceSpan`.
   - `missing`: no source URL could be produced.
+- Web clients can render this directly as provenance mode without heuristic interpretation:
+  - `Leaf-attested URL`
+  - `Resolved from source span`
+  - `Missing source URL`
 
 ## Diagnostics
 - `leaf_not_found` (`error`)

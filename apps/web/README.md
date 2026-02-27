@@ -61,6 +61,10 @@ The tree panel uses incremental root/children/path queries:
 - Lean fixture project root can be overridden with `EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT` (used by benchmark/invalidation harness).
 - Lean fixture source deep-link base can be overridden with `EXPLAIN_MD_LEAN_FIXTURE_SOURCE_BASE_URL`.
 - Leaf detail responses include `view.shareReference.sourceUrlOrigin` (`leaf` | `source_span` | `missing`) for auditable source-link provenance.
+- Leaf detail panel renders provenance mode and deep-link availability explicitly:
+  - `Leaf-attested URL` (`leaf`)
+  - `Resolved from source span` (`source_span`)
+  - `Missing source URL` (`missing`)
 - Config profiles are persisted to `.explain-md/web-config-profiles.json` (override with `EXPLAIN_MD_WEB_CONFIG_PROFILE_LEDGER`).
 - Job IDs are deterministic and monotonic (`job-000001`, `job-000002`, ...).
 - Reproducibility contract values can be configured with:

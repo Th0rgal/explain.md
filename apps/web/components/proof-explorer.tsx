@@ -26,6 +26,7 @@ import {
   type VerificationJobResponse,
   type VerificationJobsResponse,
 } from "../lib/api-client";
+import { buildLeafSourceProvenanceView } from "../lib/leaf-provenance";
 
 const DEFAULT_CONFIG: ProofConfigInput = {
   abstractionLevel: 3,
@@ -71,6 +72,10 @@ export function ProofExplorer(props: ProofExplorerProps) {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const profileProjectId = useMemo(() => props.proofId, [props.proofId]);
+  const leafSourceProvenance = useMemo(
+    () => (leafDetail?.view ? buildLeafSourceProvenanceView(leafDetail.view.shareReference) : undefined),
+    [leafDetail],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -757,6 +762,24 @@ export function ProofExplorer(props: ProofExplorerProps) {
         {pathResult?.path.path.length ? <p className="meta">Ancestry: {pathResult.path.path.map((node) => node.id).join(" -> ")}</p> : null}
         {leafDetail?.view && (
           <>
+            <p className="meta" aria-label="Source URL provenance">
+              Source URL provenance: {leafSourceProvenance?.originLabel ?? "unavailable"}
+            </p>
+            <p className="meta">{leafSourceProvenance?.originDescription ?? "Source provenance unavailable."}</p>
+            {leafSourceProvenance?.deepLinkAvailable ? (
+              <p>
+                <a
+                  href={leafSourceProvenance.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Open source link (${leafSourceProvenance.originLabel})`}
+                >
+                  Open source span
+                </a>
+              </p>
+            ) : (
+              <p className="meta">Source deep-link unavailable for this leaf.</p>
+            )}
             <p>
               <strong>{leafDetail.view.leaf.id}</strong>
             </p>
