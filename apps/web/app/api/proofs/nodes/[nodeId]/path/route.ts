@@ -13,15 +13,14 @@ function normalizeConfigInput(searchParams: URLSearchParams): ExplanationConfigI
   };
 }
 
-export async function GET(request: Request, context: { params: Promise<{ nodeId: string }> }) {
+export async function GET(request: Request, context: { params: { nodeId: string } }) {
   try {
     const url = new URL(request.url);
-    const params = await context.params;
     const proofId = normalizeString(url.searchParams.get("proofId"), SEED_PROOF_ID);
 
     const response = buildSeedNodePathView({
       proofId,
-      nodeId: normalizeString(params.nodeId, ""),
+      nodeId: normalizeString(context.params.nodeId, ""),
       config: normalizeConfigInput(url.searchParams),
     });
 

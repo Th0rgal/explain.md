@@ -34,6 +34,27 @@ export interface ProofCatalogResponse {
   }>;
 }
 
+export interface TreeNodeRecord {
+  id: string;
+  kind: "leaf" | "parent";
+  statement: string;
+  depth: number;
+  childIds: string[];
+  evidenceRefs: string[];
+  complexityScore?: number;
+  abstractionScore?: number;
+  confidence?: number;
+  whyTrueFromChildren?: string;
+  newTermsIntroduced: string[];
+}
+
+interface TreeStorageDiagnostic {
+  code: string;
+  severity: "error" | "warning";
+  message: string;
+  details?: Record<string, unknown>;
+}
+
 export interface ProjectionResponse {
   proofId: string;
   config: Record<string, unknown>;
@@ -79,6 +100,46 @@ export interface DiffResponse {
       baselineStatement?: string;
       candidateStatement?: string;
     }>;
+  };
+}
+
+export interface RootResponse {
+  proofId: string;
+  configHash: string;
+  requestHash: string;
+  snapshotHash: string;
+  root: {
+    node?: TreeNodeRecord;
+    diagnostics: TreeStorageDiagnostic[];
+  };
+}
+
+export interface NodeChildrenResponse {
+  proofId: string;
+  configHash: string;
+  requestHash: string;
+  snapshotHash: string;
+  children: {
+    parent: TreeNodeRecord;
+    totalChildren: number;
+    offset: number;
+    limit: number;
+    hasMore: boolean;
+    children: TreeNodeRecord[];
+    diagnostics: TreeStorageDiagnostic[];
+  };
+}
+
+export interface NodePathResponse {
+  proofId: string;
+  configHash: string;
+  requestHash: string;
+  snapshotHash: string;
+  path: {
+    ok: boolean;
+    nodeId: string;
+    path: TreeNodeRecord[];
+    diagnostics: TreeStorageDiagnostic[];
   };
 }
 
@@ -140,6 +201,49 @@ export async function fetchDiff(payload: {
 }
 
 export async function fetchLeafDetail(proofId: string, leafId: string, config: ProofConfigInput): Promise<LeafDetailResponse> {
+  const params = toConfigSearchParams(proofId, config);
+  return requestJson<LeafDetailResponse>(`/api/proofs/leaves/${encodeURIComponent(leafId)}?${params.toString()}`);
+}
+
+export async function fetchRoot(proofId: string, config: ProofConfigInput): Promise<RootResponse> {
+  const params = toConfigSearchParams(proofId, config);
+  return requestJson<RootResponse>(`/api/proofs/root?${params.toString()}`);
+}
+
+export async function fetchNodeChildren(
+  proofId: string,
+  nodeId: string,
+  config: ProofConfigInput,
+  pagination: { offset?: number; limit?: number } = {},
+): Promise<NodeChildrenResponse> {
+  const params = toConfigSearchParams(proofId, config);
+  if (pagination.offset !== undefined) {
+    params.set("offset", String(pagination.offset));
+  }
+  if (pagination.limit !== undefined) {
+    params.set("limit", String(pagination.limit));
+  }
+  return requestJson<NodeChildrenResponse>(`/api/proofs/nodes/${encodeURIComponent(nodeId)}/children?${params.toString()}`);
+}
+
+export async function fetchNodePath(proofId: string, nodeId: string, config: ProofConfigInput): Promise<NodePathResponse> {
+  const params = toConfigSearchParams(proofId, config);
+  return requestJson<NodePathResponse>(`/api/proofs/nodes/${encodeURIComponent(nodeId)}/path?${params.toString()}`);
+}
+
+async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, init);
+  const payload = (await response.json()) as ApiEnvelope<T>;
+
+  if (!response.ok || !payload.ok) {
+    const message = payload.ok ? `Request failed with status ${response.status}.` : payload.error.message;
+    throw new Error(message);
+  }
+
+  return payload.data;
+}
+
+function toConfigSearchParams(proofId: string, config: ProofConfigInput): URLSearchParams {
   const params = new URLSearchParams({ proofId });
   if (config.abstractionLevel !== undefined) {
     params.set("abstractionLevel", String(config.abstractionLevel));
@@ -159,18 +263,5 @@ export async function fetchLeafDetail(proofId: string, leafId: string, config: P
   if (config.termIntroductionBudget !== undefined) {
     params.set("termIntroductionBudget", String(config.termIntroductionBudget));
   }
-
-  return requestJson<LeafDetailResponse>(`/api/proofs/leaves/${encodeURIComponent(leafId)}?${params.toString()}`);
-}
-
-async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
-  const payload = (await response.json()) as ApiEnvelope<T>;
-
-  if (!response.ok || !payload.ok) {
-    const message = payload.ok ? `Request failed with status ${response.status}.` : payload.error.message;
-    throw new Error(message);
-  }
-
-  return payload.data;
+  return params;
 }

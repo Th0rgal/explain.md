@@ -28,6 +28,11 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 
 ## State management
 - Baseline strategy: local React state (`useState`) with deterministic API payloads.
+- Proof explorer tree state is incremental and query-driven:
+  - root snapshot from `GET /api/proofs/root`
+  - per-parent child pages from `GET /api/proofs/nodes/:nodeId/children`
+  - ancestry expansion from `GET /api/proofs/nodes/:nodeId/path`
+- Sibling complexity remains bounded by `maxChildrenPerParent` during child-page fetches.
 - This keeps behavior auditable while issue #15 iterates on richer interaction patterns.
 
 ## Local verification
