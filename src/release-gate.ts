@@ -95,6 +95,24 @@ export interface ExplanationDiffBenchmarkArtifact {
   };
 }
 
+export interface MultilingualBenchmarkArtifact {
+  schemaVersion: string;
+  requestHash: string;
+  outcomeHash: string;
+  summary: {
+    profileCount: number;
+    rootStructureStableProfiles: number;
+    childrenStructureStableProfiles: number;
+    pathStructureStableProfiles: number;
+    localizedRootStatementProfiles: number;
+    localizedChildStatementProfiles: number;
+    localizedPathStatementProfiles: number;
+    fallbackProfiles: number;
+    localeVariantProfiles: number;
+    leafProvenanceStableProfiles: number;
+  };
+}
+
 export interface ObservabilitySloBenchmarkArtifact {
   schemaVersion: string;
   requestHash: string;
@@ -139,6 +157,7 @@ export interface ReleaseGateInput {
   treeScaleBenchmark: TreeScaleBenchmarkArtifact;
   explanationDiffBenchmark: ExplanationDiffBenchmarkArtifact;
   verificationReplayBenchmark: VerificationReplayBenchmarkArtifact;
+  multilingualBenchmark: MultilingualBenchmarkArtifact;
   proofCacheBenchmark: ProofCacheBenchmarkArtifact;
   domainAdapterBenchmark: DomainAdapterBenchmarkArtifact;
   observabilitySloBaseline: ObservabilitySloBenchmarkArtifact;
@@ -154,6 +173,7 @@ export interface ReleaseGateCheck {
     | "tree_a11y_transcript_complete"
     | "tree_scale_profiles_cover_modes"
     | "explanation_diff_profiles_cover_config_knobs"
+    | "multilingual_generation_contract"
     | "verification_replay_contract_complete"
     | "cache_warm_speedup"
     | "cache_recovery_hits"
@@ -179,6 +199,7 @@ export interface ReleaseGateReport {
     treeA11yOutcomeHash: string;
     treeScaleOutcomeHash: string;
     explanationDiffOutcomeHash: string;
+    multilingualOutcomeHash: string;
     verificationReplayOutcomeHash: string;
     proofCacheOutcomeHash: string;
     domainAdapterOutcomeHash: string;
@@ -216,6 +237,7 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
   const treeScaleBenchmark = assertTreeScaleBenchmarkArtifact(input.treeScaleBenchmark);
   const explanationDiffBenchmark = assertExplanationDiffBenchmarkArtifact(input.explanationDiffBenchmark);
   const verificationReplayBenchmark = assertVerificationReplayBenchmarkArtifact(input.verificationReplayBenchmark);
+  const multilingualBenchmark = assertMultilingualBenchmarkArtifact(input.multilingualBenchmark);
   const proofCacheBenchmark = assertProofCacheBenchmarkArtifact(input.proofCacheBenchmark);
   const domainAdapterBenchmark = assertDomainAdapterBenchmarkArtifact(input.domainAdapterBenchmark);
   const observabilitySloBaseline = assertObservabilitySloBenchmarkArtifact(input.observabilitySloBaseline);
@@ -283,6 +305,24 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
         `profiles=${explanationDiffBenchmark.summary.profileCount} changed_profiles=${explanationDiffBenchmark.summary.changedProfiles} ` +
         `truncated_profiles=${explanationDiffBenchmark.summary.truncatedProfiles} total_changes=${explanationDiffBenchmark.summary.totalChanges} ` +
         `provenance_changes=${explanationDiffBenchmark.summary.provenanceCoveredChanges}`,
+    },
+    {
+      code: "multilingual_generation_contract",
+      pass:
+        multilingualBenchmark.summary.profileCount >= 2 &&
+        multilingualBenchmark.summary.rootStructureStableProfiles === multilingualBenchmark.summary.profileCount &&
+        multilingualBenchmark.summary.childrenStructureStableProfiles === multilingualBenchmark.summary.profileCount &&
+        multilingualBenchmark.summary.pathStructureStableProfiles === multilingualBenchmark.summary.profileCount &&
+        multilingualBenchmark.summary.localizedRootStatementProfiles === multilingualBenchmark.summary.profileCount &&
+        multilingualBenchmark.summary.localizedChildStatementProfiles === multilingualBenchmark.summary.profileCount &&
+        multilingualBenchmark.summary.localizedPathStatementProfiles === multilingualBenchmark.summary.profileCount &&
+        multilingualBenchmark.summary.fallbackProfiles === multilingualBenchmark.summary.profileCount &&
+        multilingualBenchmark.summary.localeVariantProfiles === multilingualBenchmark.summary.profileCount &&
+        multilingualBenchmark.summary.leafProvenanceStableProfiles === multilingualBenchmark.summary.profileCount,
+      details:
+        `profiles=${multilingualBenchmark.summary.profileCount} localized_root=${multilingualBenchmark.summary.localizedRootStatementProfiles} ` +
+        `localized_children=${multilingualBenchmark.summary.localizedChildStatementProfiles} localized_path=${multilingualBenchmark.summary.localizedPathStatementProfiles} ` +
+        `fallback=${multilingualBenchmark.summary.fallbackProfiles} locale_variant=${multilingualBenchmark.summary.localeVariantProfiles}`,
     },
     {
       code: "verification_replay_contract_complete",
@@ -355,6 +395,7 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
     treeScaleRequestHash: treeScaleBenchmark.requestHash,
     explanationDiffRequestHash: explanationDiffBenchmark.requestHash,
     verificationReplayRequestHash: verificationReplayBenchmark.requestHash,
+    multilingualRequestHash: multilingualBenchmark.requestHash,
     proofCacheRequestHash: proofCacheBenchmark.requestHash,
     domainAdapterRequestHash: domainAdapterBenchmark.requestHash,
     observabilityRequestHash: observabilitySloActual.requestHash,
@@ -375,6 +416,7 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
       treeA11yOutcomeHash: treeA11yBenchmark.outcomeHash,
       treeScaleOutcomeHash: treeScaleBenchmark.outcomeHash,
       explanationDiffOutcomeHash: explanationDiffBenchmark.outcomeHash,
+      multilingualOutcomeHash: multilingualBenchmark.outcomeHash,
       verificationReplayOutcomeHash: verificationReplayBenchmark.outcomeHash,
       proofCacheOutcomeHash: proofCacheBenchmark.outcomeHash,
       domainAdapterOutcomeHash: domainAdapterBenchmark.outcomeHash,
@@ -397,6 +439,7 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
       treeA11yOutcomeHash: treeA11yBenchmark.outcomeHash,
       treeScaleOutcomeHash: treeScaleBenchmark.outcomeHash,
       explanationDiffOutcomeHash: explanationDiffBenchmark.outcomeHash,
+      multilingualOutcomeHash: multilingualBenchmark.outcomeHash,
       verificationReplayOutcomeHash: verificationReplayBenchmark.outcomeHash,
       proofCacheOutcomeHash: proofCacheBenchmark.outcomeHash,
       domainAdapterOutcomeHash: domainAdapterBenchmark.outcomeHash,
@@ -591,6 +634,59 @@ export function assertExplanationDiffBenchmarkArtifact(input: unknown): Explanat
   };
 }
 
+export function assertMultilingualBenchmarkArtifact(input: unknown): MultilingualBenchmarkArtifact {
+  if (!isObject(input)) {
+    throw new Error("multilingual benchmark artifact must be an object");
+  }
+  if (expectString(input.schemaVersion, "multilingual.schemaVersion") !== "1.0.0") {
+    throw new Error("multilingual benchmark schemaVersion must be 1.0.0");
+  }
+  if (!isObject(input.summary)) {
+    throw new Error("multilingual.summary must be an object");
+  }
+  return {
+    schemaVersion: "1.0.0",
+    requestHash: expectString(input.requestHash, "multilingual.requestHash"),
+    outcomeHash: expectString(input.outcomeHash, "multilingual.outcomeHash"),
+    summary: {
+      profileCount: expectFiniteNumber(input.summary.profileCount, "multilingual.summary.profileCount"),
+      rootStructureStableProfiles: expectFiniteNumber(
+        input.summary.rootStructureStableProfiles,
+        "multilingual.summary.rootStructureStableProfiles",
+      ),
+      childrenStructureStableProfiles: expectFiniteNumber(
+        input.summary.childrenStructureStableProfiles,
+        "multilingual.summary.childrenStructureStableProfiles",
+      ),
+      pathStructureStableProfiles: expectFiniteNumber(
+        input.summary.pathStructureStableProfiles,
+        "multilingual.summary.pathStructureStableProfiles",
+      ),
+      localizedRootStatementProfiles: expectFiniteNumber(
+        input.summary.localizedRootStatementProfiles,
+        "multilingual.summary.localizedRootStatementProfiles",
+      ),
+      localizedChildStatementProfiles: expectFiniteNumber(
+        input.summary.localizedChildStatementProfiles,
+        "multilingual.summary.localizedChildStatementProfiles",
+      ),
+      localizedPathStatementProfiles: expectFiniteNumber(
+        input.summary.localizedPathStatementProfiles,
+        "multilingual.summary.localizedPathStatementProfiles",
+      ),
+      fallbackProfiles: expectFiniteNumber(input.summary.fallbackProfiles, "multilingual.summary.fallbackProfiles"),
+      localeVariantProfiles: expectFiniteNumber(
+        input.summary.localeVariantProfiles,
+        "multilingual.summary.localeVariantProfiles",
+      ),
+      leafProvenanceStableProfiles: expectFiniteNumber(
+        input.summary.leafProvenanceStableProfiles,
+        "multilingual.summary.leafProvenanceStableProfiles",
+      ),
+    },
+  };
+}
+
 export function assertTreeScaleBenchmarkArtifact(input: unknown): TreeScaleBenchmarkArtifact {
   if (!isObject(input)) {
     throw new Error("tree scale benchmark artifact must be an object");
@@ -779,6 +875,7 @@ function isKnownCheckCode(value: string): value is ReleaseGateCheck["code"] {
     value === "tree_a11y_transcript_complete" ||
     value === "tree_scale_profiles_cover_modes" ||
     value === "explanation_diff_profiles_cover_config_knobs" ||
+    value === "multilingual_generation_contract" ||
     value === "verification_replay_contract_complete" ||
     value === "cache_warm_speedup" ||
     value === "cache_recovery_hits" ||

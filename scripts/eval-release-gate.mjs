@@ -17,6 +17,7 @@ function parseArgs(argv) {
   let treeScalePath = path.resolve(cwd, "docs/benchmarks/tree-scale-evaluation.json");
   let explanationDiffPath = path.resolve(cwd, "docs/benchmarks/explanation-diff-evaluation.json");
   let verificationReplayPath = path.resolve(cwd, "docs/benchmarks/verification-replay-evaluation.json");
+  let multilingualPath = path.resolve(cwd, "docs/benchmarks/multilingual-evaluation.json");
   let proofCachePath = path.resolve(cwd, "docs/benchmarks/proof-cache-benchmark.json");
   let domainAdapterPath = path.resolve(cwd, "docs/benchmarks/domain-adapter-evaluation.json");
   let observabilityBaselinePath = path.resolve(cwd, "docs/benchmarks/observability-slo-benchmark.json");
@@ -54,6 +55,10 @@ function parseArgs(argv) {
       verificationReplayPath = path.resolve(cwd, arg.slice("--verification-replay=".length));
       continue;
     }
+    if (arg.startsWith("--multilingual=")) {
+      multilingualPath = path.resolve(cwd, arg.slice("--multilingual=".length));
+      continue;
+    }
     if (arg.startsWith("--proof-cache=")) {
       proofCachePath = path.resolve(cwd, arg.slice("--proof-cache=".length));
       continue;
@@ -87,6 +92,7 @@ function parseArgs(argv) {
     treeScalePath,
     explanationDiffPath,
     verificationReplayPath,
+    multilingualPath,
     proofCachePath,
     domainAdapterPath,
     observabilityBaselinePath,
@@ -111,6 +117,7 @@ async function main() {
   const treeScaleBenchmark = await readJson(args.treeScalePath);
   const explanationDiffBenchmark = await readJson(args.explanationDiffPath);
   const verificationReplayBenchmark = await readJson(args.verificationReplayPath);
+  const multilingualBenchmark = await readJson(args.multilingualPath);
   const proofCacheBenchmark = await readJson(args.proofCachePath);
   const domainAdapterBenchmark = await readJson(args.domainAdapterPath);
   const observabilitySloBaseline = await readJson(args.observabilityBaselinePath);
@@ -123,6 +130,7 @@ async function main() {
     treeScaleBenchmark,
     explanationDiffBenchmark,
     verificationReplayBenchmark,
+    multilingualBenchmark,
     proofCacheBenchmark,
     domainAdapterBenchmark,
     observabilitySloBaseline,

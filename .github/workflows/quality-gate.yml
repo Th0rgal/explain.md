@@ -57,6 +57,9 @@ jobs:
       - name: Run deterministic verification replay benchmark baseline check
         run: npm run web:eval:verification-replay:ci
 
+      - name: Run deterministic multilingual benchmark baseline check
+        run: npm run web:eval:multilingual:ci
+
       - name: Run deterministic domain adapter benchmark baseline check
         run: npm run eval:domain-adapters:ci
 
@@ -78,6 +81,7 @@ jobs:
             .explain-md/tree-scale-evaluation-report.json
             .explain-md/explanation-diff-evaluation-report.json
             .explain-md/verification-replay-evaluation-report.json
+            .explain-md/multilingual-evaluation-report.json
             .explain-md/domain-adapter-evaluation-report.json
             .explain-md/observability-slo-benchmark-report.json
             .explain-md/research-dossier-report.json

@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0.0",
-  "requestHash": "fe84de464907e333e765333a1ac7aaf505989082e26ec6675579f565032cae68",
-  "outcomeHash": "0993fec9f3b6bffe5c66f3e66a9f831cbbdf5c3b8ea16e8fb78388502998a998",
+  "requestHash": "796be708a10a622709ef87af4cc316ff073d093a56e56d186d7ecc6c2e2ca45d",
+  "outcomeHash": "45cd7c51debb1c64564b55011ee09727ac4b711c49ae5274d1e8c11fa4dbe81a",
   "thresholdPass": true,
   "checkStatus": [
     {
@@ -18,6 +18,10 @@
     },
     {
       "code": "explanation_diff_profiles_cover_config_knobs",
+      "pass": true
+    },
+    {
+      "code": "multilingual_generation_contract",
       "pass": true
     },
     {

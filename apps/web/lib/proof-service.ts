@@ -16,7 +16,6 @@ import {
   getSupportingDeclarations,
   ingestLeanSources,
   mapLeanIngestionToTheoremLeaves,
-  mapTheoremLeavesToTreeLeaves,
   normalizeConfig,
   validateExplanationTree,
   type DependencyGraph,
@@ -1716,7 +1715,7 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
   }
 
   const tree = await buildRecursiveExplanationTree(createDeterministicSummaryProvider(), {
-    leaves: mapTheoremLeavesToTreeLeaves(theoremLeaves),
+    leaves: mapTheoremLeavesToLocalizedTreeLeaves(theoremLeaves, config.language),
     config,
   });
 
@@ -2244,7 +2243,7 @@ async function attemptBlockedSubtreeRecovery(
     }
     nextNodes[leafId] = {
       ...existing,
-      statement: leaf.prettyStatement,
+      statement: renderLocalizedTreeLeafStatement(leaf, request.config.language),
       evidenceRefs: [leaf.id],
     };
   }
@@ -2492,7 +2491,7 @@ async function attemptTopologyRemovalRecovery(
     }
     nextNodes[leaf.id] = {
       ...node,
-      statement: leaf.prettyStatement,
+      statement: renderLocalizedTreeLeafStatement(leaf, request.config.language),
       evidenceRefs: [leaf.id],
     };
   }
@@ -3072,7 +3071,7 @@ async function attemptTopologyAdditionSubtreeInsertionRecovery(
     let addedSubtree: ExplanationTree;
     try {
       addedSubtree = await buildRecursiveExplanationTree(insertionProvider, {
-        leaves: mapTheoremLeavesToTreeLeaves(frontier.leaves),
+        leaves: mapTheoremLeavesToLocalizedTreeLeaves(frontier.leaves, request.config.language),
         config: request.config,
       });
     } catch {
@@ -3170,7 +3169,7 @@ async function attemptTopologyAdditionSubtreeInsertionRecovery(
     }
     mergedNodes[leaf.id] = {
       ...existing,
-      statement: leaf.prettyStatement,
+      statement: renderLocalizedTreeLeafStatement(leaf, request.config.language),
       evidenceRefs: [leaf.id],
     };
   }
@@ -3865,7 +3864,7 @@ async function attemptTopologyRegenerationRecovery(
   let tree: ExplanationTree;
   try {
     tree = await buildRecursiveExplanationTree(provider, {
-      leaves: mapTheoremLeavesToTreeLeaves(request.currentLeaves),
+      leaves: mapTheoremLeavesToLocalizedTreeLeaves(request.currentLeaves, request.config.language),
       config: request.config,
     });
   } catch {
@@ -4267,6 +4266,29 @@ function parsePromptLanguageConstraint(prompt: string): "en" | "fr" {
   const match = prompt.match(/language=([^\s]+)/);
   const requested = match?.[1] ?? "en";
   return resolveExplanationLanguage(requested).effective;
+}
+
+function renderLocalizedTreeLeafStatement(
+  leaf: TheoremLeafRecord,
+  language: "en" | "fr",
+): string {
+  if (language === "fr") {
+    return `Enonce ${leaf.declarationName}: ${leaf.prettyStatement}`;
+  }
+  return leaf.prettyStatement;
+}
+
+function mapTheoremLeavesToLocalizedTreeLeaves(
+  leaves: TheoremLeafRecord[],
+  language: "en" | "fr",
+): Array<{ id: string; statement: string; prerequisiteIds: string[] }> {
+  return leaves
+    .map((leaf) => ({
+      id: leaf.id,
+      statement: renderLocalizedTreeLeafStatement(leaf, language),
+      prerequisiteIds: leaf.dependencyIds,
+    }))
+    .sort((left, right) => left.id.localeCompare(right.id));
 }
 
 function assertSeedProof(proofId: string): void {

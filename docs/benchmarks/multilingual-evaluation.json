@@ -1,0 +1,113 @@
+{
+  "schemaVersion": "1.0.0",
+  "requestHash": "e9510bf180c249eca02c324648e40bed2560b820f47ef6d9e2a8fb60b8ad4604",
+  "outcomeHash": "6b91f0da805b42b0257ad88e9aee062e086d26d0203513eac34c630fa57a90ba",
+  "parameters": {
+    "profiles": [
+      {
+        "profileId": "seed-verity",
+        "proofId": "seed-verity",
+        "expectedLeafId": "Verity.ContractSpec.init_sound",
+        "languages": [
+          "en",
+          "fr",
+          "fr-CA",
+          "de"
+        ]
+      },
+      {
+        "profileId": "lean-verity-fixture",
+        "proofId": "lean-verity-fixture",
+        "expectedLeafId": "lean:Verity/Core:core_safe:8:1",
+        "languages": [
+          "en",
+          "fr",
+          "fr-CA",
+          "de"
+        ]
+      }
+    ]
+  },
+  "summary": {
+    "profileCount": 2,
+    "rootStructureStableProfiles": 2,
+    "childrenStructureStableProfiles": 2,
+    "pathStructureStableProfiles": 2,
+    "localizedRootStatementProfiles": 2,
+    "localizedChildStatementProfiles": 2,
+    "localizedPathStatementProfiles": 2,
+    "fallbackProfiles": 2,
+    "localeVariantProfiles": 2,
+    "leafProvenanceStableProfiles": 2
+  },
+  "comparisons": [
+    {
+      "profileId": "seed-verity",
+      "proofId": "seed-verity",
+      "rootId": "p2_root",
+      "rootHashes": {
+        "en": "23c4e2b97a6c8fb2e4b1d9309f896bfd109168852ea118f3118e69b715083151",
+        "fr": "71370f8d7568c898b6779ce4adc3044915bd3db5d3479f8ea150751f9e110012",
+        "frCa": "71370f8d7568c898b6779ce4adc3044915bd3db5d3479f8ea150751f9e110012",
+        "fallback": "23c4e2b97a6c8fb2e4b1d9309f896bfd109168852ea118f3118e69b715083151"
+      },
+      "requestHashes": {
+        "rootEn": "0b1e4636e0afe30efa426f6d64a32867ce569c21f1c3bca7caeb21703b381446",
+        "rootFr": "bd7e69ecf221fc6e591f4320c040fe1e0e9fb0b129fa87c92f7087cc464673ee",
+        "rootFrCa": "bd7e69ecf221fc6e591f4320c040fe1e0e9fb0b129fa87c92f7087cc464673ee",
+        "rootFallback": "0b1e4636e0afe30efa426f6d64a32867ce569c21f1c3bca7caeb21703b381446",
+        "childrenEn": "ab34cdb9fbc1ae731ce673bd758c1196ec8f05f057e35a87efc2f090781daea4",
+        "childrenFr": "3e4932508ae347eca4bd5238807cba1d1d298e6cba6872452a341ec47ffce38a",
+        "pathEn": "8112e540b191eff493f6d781842c3c843d42935a18a950d3fe5d0362d043bc10",
+        "pathFr": "f7877a07e2620db022a95692b3c9ee4011f3495658fab65dda51e849b5a614a5",
+        "leafEn": "4526144a8bd346fdd78b63099a9008797142e932ea1b76f7b31ffea5f2f9453a",
+        "leafFr": "cf590781df0f4124f7cac78b5ba60d72a50faa8d47551903ab6a52f71193cd40"
+      },
+      "checks": {
+        "rootStructureStable": true,
+        "childrenStructureStable": true,
+        "pathStructureStable": true,
+        "localizedRootStatement": true,
+        "localizedChildStatement": true,
+        "localizedPathStatement": true,
+        "fallbackToEnglish": true,
+        "localeVariantToFrench": true,
+        "leafProvenanceStable": true
+      }
+    },
+    {
+      "profileId": "lean-verity-fixture",
+      "proofId": "lean-verity-fixture",
+      "rootId": "p_1_0_3b1e203488f4e696",
+      "rootHashes": {
+        "en": "a8fab4e8904f12f8c1fb161599282ee28eadfc56147c5dba83c7205eaf30d84e",
+        "fr": "77fd7d884651c588e92f34c480811dc815af84b079e77577294e1fd316cbc9d0",
+        "frCa": "77fd7d884651c588e92f34c480811dc815af84b079e77577294e1fd316cbc9d0",
+        "fallback": "a8fab4e8904f12f8c1fb161599282ee28eadfc56147c5dba83c7205eaf30d84e"
+      },
+      "requestHashes": {
+        "rootEn": "0a6c5d52a9712999beea31f397517e50c71d1f97ad709d7f605455e462b501c1",
+        "rootFr": "6d58ce15b7f0d34519bb70770a6fdc20b590f12afe181757f0e325e3b54b770d",
+        "rootFrCa": "6d58ce15b7f0d34519bb70770a6fdc20b590f12afe181757f0e325e3b54b770d",
+        "rootFallback": "0a6c5d52a9712999beea31f397517e50c71d1f97ad709d7f605455e462b501c1",
+        "childrenEn": "419ba60757b609691d82d7292645e397b2c3e897354a76ddb3f7d445f3158dc5",
+        "childrenFr": "353dcd4787adb5be605cdecdb414cabc34d37d26a65ff441ac85da730e01def3",
+        "pathEn": "0d8f6f3693549629e52f1403755f8a545dfb3c355a7312db7919eab5dbb47728",
+        "pathFr": "098708c90a9c311ba6e0abeeada141976b4fc21693602a5cb0166427acf6b798",
+        "leafEn": "b851bfc93ac165614088a66670176863a4fa8d2352f49532cb5364cf018ac631",
+        "leafFr": "08ece037b0dfcc3e21c6b2cd09cbaff5e6118939e01a394a1b339ec8458fc7ca"
+      },
+      "checks": {
+        "rootStructureStable": true,
+        "childrenStructureStable": true,
+        "pathStructureStable": true,
+        "localizedRootStatement": true,
+        "localizedChildStatement": true,
+        "localizedPathStatement": true,
+        "fallbackToEnglish": true,
+        "localeVariantToFrench": true,
+        "leafProvenanceStable": true
+      }
+    }
+  ]
+}

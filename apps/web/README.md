@@ -96,6 +96,8 @@ The tree panel uses incremental root/children/path queries:
 - CI enforces explanation-diff benchmark determinism with `npm run benchmark:explanation-diff:ci` (compares against `docs/benchmarks/explanation-diff-evaluation.json` and writes `.explain-md/explanation-diff-evaluation-report.json`).
 - Run deterministic verification replay artifact benchmark evidence with `npm run benchmark:verification-replay` (writes `docs/benchmarks/verification-replay-evaluation.json` from repo root).
 - CI enforces verification replay benchmark determinism with `npm run benchmark:verification-replay:ci` (compares against `docs/benchmarks/verification-replay-evaluation.json` and writes `.explain-md/verification-replay-evaluation-report.json`).
+- Run deterministic multilingual rendering benchmark evidence with `npm run benchmark:multilingual` (writes `docs/benchmarks/multilingual-evaluation.json` from repo root).
+- CI enforces multilingual rendering benchmark determinism with `npm run benchmark:multilingual:ci` (compares against `docs/benchmarks/multilingual-evaluation.json` and writes `.explain-md/multilingual-evaluation-report.json`).
 - Run deterministic observability SLO benchmark evidence with `npm run benchmark:observability-slo` (writes `docs/benchmarks/observability-slo-benchmark.json` from repo root).
   - Default benchmark profiles are deterministic and include both datasets:
     - `seed-verity`

@@ -32,12 +32,14 @@ It composes benchmark evidence from:
 - `docs/benchmarks/tree-scale-evaluation.json`
 - `docs/benchmarks/explanation-diff-evaluation.json`
 - `docs/benchmarks/verification-replay-evaluation.json`
+- `docs/benchmarks/multilingual-evaluation.json`
 - `docs/benchmarks/proof-cache-benchmark.json`
 - `docs/benchmarks/domain-adapter-evaluation.json`
 - `docs/benchmarks/observability-slo-benchmark.json`
 - `.explain-md/quality-gate-baseline-check.json`
 - `.explain-md/explanation-diff-evaluation-report.json`
 - `.explain-md/verification-replay-evaluation-report.json`
+- `.explain-md/multilingual-evaluation-report.json`
 - `.explain-md/observability-slo-benchmark-report.json`
 
 Gate checks:
@@ -47,6 +49,7 @@ Gate checks:
 - `tree_a11y_transcript_complete`
 - `tree_scale_profiles_cover_modes`
 - `explanation_diff_profiles_cover_config_knobs`
+- `multilingual_generation_contract`
 - `verification_replay_contract_complete`
 - `cache_warm_speedup`
 - `cache_recovery_hits`

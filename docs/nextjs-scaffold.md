@@ -111,6 +111,8 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 - CI enforces explanation-diff benchmark reproducibility via `npm run web:eval:explanation-diff:ci` (baseline-compares request/outcome hashes and emits `.explain-md/explanation-diff-evaluation-report.json`).
 - Deterministic verification replay benchmark is available via `npm run web:bench:verification-replay` (writes `docs/benchmarks/verification-replay-evaluation.json`).
 - CI enforces verification replay benchmark reproducibility via `npm run web:eval:verification-replay:ci` (baseline-compares request/outcome hashes and emits `.explain-md/verification-replay-evaluation-report.json`).
+- Deterministic multilingual rendering benchmark is available via `npm run web:bench:multilingual` (writes `docs/benchmarks/multilingual-evaluation.json`).
+- CI enforces multilingual rendering benchmark reproducibility via `npm run web:eval:multilingual:ci` (baseline-compares request/outcome hashes and emits `.explain-md/multilingual-evaluation-report.json`).
 - Deterministic observability SLO benchmark is available via `npm run web:bench:observability-slo` (writes `docs/benchmarks/observability-slo-benchmark.json`).
   - Default run covers both deterministic proof profiles (`seed-verity` and `lean-verity-fixture`) and emits aggregate + per-profile evidence (`parameters.profiles`, `profileReports`, `evaluation.byProfile`).
 - CI enforces observability SLO benchmark reproducibility via `npm run web:eval:observability-slo:ci` (baseline-compares request/outcome hashes and emits `.explain-md/observability-slo-benchmark-report.json`).

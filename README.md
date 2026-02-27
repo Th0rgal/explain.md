@@ -48,6 +48,7 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #15 follow-up: leaf verification panel now exports deterministic replay artifacts (canonical JSON + hash-tagged filename) for browser-to-operator provenance handoff.
 - Issue #15 follow-up: replay artifact export now also embeds tree/leaf query hash context (`treeSnapshotHash`, `leafDetailHash`, `nodePathRequestHash`, etc.) so browser context remains auditable after handoff.
 - Issue #15 follow-up: verification replay artifact benchmarks are now fail-closed in CI and in the root release gate via baseline hash checks (`web:eval:verification-replay:ci`).
+- Issue #10 follow-up: Lean/Verity tree node rendering now applies deterministic language-localized leaf statements (`en`/`fr`) with locale fallback (`fr-CA` -> `fr`, unsupported -> `en`), and multilingual contract benchmarks are fail-closed in CI + release gate (`web:eval:multilingual:ci`).
 
 ## Local checks
 ```bash
@@ -76,6 +77,7 @@ npm run web:eval:tree-a11y:ci
 npm run web:eval:tree-scale:ci
 npm run web:eval:explanation-diff:ci
 npm run web:eval:verification-replay:ci
+npm run web:eval:multilingual:ci
 npm run eval:domain-adapters:ci
 ```
 
@@ -107,6 +109,7 @@ EXPLAIN_MD_LIVE_RPC_API_KEY=... npm run test:live:summary
 - [Tree scale benchmark](docs/tree-scale-evaluation.md)
 - [Explanation diff benchmark](docs/explanation-diff-evaluation.md)
 - [Verification replay benchmark](docs/verification-replay-evaluation.md)
+- [Multilingual rendering benchmark](docs/multilingual-evaluation.md)
 - [Config profile API](docs/config-profile-api.md)
 - [Browser-triggered verification flow](docs/verification-flow.md)
 - [Verification HTTP API service](docs/verification-api.md)

@@ -19,6 +19,8 @@
     "benchmark:explanation-diff:ci": "tsx scripts/explanation-diff-evaluation.ts --baseline ../../docs/benchmarks/explanation-diff-evaluation.json --out ../../.explain-md/explanation-diff-evaluation-report.json",
     "benchmark:verification-replay": "tsx scripts/verification-replay-evaluation.ts --out ../../docs/benchmarks/verification-replay-evaluation.json",
     "benchmark:verification-replay:ci": "tsx scripts/verification-replay-evaluation.ts --baseline ../../docs/benchmarks/verification-replay-evaluation.json --out ../../.explain-md/verification-replay-evaluation-report.json",
+    "benchmark:multilingual": "tsx scripts/multilingual-evaluation.ts --out ../../docs/benchmarks/multilingual-evaluation.json",
+    "benchmark:multilingual:ci": "tsx scripts/multilingual-evaluation.ts --baseline ../../docs/benchmarks/multilingual-evaluation.json --out ../../.explain-md/multilingual-evaluation-report.json",
     "benchmark:observability-slo": "tsx scripts/observability-slo-benchmark.ts --out ../../docs/benchmarks/observability-slo-benchmark.json",
     "benchmark:observability-slo:ci": "tsx scripts/observability-slo-benchmark.ts --baseline ../../docs/benchmarks/observability-slo-benchmark.json --out ../../.explain-md/observability-slo-benchmark-report.json"
   },

@@ -18,6 +18,7 @@ describe("release gate", () => {
     const treeScaleBenchmark = readJson("docs/benchmarks/tree-scale-evaluation.json");
     const explanationDiffBenchmark = readJson("docs/benchmarks/explanation-diff-evaluation.json");
     const verificationReplayBenchmark = readJson("docs/benchmarks/verification-replay-evaluation.json");
+    const multilingualBenchmark = readJson("docs/benchmarks/multilingual-evaluation.json");
     const proofCacheBenchmark = readJson("docs/benchmarks/proof-cache-benchmark.json");
     const domainAdapterBenchmark = readJson("docs/benchmarks/domain-adapter-evaluation.json");
     const observabilitySloBaseline = readJson("docs/benchmarks/observability-slo-benchmark.json");
@@ -36,6 +37,7 @@ describe("release gate", () => {
       treeScaleBenchmark,
       explanationDiffBenchmark,
       verificationReplayBenchmark,
+      multilingualBenchmark,
       proofCacheBenchmark,
       domainAdapterBenchmark,
       observabilitySloBaseline,
@@ -50,6 +52,7 @@ describe("release gate", () => {
       treeScaleBenchmark,
       explanationDiffBenchmark,
       verificationReplayBenchmark,
+      multilingualBenchmark,
       proofCacheBenchmark,
       domainAdapterBenchmark,
       observabilitySloBaseline,
@@ -90,6 +93,7 @@ describe("release gate", () => {
         treeA11yOutcomeHash: "a",
         treeScaleOutcomeHash: "s",
         explanationDiffOutcomeHash: "d",
+        multilingualOutcomeHash: "m",
         verificationReplayOutcomeHash: "v",
         proofCacheOutcomeHash: "c",
         domainAdapterOutcomeHash: "da",
