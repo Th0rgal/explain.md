@@ -23,6 +23,8 @@ The tree panel now uses incremental root/children/path queries:
 - Expand parent nodes with bounded child pages (`/api/proofs/nodes/:nodeId/children`, `limit=maxChildrenPerParent`).
 - Resolve selected leaf ancestry (`/api/proofs/nodes/:nodeId/path`) to expand prerequisite parents deterministically.
 - Keep leaf-detail and diff panels wired to provenance-aware contracts (`/api/proofs/leaves/:leafId`, `/api/proofs/diff`).
+- Surface per-parent policy diagnostics (pre/post compliance + metrics) directly in tree rows.
+- Use shared config parser (`lib/config-input.ts`) across query routes to keep config semantics consistent.
 
 ## Local commands
 ```bash

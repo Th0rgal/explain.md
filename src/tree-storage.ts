@@ -5,6 +5,7 @@ import {
   renderTheoremLeafCanonical,
   type TheoremLeafRecord,
 } from "./leaf-schema.js";
+import type { ParentPolicyDiagnostics } from "./pedagogical-policy.js";
 import type { ExplanationTree, ExplanationTreeNode } from "./tree-builder.js";
 
 export const TREE_STORAGE_SCHEMA_VERSION = "1.0.0";
@@ -42,6 +43,7 @@ export interface TreeStorageNodeRecord {
   confidence?: number;
   whyTrueFromChildren?: string;
   newTermsIntroduced: string[];
+  policyDiagnostics?: ParentPolicyDiagnostics;
 }
 
 export interface TreeStorageEdgeRecord {
@@ -195,7 +197,9 @@ export function importTreeStorageSnapshot(snapshot: TreeStorageSnapshot): {
   }
 
   const nodes: Record<string, ExplanationTreeNode> = {};
+  const policyDiagnosticsByParent: Record<string, ParentPolicyDiagnostics> = {};
   for (const record of normalized.nodes) {
+    const policyDiagnostics = record.policyDiagnostics ? clonePolicyDiagnostics(record.policyDiagnostics) : undefined;
     nodes[record.id] = {
       id: record.id,
       kind: record.kind,
@@ -208,7 +212,12 @@ export function importTreeStorageSnapshot(snapshot: TreeStorageSnapshot): {
       whyTrueFromChildren: record.whyTrueFromChildren,
       newTermsIntroduced: record.newTermsIntroduced.slice(),
       evidenceRefs: record.evidenceRefs.slice(),
+      policyDiagnostics,
     };
+
+    if (policyDiagnostics) {
+      policyDiagnosticsByParent[record.id] = policyDiagnostics;
+    }
   }
 
   const tree: ExplanationTree = {
@@ -218,7 +227,7 @@ export function importTreeStorageSnapshot(snapshot: TreeStorageSnapshot): {
     configHash: normalized.configSnapshot.configHash,
     groupPlan: [],
     groupingDiagnostics: [],
-    policyDiagnosticsByParent: {},
+    policyDiagnosticsByParent,
     maxDepth: normalized.maxDepth,
   };
 
@@ -394,7 +403,8 @@ export function createTreeQueryApi(input: TreeStorageSnapshot): TreeQueryApi {
     const pathResult = getAncestryPath(normalizedLeafId);
     const diagnostics = pathResult.diagnostics.slice();
 
-    if (!pathResult.ok) {
+    const pathStartsAtRoot = pathResult.path[0]?.id === snapshot.rootId;
+    if (!pathStartsAtRoot && !hasDiagnostic(pathResult.diagnostics, "leaf_not_reachable", "error")) {
       diagnostics.push({
         code: "leaf_not_reachable",
         severity: "error",
@@ -522,6 +532,7 @@ export function renderTreeStorageSnapshotCanonical(input: TreeStorageSnapshot): 
         `nodes[${index}].confidence=${node.confidence ?? "none"}`,
         `nodes[${index}].why_true=${JSON.stringify(node.whyTrueFromChildren ?? "")}`,
         `nodes[${index}].new_terms=${node.newTermsIntroduced.join(",") || "none"}`,
+        `nodes[${index}].policy_diagnostics=${renderStableJson(node.policyDiagnostics) ?? "none"}`,
       ].join("\n"),
     ),
     `edges_count=${snapshot.edges.length}`,
@@ -611,6 +622,7 @@ function canonicalizeNodeRecord(node: TreeStorageNodeRecord | ExplanationTreeNod
     confidence: normalizeOptionalNumber(node.confidence, "node.confidence"),
     whyTrueFromChildren: normalizeOptionalString(node.whyTrueFromChildren),
     newTermsIntroduced: canonicalOrderedStringList(node.newTermsIntroduced, "node.newTermsIntroduced"),
+    policyDiagnostics: canonicalizePolicyDiagnostics(node.policyDiagnostics),
   };
 }
 
@@ -652,17 +664,6 @@ function buildSnapshotIndexes(snapshot: TreeStorageSnapshot): SnapshotIndexes {
     if (!parentByChildId.has(edge.childId)) {
       parentByChildId.set(edge.childId, edge.parentId);
     }
-  }
-
-  for (const [parentId, children] of childrenByParentId) {
-    children.sort((left, right) => {
-      const leftOrder = snapshot.edges.find((edge) => edge.parentId === parentId && edge.childId === left.id)?.order ?? 0;
-      const rightOrder = snapshot.edges.find((edge) => edge.parentId === parentId && edge.childId === right.id)?.order ?? 0;
-      if (leftOrder !== rightOrder) {
-        return leftOrder - rightOrder;
-      }
-      return left.id.localeCompare(right.id);
-    });
   }
 
   for (const record of snapshot.provenance) {
@@ -817,6 +818,83 @@ function normalizeOptionalString(value: string | undefined): string | undefined 
   }
   const normalized = value.trim();
   return normalized.length === 0 ? undefined : normalized;
+}
+
+function hasDiagnostic(
+  diagnostics: TreeStorageDiagnostic[],
+  code: TreeStorageDiagnosticCode,
+  severity: TreeStorageDiagnostic["severity"],
+): boolean {
+  return diagnostics.some((diagnostic) => diagnostic.code === code && diagnostic.severity === severity);
+}
+
+function canonicalizePolicyDiagnostics(value: ParentPolicyDiagnostics | undefined): ParentPolicyDiagnostics | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const normalizeDecision = (decision: ParentPolicyDiagnostics["preSummary"]): ParentPolicyDiagnostics["preSummary"] => ({
+    ok: decision.ok,
+    metrics: {
+      ...decision.metrics,
+    },
+    violations: decision.violations
+      .map((violation) => ({
+        code: violation.code,
+        message: normalizeNonEmpty(violation.message, "node.policyDiagnostics.violation.message"),
+        details: normalizeRecord(violation.details),
+      }))
+      .sort((left, right) => {
+        if (left.code !== right.code) {
+          return left.code.localeCompare(right.code);
+        }
+        return left.message.localeCompare(right.message);
+      }),
+  });
+
+  return {
+    depth: normalizeNonNegativeInt(value.depth, "node.policyDiagnostics.depth"),
+    groupIndex: normalizeNonNegativeInt(value.groupIndex, "node.policyDiagnostics.groupIndex"),
+    retriesUsed: normalizeNonNegativeInt(value.retriesUsed, "node.policyDiagnostics.retriesUsed"),
+    preSummary: normalizeDecision(value.preSummary),
+    postSummary: normalizeDecision(value.postSummary),
+  };
+}
+
+function normalizeRecord(value: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  if (!value) {
+    return undefined;
+  }
+  return sortObjectKeys(value) as Record<string, unknown>;
+}
+
+function clonePolicyDiagnostics(value: ParentPolicyDiagnostics): ParentPolicyDiagnostics {
+  return canonicalizePolicyDiagnostics(value) as ParentPolicyDiagnostics;
+}
+
+function renderStableJson(value: unknown): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return JSON.stringify(sortObjectKeys(value));
+}
+
+function sortObjectKeys(value: unknown): unknown {
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => sortObjectKeys(entry));
+  }
+
+  const record = value as Record<string, unknown>;
+  return Object.keys(record)
+    .sort((left, right) => left.localeCompare(right))
+    .reduce<Record<string, unknown>>((accumulator, key) => {
+      accumulator[key] = sortObjectKeys(record[key]);
+      return accumulator;
+    }, {});
 }
 
 function normalizeNonNegativeInt(value: number | undefined, fieldName: string, fallback = 0): number {

@@ -1,17 +1,6 @@
-import type { ExplanationConfigInput } from "../../../../../../../../src/config-contract";
-import { jsonError, jsonSuccess, normalizeInteger, normalizeOptionalInteger, normalizeString } from "../../../../../../lib/http-contract";
+import { readConfigFromSearchParams } from "../../../../../../lib/config-input";
+import { jsonError, jsonSuccess, normalizeString } from "../../../../../../lib/http-contract";
 import { buildSeedNodePathView, SEED_PROOF_ID } from "../../../../../../lib/proof-service";
-
-function normalizeConfigInput(searchParams: URLSearchParams): ExplanationConfigInput {
-  return {
-    abstractionLevel: normalizeInteger(searchParams.get("abstractionLevel"), 3, 1, 5) as 1 | 2 | 3 | 4 | 5,
-    complexityLevel: normalizeInteger(searchParams.get("complexityLevel"), 3, 1, 5) as 1 | 2 | 3 | 4 | 5,
-    maxChildrenPerParent: normalizeInteger(searchParams.get("maxChildrenPerParent"), 3, 2, 12),
-    audienceLevel: normalizeString(searchParams.get("audienceLevel"), "intermediate") as "novice" | "intermediate" | "expert",
-    language: normalizeString(searchParams.get("language"), "en"),
-    termIntroductionBudget: normalizeOptionalInteger(searchParams.get("termIntroductionBudget"), 0, 8),
-  };
-}
 
 export async function GET(request: Request, context: { params: { nodeId: string } }) {
   try {
@@ -21,7 +10,7 @@ export async function GET(request: Request, context: { params: { nodeId: string 
     const response = buildSeedNodePathView({
       proofId,
       nodeId: normalizeString(context.params.nodeId, ""),
-      config: normalizeConfigInput(url.searchParams),
+      config: readConfigFromSearchParams(url.searchParams),
     });
 
     return jsonSuccess(response);

@@ -69,6 +69,7 @@ describe("tree storage", () => {
     expect(leafDetail.provenancePath.map((node) => node.id)).toEqual(["p-root", "p-mid", "leaf-a"]);
     expect(leafDetail.provenanceRecords.length).toBeGreaterThan(0);
     expect(leafDetail.provenanceRecords.some((record) => record.nodeId === "p-mid")).toBe(true);
+    expect(root.node?.policyDiagnostics?.preSummary.ok).toBe(true);
   });
 
   test("import reconstructs tree and emits diagnostics for invalid snapshot", () => {
@@ -81,6 +82,8 @@ describe("tree storage", () => {
     const imported = importTreeStorageSnapshot(snapshot);
     expect(imported.tree?.rootId).toBe("p-root");
     expect(imported.tree?.nodes["p-mid"].childIds).toEqual(["leaf-a"]);
+    expect(imported.tree?.nodes["p-root"].policyDiagnostics?.postSummary.ok).toBe(true);
+    expect(imported.tree?.policyDiagnosticsByParent["p-root"]?.postSummary.ok).toBe(true);
     expect(imported.diagnostics.every((diagnostic) => diagnostic.severity !== "error")).toBe(true);
 
     const broken: TreeStorageSnapshot = {
@@ -100,6 +103,25 @@ describe("tree storage", () => {
     const importedBroken = importTreeStorageSnapshot(broken);
     expect(importedBroken.tree).toBeUndefined();
   });
+
+  test("leaf detail does not add duplicate or false leaf_not_reachable diagnostics", () => {
+    const snapshot = exportTreeStorageSnapshot(sampleTree(), {
+      proofId: "proof-verity",
+      config: normalizeConfig({}),
+      leaves: sampleLeaves(),
+    });
+    const api = createTreeQueryApi({
+      ...snapshot,
+      schemaVersion: "0.9.0",
+    });
+
+    const detail = api.getLeafDetail("leaf-a");
+    const reachabilityErrors = detail.diagnostics.filter(
+      (diagnostic) => diagnostic.code === "leaf_not_reachable" && diagnostic.severity === "error",
+    );
+    expect(reachabilityErrors).toHaveLength(0);
+    expect(detail.diagnostics.some((diagnostic) => diagnostic.code === "unsupported_schema_version")).toBe(true);
+  });
 });
 
 function sampleTree(): ExplanationTree {
@@ -109,7 +131,37 @@ function sampleTree(): ExplanationTree {
     configHash: "cfg-seed",
     groupPlan: [],
     groupingDiagnostics: [],
-    policyDiagnosticsByParent: {},
+    policyDiagnosticsByParent: {
+      "p-root": {
+        depth: 2,
+        groupIndex: 0,
+        retriesUsed: 0,
+        preSummary: {
+          ok: true,
+          violations: [],
+          metrics: {
+            complexitySpread: 1,
+            prerequisiteOrderViolations: 0,
+            introducedTermCount: 0,
+            evidenceCoverageRatio: 1,
+            vocabularyContinuityRatio: 1,
+            vocabularyContinuityFloor: 0.6,
+          },
+        },
+        postSummary: {
+          ok: true,
+          violations: [],
+          metrics: {
+            complexitySpread: 1,
+            prerequisiteOrderViolations: 0,
+            introducedTermCount: 1,
+            evidenceCoverageRatio: 1,
+            vocabularyContinuityRatio: 0.7,
+            vocabularyContinuityFloor: 0.6,
+          },
+        },
+      },
+    },
     maxDepth: 2,
     nodes: {
       "p-root": {
@@ -119,6 +171,35 @@ function sampleTree(): ExplanationTree {
         childIds: ["p-mid", "leaf-c"],
         depth: 2,
         evidenceRefs: ["leaf-a", "leaf-b", "leaf-c"],
+        policyDiagnostics: {
+          depth: 2,
+          groupIndex: 0,
+          retriesUsed: 0,
+          preSummary: {
+            ok: true,
+            violations: [],
+            metrics: {
+              complexitySpread: 1,
+              prerequisiteOrderViolations: 0,
+              introducedTermCount: 0,
+              evidenceCoverageRatio: 1,
+              vocabularyContinuityRatio: 1,
+              vocabularyContinuityFloor: 0.6,
+            },
+          },
+          postSummary: {
+            ok: true,
+            violations: [],
+            metrics: {
+              complexitySpread: 1,
+              prerequisiteOrderViolations: 0,
+              introducedTermCount: 1,
+              evidenceCoverageRatio: 1,
+              vocabularyContinuityRatio: 0.7,
+              vocabularyContinuityFloor: 0.6,
+            },
+          },
+        },
       },
       "p-mid": {
         id: "p-mid",

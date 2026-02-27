@@ -27,6 +27,7 @@ Each node stores:
 - ordered `childIds`
 - `evidenceRefs`
 - optional summary metadata (`complexityScore`, `abstractionScore`, `confidence`, `whyTrueFromChildren`, `newTermsIntroduced`)
+- optional `policyDiagnostics` (pre/post pedagogy decisions + metrics) for parent-node auditability
 
 ### Edge record
 Each directed edge stores:
@@ -60,6 +61,10 @@ This allows browser/API consumers to inspect parent support and trace each rende
 - `getLeafDetail(leafId)`
 
 All query methods return machine-readable diagnostics and stable ordering.
+
+`getLeafDetail(leafId)` behavior is strict:
+- no duplicate `leaf_not_reachable` diagnostics
+- no false `leaf_not_reachable` when a leaf is reachable but unrelated snapshot-level diagnostics are present
 
 ## Import/export portability
 - `exportTreeStorageSnapshot(tree, { proofId, leaves, config? })`

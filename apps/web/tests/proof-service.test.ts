@@ -82,6 +82,7 @@ describe("proof service", () => {
       complexityLevel: 3,
     });
     expect(root.root.node?.id).toBe("p2_root");
+    expect(root.root.node?.policyDiagnostics?.postSummary.ok).toBe(true);
     expect(root.snapshotHash).toHaveLength(64);
 
     const children = buildSeedNodeChildrenView({

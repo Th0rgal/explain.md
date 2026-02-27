@@ -419,6 +419,16 @@ export function ProofExplorer(props: ProofExplorerProps) {
                     <span className="meta">{childrenState.diagnostics.map((diagnostic) => diagnostic.code).join(", ")}</span>
                   </div>
                 ) : null}
+                {node.kind === "parent" && node.policyDiagnostics ? (
+                  <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
+                    <span className="meta">
+                      Policy pre/post: {node.policyDiagnostics.preSummary.ok ? "ok" : "violating"}/
+                      {node.policyDiagnostics.postSummary.ok ? "ok" : "violating"} | spread=
+                      {node.policyDiagnostics.preSummary.metrics.complexitySpread} | new-terms=
+                      {node.policyDiagnostics.postSummary.metrics.introducedTermCount}
+                    </span>
+                  </div>
+                ) : null}
                 {node.kind === "leaf" && pathResult?.path.path.some((pathNode) => pathNode.id === node.id) ? (
                   <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
                     <span className="meta">Included in selected ancestry path</span>

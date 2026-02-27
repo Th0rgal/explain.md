@@ -25,6 +25,8 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - `viewHash` / `diffHash` / `detailHash`
 - Leaf detail panel is backed by provenance path + deterministic sample verification history.
 - Node/root/path query routes use canonical tree-storage snapshots, enabling stable root/children/ancestry reads for progressive expansion UIs.
+- Parent nodes include policy diagnostics in tree query payloads so browser views can audit complexity/prerequisite/term-budget compliance.
+- Shared config query parsing is centralized in `apps/web/lib/config-input.ts` for route consistency.
 
 ## State management
 - Baseline strategy: local React state (`useState`) with deterministic API payloads.

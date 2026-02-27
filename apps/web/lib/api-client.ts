@@ -46,6 +46,35 @@ export interface TreeNodeRecord {
   confidence?: number;
   whyTrueFromChildren?: string;
   newTermsIntroduced: string[];
+  policyDiagnostics?: {
+    depth: number;
+    groupIndex: number;
+    retriesUsed: number;
+    preSummary: {
+      ok: boolean;
+      violations: Array<{ code: string; message: string; details?: Record<string, unknown> }>;
+      metrics: {
+        complexitySpread: number;
+        prerequisiteOrderViolations: number;
+        introducedTermCount: number;
+        evidenceCoverageRatio: number;
+        vocabularyContinuityRatio: number;
+        vocabularyContinuityFloor: number;
+      };
+    };
+    postSummary: {
+      ok: boolean;
+      violations: Array<{ code: string; message: string; details?: Record<string, unknown> }>;
+      metrics: {
+        complexitySpread: number;
+        prerequisiteOrderViolations: number;
+        introducedTermCount: number;
+        evidenceCoverageRatio: number;
+        vocabularyContinuityRatio: number;
+        vocabularyContinuityFloor: number;
+      };
+    };
+  };
 }
 
 interface TreeStorageDiagnostic {
