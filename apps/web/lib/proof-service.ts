@@ -4,8 +4,10 @@ import path from "node:path";
 import {
   buildRecursiveExplanationTree,
   buildDeclarationDependencyGraph,
+  computeTreeQualityReportHash,
   computeDependencyGraphHash,
   computeLeanIngestionHash,
+  evaluateExplanationTreeQuality,
   getDirectDependencies,
   getDirectDependents,
   getSupportingDeclarations,
@@ -18,6 +20,7 @@ import {
   type ExplanationTree,
   type ExplanationConfig,
   type ExplanationConfigInput,
+  type TreeQualityThresholds,
   type ProviderClient,
   type TheoremLeafRecord,
 } from "../../../dist/index";
@@ -114,6 +117,12 @@ export interface DependencyGraphRequest {
   includeExternalSupport?: boolean;
 }
 
+export interface PolicyReportRequest {
+  proofId: string;
+  config?: ExplanationConfigInput;
+  thresholds?: Partial<TreeQualityThresholds>;
+}
+
 export interface ProofCatalogEntry {
   proofId: string;
   title: string;
@@ -156,6 +165,14 @@ export interface DependencyGraphView {
     inCycle: boolean;
   };
   diagnostics: DependencyGraphQueryDiagnostic[];
+}
+
+export interface PolicyReportView {
+  proofId: string;
+  configHash: string;
+  requestHash: string;
+  reportHash: string;
+  report: ReturnType<typeof evaluateExplanationTreeQuality>;
 }
 
 export function getSupportedProofIds(): string[] {
@@ -542,6 +559,26 @@ export async function buildProofDependencyGraphView(request: DependencyGraphRequ
     },
     declaration,
     diagnostics,
+  };
+}
+
+export async function buildProofPolicyReportView(request: PolicyReportRequest): Promise<PolicyReportView> {
+  const { dataset } = await loadProofDataset(request.proofId, request.config);
+  const report = evaluateExplanationTreeQuality(dataset.tree, dataset.config, {
+    thresholds: request.thresholds,
+  });
+
+  return {
+    proofId: request.proofId,
+    configHash: dataset.configHash,
+    requestHash: computeCanonicalRequestHash({
+      proofId: request.proofId,
+      configHash: dataset.configHash,
+      thresholds: request.thresholds ?? {},
+      query: "policy-report",
+    }),
+    reportHash: computeTreeQualityReportHash(report),
+    report,
   };
 }
 

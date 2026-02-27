@@ -4,6 +4,7 @@ import {
   fetchLeafVerificationJobs,
   fetchNodeChildren,
   fetchNodePath,
+  fetchPolicyReport,
   fetchRoot,
   fetchVerificationJob,
   verifyLeaf,
@@ -243,6 +244,76 @@ describe("api client", () => {
     expect(requestUrl).toContain("maxChildrenPerParent=3");
     expect(requestUrl).toContain("declarationId=lean%3AVerity%2FLoop%3Aloop_preserves%3A3%3A1");
     expect(requestUrl).toContain("includeExternalSupport=false");
+  });
+
+  it("encodes policy report query contract with threshold overrides", async () => {
+    const fetchMock = vi.fn(async (_input: string) =>
+      buildMockResponse({
+        ok: true,
+        data: {
+          proofId: "lean-verity-fixture",
+          configHash: "a".repeat(64),
+          requestHash: "b".repeat(64),
+          reportHash: "c".repeat(64),
+          report: {
+            rootId: "root",
+            configHash: "d".repeat(64),
+            generatedAt: "2026-02-27T00:00:00.000Z",
+            metrics: {
+              parentCount: 1,
+              unsupportedParentCount: 0,
+              prerequisiteViolationParentCount: 0,
+              policyViolationParentCount: 0,
+              introducedTermOverflowParentCount: 0,
+              unsupportedParentRate: 0,
+              prerequisiteViolationRate: 0,
+              policyViolationRate: 0,
+              meanComplexitySpread: 0,
+              maxComplexitySpread: 0,
+              meanEvidenceCoverage: 1,
+              meanVocabularyContinuity: 1,
+              meanTermJumpRate: 0,
+              supportCoverageFloor: 0.4,
+            },
+            thresholds: {
+              maxUnsupportedParentRate: 0,
+              maxPrerequisiteViolationRate: 0,
+              maxPolicyViolationRate: 0,
+              maxTermJumpRate: 0.35,
+              maxComplexitySpreadMean: 1,
+              minEvidenceCoverageMean: 1,
+              minVocabularyContinuityMean: 1,
+            },
+            thresholdPass: true,
+            thresholdFailures: [],
+            parentSamples: [],
+            depthMetrics: [],
+          },
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchPolicyReport(
+      "lean-verity-fixture",
+      { abstractionLevel: 2, complexityLevel: 4, maxChildrenPerParent: 3 },
+      {
+        maxPolicyViolationRate: 0,
+        minEvidenceCoverageMean: 1,
+        minVocabularyContinuityMean: 1,
+      },
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const requestUrl = String(fetchMock.mock.calls[0]?.[0]);
+    expect(requestUrl).toContain("/api/proofs/policy-report?");
+    expect(requestUrl).toContain("proofId=lean-verity-fixture");
+    expect(requestUrl).toContain("abstractionLevel=2");
+    expect(requestUrl).toContain("complexityLevel=4");
+    expect(requestUrl).toContain("maxChildrenPerParent=3");
+    expect(requestUrl).toContain("maxPolicyViolationRate=0");
+    expect(requestUrl).toContain("minEvidenceCoverageMean=1");
+    expect(requestUrl).toContain("minVocabularyContinuityMean=1");
   });
 });
 

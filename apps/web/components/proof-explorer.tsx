@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   fetchDiff,
   fetchLeafDetail,
+  fetchPolicyReport,
   fetchLeafVerificationJobs,
   fetchNodeChildren,
   fetchNodePath,
@@ -14,6 +15,7 @@ import {
   type LeafDetailResponse,
   type NodeChildrenResponse,
   type NodePathResponse,
+  type PolicyReportResponse,
   type ProofConfigInput,
   type RootResponse,
   type TreeNodeRecord,
@@ -43,6 +45,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
   const [nodesById, setNodesById] = useState<Record<string, TreeNodeRecord>>({});
   const [childrenByParentId, setChildrenByParentId] = useState<Record<string, NodeChildrenState>>({});
   const [diff, setDiff] = useState<DiffResponse | null>(null);
+  const [policyReport, setPolicyReport] = useState<PolicyReportResponse | null>(null);
   const [pathResult, setPathResult] = useState<NodePathResponse | null>(null);
   const [selectedLeafId, setSelectedLeafId] = useState<string | null>(null);
   const [leafDetail, setLeafDetail] = useState<LeafDetailResponse | null>(null);
@@ -62,13 +65,14 @@ export function ProofExplorer(props: ProofExplorerProps) {
       setError(null);
       setPathResult(null);
       try {
-        const [rootData, diffData] = await Promise.all([
+        const [rootData, diffData, policyData] = await Promise.all([
           fetchRoot(props.proofId, config),
           fetchDiff({
             proofId: props.proofId,
             baselineConfig: DEFAULT_CONFIG,
             candidateConfig: config,
           }),
+          fetchPolicyReport(props.proofId, config),
         ]);
 
         if (cancelled) {
@@ -120,6 +124,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
         );
         setExpandedNodeIds(rootNode.kind === "parent" ? [rootNode.id] : []);
         setDiff(diffData);
+        setPolicyReport(policyData);
       } catch (loadError) {
         if (cancelled) {
           return;
@@ -548,6 +553,25 @@ export function ProofExplorer(props: ProofExplorerProps) {
           {(diff?.report.changes ?? []).slice(0, 8).map((change) => (
             <li key={change.key}>
               <strong>{change.type}</strong> {change.kind} ({change.supportLeafIds.join(", ")})
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="panel diff" aria-label="Policy calibration report">
+        <h2>Policy</h2>
+        <p className="meta">Report hash: {policyReport?.reportHash ?? "unavailable"}</p>
+        <p className="meta">
+          Threshold pass: {policyReport ? (policyReport.report.thresholdPass ? "yes" : "no") : "unavailable"}
+        </p>
+        <p className="meta">
+          Parent count: {policyReport?.report.metrics.parentCount ?? 0} | violation rate:{" "}
+          {policyReport?.report.metrics.policyViolationRate ?? 0}
+        </p>
+        <ul>
+          {(policyReport?.report.thresholdFailures ?? []).slice(0, 6).map((failure) => (
+            <li key={failure.code}>
+              {failure.code}: {failure.details.actual} {failure.details.comparator} {failure.details.expected}
             </li>
           ))}
         </ul>

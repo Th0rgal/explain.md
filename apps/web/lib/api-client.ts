@@ -204,6 +204,77 @@ export interface DependencyGraphResponse {
   }>;
 }
 
+export interface PolicyReportResponse {
+  proofId: string;
+  configHash: string;
+  requestHash: string;
+  reportHash: string;
+  report: {
+    rootId: string;
+    configHash: string;
+    generatedAt: string;
+    metrics: {
+      parentCount: number;
+      unsupportedParentCount: number;
+      prerequisiteViolationParentCount: number;
+      policyViolationParentCount: number;
+      introducedTermOverflowParentCount: number;
+      unsupportedParentRate: number;
+      prerequisiteViolationRate: number;
+      policyViolationRate: number;
+      meanComplexitySpread: number;
+      maxComplexitySpread: number;
+      meanEvidenceCoverage: number;
+      meanVocabularyContinuity: number;
+      meanTermJumpRate: number;
+      supportCoverageFloor: number;
+    };
+    thresholds: {
+      maxUnsupportedParentRate: number;
+      maxPrerequisiteViolationRate: number;
+      maxPolicyViolationRate: number;
+      maxTermJumpRate: number;
+      maxComplexitySpreadMean: number;
+      minEvidenceCoverageMean: number;
+      minVocabularyContinuityMean: number;
+    };
+    thresholdPass: boolean;
+    thresholdFailures: Array<{
+      code: string;
+      message: string;
+      details: {
+        actual: number;
+        expected: number;
+        comparator: "<=" | ">=";
+      };
+    }>;
+    parentSamples: Array<{
+      parentId: string;
+      depth: number;
+      childCount: number;
+      complexitySpread: number;
+      prerequisiteOrderViolations: number;
+      evidenceCoverageRatio: number;
+      vocabularyContinuityRatio: number;
+      supportedClaimRatio: number;
+      introducedTermCount: number;
+      introducedTermRate: number;
+      policyViolationCount: number;
+    }>;
+    depthMetrics: Array<{
+      depth: number;
+      parentCount: number;
+      unsupportedParentRate: number;
+      prerequisiteViolationRate: number;
+      policyViolationRate: number;
+      meanComplexitySpread: number;
+      meanEvidenceCoverage: number;
+      meanVocabularyContinuity: number;
+      meanTermJumpRate: number;
+    }>;
+  };
+}
+
 export interface LeafDetailResponse {
   ok: boolean;
   proofId: string;
@@ -360,6 +431,20 @@ export async function fetchDependencyGraph(
     params.set("includeExternalSupport", String(options.includeExternalSupport));
   }
   return requestJson<DependencyGraphResponse>(`/api/proofs/dependency-graph?${params.toString()}`);
+}
+
+export async function fetchPolicyReport(
+  proofId: string,
+  config: ProofConfigInput,
+  thresholds: Partial<PolicyReportResponse["report"]["thresholds"]> = {},
+): Promise<PolicyReportResponse> {
+  const params = toConfigSearchParams(proofId, config);
+  for (const [key, value] of Object.entries(thresholds)) {
+    if (value !== undefined) {
+      params.set(key, String(value));
+    }
+  }
+  return requestJson<PolicyReportResponse>(`/api/proofs/policy-report?${params.toString()}`);
 }
 
 export async function verifyLeaf(proofId: string, leafId: string, autoRun = true): Promise<VerifyLeafResponse> {

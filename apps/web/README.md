@@ -10,6 +10,7 @@ This Next.js app provides a deterministic frontend scaffold for explain.md.
   - `GET /api/proofs/nodes/:nodeId/children`
   - `GET /api/proofs/nodes/:nodeId/path`
   - `GET /api/proofs/dependency-graph`
+  - `GET /api/proofs/policy-report`
   - `POST /api/proofs/view`
   - `POST /api/proofs/diff`
   - `GET /api/proofs/leaves/:leafId`
@@ -32,6 +33,8 @@ The tree panel uses incremental root/children/path queries:
 - Keep leaf-detail and diff panels wired to provenance-aware contracts (`/api/proofs/leaves/:leafId`, `/api/proofs/diff`).
 - Query dependency reachability/SCC evidence deterministically with `/api/proofs/dependency-graph`.
 - Surface per-parent policy diagnostics (pre/post compliance + metrics) directly in tree rows.
+- Query deterministic pedagogy calibration metrics + threshold gates with `/api/proofs/policy-report`.
+  - Optional threshold overrides: `maxUnsupportedParentRate`, `maxPrerequisiteViolationRate`, `maxPolicyViolationRate`, `maxTermJumpRate`, `maxComplexitySpreadMean`, `minEvidenceCoverageMean`, `minVocabularyContinuityMean`.
 - Use shared config parser (`lib/config-input.ts`) across query routes to keep config semantics consistent.
 - Proof switching is supported through `/proofs?proofId=<id>` with validation against supported IDs.
 

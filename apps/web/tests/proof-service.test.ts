@@ -4,6 +4,7 @@ import {
   buildProofDiff,
   buildProofNodeChildrenView,
   buildProofNodePathView,
+  buildProofPolicyReportView,
   buildProofRootView,
   buildSeedDiff,
   buildSeedLeafDetail,
@@ -208,5 +209,32 @@ describe("proof service", () => {
         details: { declarationId: "unknown.declaration" },
       },
     ]);
+  });
+
+  it("returns deterministic pedagogy policy report hashes for Lean-ingested fixture proof", async () => {
+    const first = await buildProofPolicyReportView({
+      proofId: LEAN_FIXTURE_PROOF_ID,
+    });
+    const second = await buildProofPolicyReportView({
+      proofId: LEAN_FIXTURE_PROOF_ID,
+    });
+
+    expect(first.requestHash).toBe(second.requestHash);
+    expect(first.reportHash).toBe(second.reportHash);
+    expect(first.report.metrics.parentCount).toBeGreaterThan(0);
+    expect(first.report.thresholdPass).toBe(true);
+  });
+
+  it("applies threshold overrides with machine-checkable threshold outcomes", async () => {
+    const response = await buildProofPolicyReportView({
+      proofId: LEAN_FIXTURE_PROOF_ID,
+      thresholds: {
+        maxComplexitySpreadMean: 0,
+      },
+    });
+
+    expect(response.report.thresholds.maxComplexitySpreadMean).toBe(0);
+    expect(typeof response.report.thresholdPass).toBe("boolean");
+    expect(response.report.thresholdFailures.every((failure) => typeof failure.code === "string")).toBe(true);
   });
 });
