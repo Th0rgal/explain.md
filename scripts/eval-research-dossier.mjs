@@ -2,7 +2,7 @@
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 const args = parseArgs(process.argv.slice(2));
 const evidencePath = resolve(args.evidence ?? "docs/research-dossier-evidence.json");
@@ -30,11 +30,19 @@ if (!validation.evidence) {
   const implementationRefIssues = mod.validateResearchDossierImplementationRefs(validation.evidence, (path) =>
     existsSync(resolve(path)),
   );
-  if (implementationRefIssues.length > 0) {
+  const evidenceCheckIssues = mod.validateResearchDossierEvidenceChecks(validation.evidence, (path) => {
+    const absolutePath = resolve(path);
+    if (!existsSync(absolutePath)) {
+      return undefined;
+    }
+    return createHash("sha256").update(readFileSync(absolutePath)).digest("hex");
+  });
+  const allIssues = [...implementationRefIssues, ...evidenceCheckIssues];
+  if (allIssues.length > 0) {
     const report = {
       ok: false,
       evidencePath,
-      errors: implementationRefIssues,
+      errors: allIssues,
     };
     if (outPath) {
       await writeFile(outPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
@@ -49,6 +57,10 @@ if (!validation.evidence) {
       coveredIssues: Array.from(new Set(validation.evidence.designDecisions.map((entry) => entry.issue))).sort((a, b) => a - b),
       citationCount: validation.evidence.citations.length,
       decisionCount: validation.evidence.designDecisions.length,
+      evidenceCheckCount: validation.evidence.designDecisions.reduce(
+        (accumulator, decision) => accumulator + decision.evidenceChecks.length,
+        0,
+      ),
       openQuestionCount: validation.evidence.openQuestions.length,
       requestHash: createHash("sha256").update(JSON.stringify({ evidencePath })).digest("hex"),
       outcomeHash: mod.computeResearchDossierEvidenceHash(validation.evidence),

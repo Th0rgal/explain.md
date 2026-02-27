@@ -1,10 +1,12 @@
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   computeResearchDossierEvidenceHash,
   getRequiredResearchIssueCoverage,
   renderResearchDossierEvidenceCanonical,
+  validateResearchDossierEvidenceChecks,
   validateResearchDossierImplementationRefs,
   validateResearchDossierEvidence,
   type ResearchDossierEvidence,
@@ -59,5 +61,22 @@ describe("research-dossier evidence contract", () => {
     const issues = validateResearchDossierImplementationRefs(evidence, () => false);
     expect(issues.length).toBeGreaterThan(0);
     expect(issues[0]?.message).toContain("does not exist");
+  });
+
+  it("validates pinned evidence check artifact hashes", () => {
+    const evidence = loadEvidence();
+    const issues = validateResearchDossierEvidenceChecks(evidence, (path) => {
+      const absolutePath = resolve(path);
+      const content = readFileSync(absolutePath);
+      return createHash("sha256").update(content).digest("hex");
+    });
+    expect(issues).toHaveLength(0);
+  });
+
+  it("fails when an evidence check hash does not match", () => {
+    const evidence = loadEvidence();
+    const issues = validateResearchDossierEvidenceChecks(evidence, () => "0".repeat(64));
+    expect(issues.length).toBeGreaterThan(0);
+    expect(issues[0]?.message).toContain("Expected sha256");
   });
 });

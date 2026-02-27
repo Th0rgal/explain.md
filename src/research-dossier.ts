@@ -17,6 +17,7 @@ export interface ResearchDecision {
   rationale: string;
   implementationRefs: string[];
   citationIds: string[];
+  evidenceChecks: ResearchEvidenceCheck[];
 }
 
 export interface ResearchOpenQuestion {
@@ -43,6 +44,14 @@ export interface ResearchDossierValidationIssue {
 }
 
 export type ResearchDossierRefExists = (path: string) => boolean;
+export type ResearchDossierArtifactHashResolver = (path: string) => string | undefined;
+
+export interface ResearchEvidenceCheck {
+  id: string;
+  command: string;
+  artifactPath: string;
+  expectedSha256: string;
+}
 
 const REQUIRED_ISSUE_COVERAGE = [7, 8, 9, 18, 23, 25] as const;
 
@@ -115,10 +124,48 @@ export function validateResearchDossierImplementationRefs(
   return issues;
 }
 
+export function validateResearchDossierEvidenceChecks(
+  evidence: ResearchDossierEvidence,
+  resolveArtifactHash: ResearchDossierArtifactHashResolver,
+): ResearchDossierValidationIssue[] {
+  const issues: ResearchDossierValidationIssue[] = [];
+  for (const decision of evidence.designDecisions) {
+    for (const check of decision.evidenceChecks) {
+      const actualHash = resolveArtifactHash(check.artifactPath);
+      if (!actualHash) {
+        issues.push({
+          path: `designDecisions.${decision.id}.evidenceChecks.${check.id}`,
+          message: `Evidence artifact '${check.artifactPath}' does not exist or hash resolution failed.`,
+        });
+        continue;
+      }
+      if (actualHash !== check.expectedSha256) {
+        issues.push({
+          path: `designDecisions.${decision.id}.evidenceChecks.${check.id}.expectedSha256`,
+          message: `Expected sha256 '${check.expectedSha256}' but resolved '${actualHash}' for '${check.artifactPath}'.`,
+        });
+      }
+    }
+  }
+  return issues;
+}
+
 function validateCrossReferences(evidence: ResearchDossierEvidence, issues: ResearchDossierValidationIssue[]): void {
   const citationIds = new Set(evidence.citations.map((citation) => citation.id));
   const seenDecisionIds = new Set<string>();
+  const seenEvidenceCheckIds = new Set<string>();
   const coveredIssues = new Set<number>();
+
+  const requiredCoverage = uniqueInts(evidence.scope.requiredIssueCoverage).sort((left, right) => left - right);
+  if (
+    requiredCoverage.length !== REQUIRED_ISSUE_COVERAGE.length ||
+    requiredCoverage.some((issue, index) => issue !== REQUIRED_ISSUE_COVERAGE[index])
+  ) {
+    issues.push({
+      path: "scope.requiredIssueCoverage",
+      message: `requiredIssueCoverage must exactly match [${REQUIRED_ISSUE_COVERAGE.join(", ")}].`,
+    });
+  }
 
   for (const decision of evidence.designDecisions) {
     if (seenDecisionIds.has(decision.id)) {
@@ -134,6 +181,16 @@ function validateCrossReferences(evidence: ResearchDossierEvidence, issues: Rese
           message: `Citation '${citationId}' is not defined in citations.`,
         });
       }
+    }
+
+    for (const check of decision.evidenceChecks) {
+      if (seenEvidenceCheckIds.has(check.id)) {
+        issues.push({
+          path: `designDecisions.${decision.id}.evidenceChecks`,
+          message: `Evidence check id '${check.id}' must be globally unique.`,
+        });
+      }
+      seenEvidenceCheckIds.add(check.id);
     }
   }
 
@@ -165,6 +222,10 @@ function canonicalizeResearchDossierEvidence(evidence: ResearchDossierEvidence):
         ...decision,
         implementationRefs: uniqueStrings(decision.implementationRefs).sort((left, right) => left.localeCompare(right)),
         citationIds: uniqueStrings(decision.citationIds).sort((left, right) => left.localeCompare(right)),
+        evidenceChecks: decision.evidenceChecks
+          .slice()
+          .sort((left, right) => left.id.localeCompare(right.id))
+          .map((check) => ({ ...check })),
       }))
       .sort((left, right) => left.id.localeCompare(right.id)),
     openQuestions: evidence.openQuestions.slice().sort((left, right) => left.id.localeCompare(right.id)),
@@ -251,8 +312,9 @@ function parseDecisions(value: unknown, issues: ResearchDossierValidationIssue[]
       const rationale = asString(entry.rationale, `designDecisions.${index}.rationale`, issues);
       const implementationRefs = asStringArray(entry.implementationRefs, `designDecisions.${index}.implementationRefs`, issues);
       const citationIds = asStringArray(entry.citationIds, `designDecisions.${index}.citationIds`, issues);
+      const evidenceChecks = parseEvidenceChecks(entry.evidenceChecks, `designDecisions.${index}.evidenceChecks`, issues);
 
-      if (!id || issue === undefined || !decision || !rationale || !implementationRefs || !citationIds) {
+      if (!id || issue === undefined || !decision || !rationale || !implementationRefs || !citationIds || !evidenceChecks) {
         return undefined;
       }
 
@@ -268,6 +330,12 @@ function parseDecisions(value: unknown, issues: ResearchDossierValidationIssue[]
           message: "At least one citation is required.",
         });
       }
+      if (evidenceChecks.length === 0) {
+        issues.push({
+          path: `designDecisions.${index}.evidenceChecks`,
+          message: "At least one evidence check is required.",
+        });
+      }
 
       return {
         id,
@@ -276,9 +344,49 @@ function parseDecisions(value: unknown, issues: ResearchDossierValidationIssue[]
         rationale,
         implementationRefs,
         citationIds,
+        evidenceChecks,
       };
     })
     .filter((entry): entry is ResearchDecision => entry !== undefined);
+}
+
+function parseEvidenceChecks(
+  value: unknown,
+  path: string,
+  issues: ResearchDossierValidationIssue[],
+): ResearchEvidenceCheck[] | undefined {
+  if (!Array.isArray(value)) {
+    issues.push({ path, message: "Expected an array." });
+    return undefined;
+  }
+
+  return value
+    .map((entry, index): ResearchEvidenceCheck | undefined => {
+      if (!isRecord(entry)) {
+        issues.push({ path: `${path}.${index}`, message: "Expected an object." });
+        return undefined;
+      }
+
+      const id = asString(entry.id, `${path}.${index}.id`, issues);
+      const command = asString(entry.command, `${path}.${index}.command`, issues);
+      const artifactPath = asString(entry.artifactPath, `${path}.${index}.artifactPath`, issues);
+      const expectedSha256 = asString(entry.expectedSha256, `${path}.${index}.expectedSha256`, issues);
+
+      if (!id || !command || !artifactPath || !expectedSha256) {
+        return undefined;
+      }
+      if (!/^[a-f0-9]{64}$/i.test(expectedSha256)) {
+        issues.push({ path: `${path}.${index}.expectedSha256`, message: "Must be a 64-character hex sha256 string." });
+      }
+
+      return {
+        id,
+        command,
+        artifactPath,
+        expectedSha256: expectedSha256.toLowerCase(),
+      };
+    })
+    .filter((entry): entry is ResearchEvidenceCheck => entry !== undefined);
 }
 
 function parseOpenQuestions(value: unknown, issues: ResearchDossierValidationIssue[]): ResearchOpenQuestion[] {
