@@ -117,6 +117,18 @@ Strict-entailment variant of the same frozen snapshot:
 npm run eval:quality -- --preset=fixture-verity-counter-snapshot-strict --out=.explain-md/quality-gate-report-counter-snapshot-strict.json
 ```
 
+Frozen real-Verity snapshot preset (SimpleToken correctness/isolation/supply):
+
+```bash
+npm run eval:quality -- --preset=fixture-verity-token-snapshot --out=.explain-md/quality-gate-report-token-snapshot.json
+```
+
+Strict-entailment variant of the same frozen SimpleToken snapshot:
+
+```bash
+npm run eval:quality -- --preset=fixture-verity-token-snapshot-strict --out=.explain-md/quality-gate-report-token-snapshot-strict.json
+```
+
 Optional threshold overrides:
 
 ```bash
@@ -162,7 +174,7 @@ To intentionally refresh baseline expectations after a reviewed benchmark change
 
 ```bash
 node scripts/eval-quality-baseline.mjs \
-  --reports=.explain-md/quality-gate-report-pressure.json,.explain-md/quality-gate-report-broad.json,.explain-md/quality-gate-report-counter-snapshot.json,.explain-md/quality-gate-report-counter-snapshot-strict.json \
+  --reports=.explain-md/quality-gate-report-pressure.json,.explain-md/quality-gate-report-broad.json,.explain-md/quality-gate-report-counter-snapshot.json,.explain-md/quality-gate-report-counter-snapshot-strict.json,.explain-md/quality-gate-report-token-snapshot.json,.explain-md/quality-gate-report-token-snapshot-strict.json \
   --baseline=docs/benchmarks/quality-gate-baseline.json \
   --write-baseline
 ```

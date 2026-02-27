@@ -45,6 +45,26 @@ const PRESET_DEFINITIONS: Record<string, Omit<QualityBenchmarkPreset, "name">> =
       maxUnsupportedParentRate: 1,
     },
   },
+  "fixture-verity-token-snapshot": {
+    description:
+      "Frozen real-Verity SimpleToken snapshot (correctness/isolation/supply proofs) for invariant-heavy benchmark coverage.",
+    projectRoot: "tests/fixtures/lean-verity-token-snapshot",
+    includePaths: ["Verity"],
+    configOverrides: {},
+    thresholdOverrides: {},
+  },
+  "fixture-verity-token-snapshot-strict": {
+    description:
+      "Frozen real-Verity SimpleToken snapshot with strict entailment mode enabled for invariant-heavy unsupported-claim gating.",
+    projectRoot: "tests/fixtures/lean-verity-token-snapshot",
+    includePaths: ["Verity"],
+    configOverrides: {
+      entailmentMode: "strict",
+    },
+    thresholdOverrides: {
+      maxUnsupportedParentRate: 1,
+    },
+  },
   "fixture-verity-core": {
     description: "Deterministic fixture benchmark covering the Verity mini corpus in tests/fixtures/lean-project.",
     projectRoot: "tests/fixtures/lean-project",

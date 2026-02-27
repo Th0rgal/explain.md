@@ -40,7 +40,27 @@
       "parentCount": 3,
       "repartitionEventCount": 1,
       "repartitionMaxRound": 0
+    },
+    {
+      "presetName": "fixture-verity-token-snapshot",
+      "presetHash": "65daf2f6ac45bcf48630672fb372bf63925cd633979d874d32c2a68a45aa1312",
+      "qualityReportHash": "b921864ca90605de3996121c57dcf1999ba891f07d87dc1e79dd3731b12fa910",
+      "thresholdPass": true,
+      "leafCount": 28,
+      "parentCount": 8,
+      "repartitionEventCount": 0,
+      "repartitionMaxRound": 0
+    },
+    {
+      "presetName": "fixture-verity-token-snapshot-strict",
+      "presetHash": "9cf433c3342fa5d879f7fa532938b3523500dc8cc67e58181c796594cfe6686c",
+      "qualityReportHash": "5f470b737372038c93b03b42223c9cd241fd3bd430ed9cb08762023d9e7435a9",
+      "thresholdPass": true,
+      "leafCount": 28,
+      "parentCount": 8,
+      "repartitionEventCount": 0,
+      "repartitionMaxRound": 0
     }
   ],
-  "outcomeHash": "77367dbdf1a3d28ec4173c3335134380d785c674ab419776c8583c05b7b25baa"
+  "outcomeHash": "5413da91a55655a77ca29ce89a6b39d5890a4203da68a5b7341b2f9039f31fbf"
 }

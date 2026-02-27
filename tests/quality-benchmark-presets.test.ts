@@ -26,6 +26,8 @@ describe("quality-benchmark-presets", () => {
       "fixture-verity-counter-snapshot-strict",
       "fixture-verity-loop",
       "fixture-verity-pressure",
+      "fixture-verity-token-snapshot",
+      "fixture-verity-token-snapshot-strict",
     ]);
     expect(presets[0].includePaths).toEqual(["Verity"]);
   });
@@ -56,6 +58,22 @@ describe("quality-benchmark-presets", () => {
     });
     expect(resolveQualityBenchmarkPreset("fixture-verity-counter-snapshot-strict")).toMatchObject({
       projectRoot: "tests/fixtures/lean-verity-counter-snapshot",
+      includePaths: ["Verity"],
+      configOverrides: {
+        entailmentMode: "strict",
+      },
+      thresholdOverrides: {
+        maxUnsupportedParentRate: 1,
+      },
+    });
+    expect(resolveQualityBenchmarkPreset("fixture-verity-token-snapshot")).toMatchObject({
+      projectRoot: "tests/fixtures/lean-verity-token-snapshot",
+      includePaths: ["Verity"],
+      configOverrides: {},
+      thresholdOverrides: {},
+    });
+    expect(resolveQualityBenchmarkPreset("fixture-verity-token-snapshot-strict")).toMatchObject({
+      projectRoot: "tests/fixtures/lean-verity-token-snapshot",
       includePaths: ["Verity"],
       configOverrides: {
         entailmentMode: "strict",
