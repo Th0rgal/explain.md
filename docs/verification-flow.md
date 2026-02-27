@@ -48,3 +48,8 @@ Issue: #17
   - `startVerificationHttpServer(...)`
   - `createChildProcessVerificationRunner(...)`
 - Endpoint contract is documented in `docs/verification-api.md`.
+- Next.js web integration (`apps/web`) additionally exposes:
+  - `POST /api/proofs/leaves/:leafId/verify`
+  - `GET /api/proofs/leaves/:leafId/verification-jobs`
+  - `GET /api/verification/jobs/:jobId`
+- Web integration persists ledger at `.explain-md/web-verification-ledger.json` and uses deterministic monotonic job IDs (`job-000001`, ...).

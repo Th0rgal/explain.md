@@ -2,6 +2,9 @@ import { NextRequest } from "next/server";
 import type { ExplanationConfigInput } from "../../../../../../../src/config-contract";
 import { jsonError, jsonSuccess, normalizeInteger, normalizeOptionalInteger, normalizeString } from "../../../../../lib/http-contract";
 import { buildSeedLeafDetail, SEED_PROOF_ID } from "../../../../../lib/proof-service";
+import { listLeafVerificationJobs } from "../../../../../lib/verification-service";
+
+export const runtime = "nodejs";
 
 function readConfigFromSearch(request: NextRequest): ExplanationConfigInput {
   const search = request.nextUrl.searchParams;
@@ -19,10 +22,12 @@ export async function GET(request: NextRequest, context: { params: { leafId: str
   try {
     const proofId = normalizeString(request.nextUrl.searchParams.get("proofId"), SEED_PROOF_ID);
     const leafId = normalizeString(context.params.leafId, "");
+    const verification = await listLeafVerificationJobs(proofId, leafId);
     const response = buildSeedLeafDetail({
       proofId,
       leafId,
       config: readConfigFromSearch(request),
+      verificationJobs: verification.jobs,
     });
 
     return jsonSuccess(response, response.ok ? 200 : 404);
