@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  fetchDiff,
   fetchDependencyGraph,
   fetchLeafVerificationJobs,
   fetchNodeChildren,
@@ -164,6 +165,86 @@ describe("api client", () => {
     expect(requestUrl).toContain("/api/proofs/leaves/leaf%2Fwith%20spaces/verify");
     expect(init.method).toBe("POST");
     expect(init.body).toBe(JSON.stringify({ proofId: "seed-verity", autoRun: true }));
+  });
+
+  it("posts diff payloads with the full config knob contract", async () => {
+    const fetchMock = vi.fn(async (_input: string, _init?: RequestInit) =>
+      buildMockResponse({
+        ok: true,
+        data: {
+          proofId: "seed-verity",
+          requestHash: "req",
+          diffHash: "diff",
+          report: {
+            summary: {
+              total: 0,
+              added: 0,
+              removed: 0,
+              changed: 0,
+            },
+            changes: [],
+          },
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchDiff({
+      proofId: "seed-verity",
+      baselineConfig: {
+        abstractionLevel: 2,
+        complexityLevel: 2,
+        maxChildrenPerParent: 3,
+        audienceLevel: "novice",
+        language: "en",
+        readingLevelTarget: "high_school",
+        complexityBandWidth: 1,
+        termIntroductionBudget: 1,
+        proofDetailMode: "minimal",
+      },
+      candidateConfig: {
+        abstractionLevel: 4,
+        complexityLevel: 4,
+        maxChildrenPerParent: 5,
+        audienceLevel: "expert",
+        language: "fr",
+        readingLevelTarget: "graduate",
+        complexityBandWidth: 2,
+        termIntroductionBudget: 3,
+        proofDetailMode: "formal",
+      },
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(init.method).toBe("POST");
+    expect(init.body).toBe(
+      JSON.stringify({
+        proofId: "seed-verity",
+        baselineConfig: {
+          abstractionLevel: 2,
+          complexityLevel: 2,
+          maxChildrenPerParent: 3,
+          audienceLevel: "novice",
+          language: "en",
+          readingLevelTarget: "high_school",
+          complexityBandWidth: 1,
+          termIntroductionBudget: 1,
+          proofDetailMode: "minimal",
+        },
+        candidateConfig: {
+          abstractionLevel: 4,
+          complexityLevel: 4,
+          maxChildrenPerParent: 5,
+          audienceLevel: "expert",
+          language: "fr",
+          readingLevelTarget: "graduate",
+          complexityBandWidth: 2,
+          termIntroductionBudget: 3,
+          proofDetailMode: "formal",
+        },
+      }),
+    );
   });
 
   it("encodes verification history and job-detail urls", async () => {

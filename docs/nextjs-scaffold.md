@@ -42,7 +42,7 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 - Dependency graph route exposes deterministic SCC/reachability data and per-declaration support closures for browser-side provenance checks.
 - Parent nodes include policy diagnostics in tree query payloads so browser views can audit complexity/prerequisite/term-budget compliance.
 - Policy report route exposes deterministic quality metrics/threshold outcomes using the evaluation harness, with optional threshold overrides for pedagogy calibration.
-- Shared config query parsing is centralized in `apps/web/lib/config-input.ts` for route consistency.
+- Shared config parsing is centralized in `apps/web/lib/config-input.ts` for route consistency across both query and POST contracts.
 - Shared config query parsing now covers the full pedagogy knob surface used by generation and hashing:
   - `abstractionLevel`, `complexityLevel`, `maxChildrenPerParent`
   - `audienceLevel`, `language`, `readingLevelTarget`
