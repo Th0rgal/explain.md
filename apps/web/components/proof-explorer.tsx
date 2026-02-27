@@ -2,15 +2,19 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  fetchConfigProfiles,
   fetchDiff,
   fetchLeafDetail,
-  fetchPolicyReport,
   fetchLeafVerificationJobs,
+  fetchPolicyReport,
   fetchNodeChildren,
   fetchNodePath,
   fetchRoot,
   fetchVerificationJob,
+  removeConfigProfile,
+  saveConfigProfile,
   verifyLeaf,
+  type ConfigProfilesResponse,
   type DiffResponse,
   type LeafDetailResponse,
   type NodeChildrenResponse,
@@ -35,12 +39,19 @@ const DEFAULT_CONFIG: ProofConfigInput = {
   proofDetailMode: "balanced",
 };
 
+const DEFAULT_PROFILE_USER_ID = "local-user";
+
 interface ProofExplorerProps {
   proofId: string;
 }
 
 export function ProofExplorer(props: ProofExplorerProps) {
   const [config, setConfig] = useState<ProofConfigInput>(DEFAULT_CONFIG);
+  const [profileName, setProfileName] = useState<string>("Default profile");
+  const [profileId, setProfileId] = useState<string>("default");
+  const [profiles, setProfiles] = useState<ConfigProfilesResponse["profiles"]>([]);
+  const [profileLedgerHash, setProfileLedgerHash] = useState<string>("");
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [expandedNodeIds, setExpandedNodeIds] = useState<string[]>([]);
   const [root, setRoot] = useState<RootResponse | null>(null);
   const [treeConfigHash, setTreeConfigHash] = useState<string>("");
@@ -59,6 +70,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const profileProjectId = useMemo(() => props.proofId, [props.proofId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,6 +78,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
     async function load() {
       setIsLoading(true);
       setError(null);
+      setProfileError(null);
       setPathResult(null);
       try {
         const [rootData, diffData, policyData] = await Promise.all([
@@ -144,7 +157,33 @@ export function ProofExplorer(props: ProofExplorerProps) {
     return () => {
       cancelled = true;
     };
-  }, [props.proofId, config]);
+  }, [config, props.proofId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProfiles() {
+      setProfileError(null);
+      try {
+        const profileData = await fetchConfigProfiles(profileProjectId, DEFAULT_PROFILE_USER_ID);
+        if (cancelled) {
+          return;
+        }
+        setProfiles(profileData.profiles);
+        setProfileLedgerHash(profileData.ledgerHash);
+      } catch (profileLoadError) {
+        if (cancelled) {
+          return;
+        }
+        setProfileError(profileLoadError instanceof Error ? profileLoadError.message : String(profileLoadError));
+      }
+    }
+
+    void loadProfiles();
+    return () => {
+      cancelled = true;
+    };
+  }, [profileProjectId]);
 
   useEffect(() => {
     if (!selectedLeafId) {
@@ -400,6 +439,53 @@ export function ProofExplorer(props: ProofExplorerProps) {
     }
   }
 
+  async function refreshProfiles(): Promise<void> {
+    const result = await fetchConfigProfiles(profileProjectId, DEFAULT_PROFILE_USER_ID);
+    setProfiles(result.profiles);
+    setProfileLedgerHash(result.ledgerHash);
+  }
+
+  async function saveCurrentProfile(): Promise<void> {
+    setProfileError(null);
+    try {
+      const result = await saveConfigProfile({
+        projectId: profileProjectId,
+        userId: DEFAULT_PROFILE_USER_ID,
+        profileId,
+        name: profileName,
+        config,
+      });
+      setProfileId(result.profile.profileId);
+      setProfileName(result.profile.name);
+      await refreshProfiles();
+    } catch (saveError) {
+      setProfileError(saveError instanceof Error ? saveError.message : String(saveError));
+    }
+  }
+
+  async function deleteSelectedProfile(): Promise<void> {
+    setProfileError(null);
+    try {
+      const response = await removeConfigProfile(profileProjectId, DEFAULT_PROFILE_USER_ID, profileId);
+      if (!response.deleted) {
+        setProfileError(`Profile '${profileId}' was not found.`);
+      }
+      await refreshProfiles();
+    } catch (deleteError) {
+      setProfileError(deleteError instanceof Error ? deleteError.message : String(deleteError));
+    }
+  }
+
+  function applyProfileSelection(nextProfileId: string): void {
+    const selected = profiles.find((entry) => entry.profileId === nextProfileId);
+    if (!selected) {
+      return;
+    }
+    setProfileId(selected.profileId);
+    setProfileName(selected.name);
+    setConfig(selected.config as ProofConfigInput);
+  }
+
   if (isLoading) {
     return <div className="panel">Loading seeded explanation tree...</div>;
   }
@@ -510,6 +596,37 @@ export function ProofExplorer(props: ProofExplorerProps) {
           Language
           <input type="text" value={config.language} onChange={(event) => updateConfig("language", event.target.value)} />
         </label>
+        <label>
+          Saved profiles
+          <select value={profileId} onChange={(event) => applyProfileSelection(event.target.value)}>
+            <option value={profileId}>{profileId}</option>
+            {profiles
+              .filter((entry) => entry.profileId !== profileId)
+              .map((entry) => (
+                <option key={entry.storageKey} value={entry.profileId}>
+                  {entry.profileId} ({entry.name})
+                </option>
+              ))}
+          </select>
+        </label>
+        <label>
+          Profile ID
+          <input type="text" value={profileId} onChange={(event) => setProfileId(event.target.value)} />
+        </label>
+        <label>
+          Profile name
+          <input type="text" value={profileName} onChange={(event) => setProfileName(event.target.value)} />
+        </label>
+        <div className="tree-row">
+          <button type="button" onClick={() => void saveCurrentProfile()}>
+            Save profile
+          </button>
+          <button type="button" onClick={() => void deleteSelectedProfile()}>
+            Delete profile
+          </button>
+        </div>
+        <p className="meta">Profile ledger hash: {profileLedgerHash || "unavailable"}</p>
+        {profileError ? <p className="meta">Profile error: {profileError}</p> : null}
       </section>
 
       <section className="panel tree" aria-label="Root-first explanation tree">

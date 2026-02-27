@@ -18,6 +18,7 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #25 follow-up: web proof service now exposes deterministic pedagogy policy reports (threshold-calibrated quality metrics + canonical report hashing) via `GET /api/proofs/policy-report`.
 - Issue #23 follow-up: web config/query contracts now expose advanced pedagogy knobs (`readingLevelTarget`, `complexityBandWidth`, `proofDetailMode`) with strict deterministic parsing across routes and explorer controls.
 - Issue #23 follow-up: `/api/proofs/view` and `/api/proofs/diff` now share the same full-knob parser as query routes, so regeneration planning cannot drift from configured pedagogy controls.
+- Issue #23 follow-up: web config profile APIs now persist/query deterministic per-project/user profile records with canonical storage keys, `configHash`, and response-level `requestHash`/`ledgerHash`.
 - Issue #17: browser-triggered verification workflow core with deterministic queue/status lifecycle, reproducibility contracts, and canonical ledger persistence.
 - Issue #17 follow-up: browser-callable verification HTTP API with deterministic route payloads, persisted ledger-backed job querying, and command-runner integration.
 - Issue #16: deterministic leaf-detail/provenance contract for theorem inspection, source linking/share references, and verification-job binding for browser panels.
@@ -65,6 +66,7 @@ EXPLAIN_MD_LIVE_RPC_API_KEY=... npm run test:live:summary
 - [Evaluation harness](docs/evaluation-harness.md)
 - [Pedagogical policy engine](docs/pedagogical-policy.md)
 - [Policy report API](docs/policy-report-api.md)
+- [Config profile API](docs/config-profile-api.md)
 - [Browser-triggered verification flow](docs/verification-flow.md)
 - [Verification HTTP API service](docs/verification-api.md)
 - [Leaf detail contract](docs/leaf-detail.md)

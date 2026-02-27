@@ -12,6 +12,9 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - `GET /api/proofs/nodes/:nodeId/path`
   - `GET /api/proofs/dependency-graph`
   - `GET /api/proofs/policy-report`
+  - `GET /api/proofs/config-profiles`
+  - `POST /api/proofs/config-profiles`
+  - `DELETE /api/proofs/config-profiles/:profileId`
   - `POST /api/proofs/view`
   - `POST /api/proofs/diff`
   - `GET /api/proofs/leaves/:leafId`
@@ -47,6 +50,7 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - `abstractionLevel`, `complexityLevel`, `maxChildrenPerParent`
   - `audienceLevel`, `language`, `readingLevelTarget`
   - `complexityBandWidth`, `termIntroductionBudget`, `proofDetailMode`
+- Config profiles are persisted/queryable through deterministic API contracts with canonical storage keys, profile `configHash`, and response-level `requestHash` + `ledgerHash`.
 - The Lean fixture uses a deterministic summary provider (`temperature=0` behavior with fixed evidence-only synthesis), so parent statements remain child-entailed and reproducible.
 - Reproducibility contract for each queued job is derived from the selected theorem leaf:
   - source revision (`EXPLAIN_MD_SOURCE_REVISION` or Vercel commit SHA fallback)

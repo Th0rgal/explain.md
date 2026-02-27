@@ -11,6 +11,9 @@ This Next.js app provides a deterministic frontend scaffold for explain.md.
   - `GET /api/proofs/nodes/:nodeId/path`
   - `GET /api/proofs/dependency-graph`
   - `GET /api/proofs/policy-report`
+  - `GET /api/proofs/config-profiles`
+  - `POST /api/proofs/config-profiles`
+  - `DELETE /api/proofs/config-profiles/:profileId`
   - `POST /api/proofs/view`
   - `POST /api/proofs/diff`
   - `GET /api/proofs/leaves/:leafId`
@@ -41,11 +44,17 @@ The tree panel uses incremental root/children/path queries:
   - `abstractionLevel`, `complexityLevel`, `maxChildrenPerParent`
   - `audienceLevel`, `language`, `readingLevelTarget`
   - `complexityBandWidth`, `termIntroductionBudget`, `proofDetailMode`
+- Config profile persistence/query is deterministic and file-backed:
+  - per-project/user profile scope
+  - canonical storage keys via `buildProfileStorageKey(...)`
+  - response hashes: `requestHash`, `ledgerHash`
+  - persisted profile `configHash` for auditability
 - Proof switching is supported through `/proofs?proofId=<id>` with validation against supported IDs.
 
 ## Verification integration
 - Leaf panel can trigger server-side verification and render status/log diagnostics.
 - Verification history is persisted to `.explain-md/web-verification-ledger.json`.
+- Config profiles are persisted to `.explain-md/web-config-profiles.json` (override with `EXPLAIN_MD_WEB_CONFIG_PROFILE_LEDGER`).
 - Job IDs are deterministic and monotonic (`job-000001`, `job-000002`, ...).
 - Reproducibility contract values can be configured with:
   - `EXPLAIN_MD_VERIFICATION_PROJECT_ROOT`

@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  fetchConfigProfiles,
   fetchDiff,
   fetchDependencyGraph,
+  removeConfigProfile,
+  saveConfigProfile,
   fetchLeafVerificationJobs,
   fetchNodeChildren,
   fetchNodePath,
@@ -401,6 +404,112 @@ describe("api client", () => {
     expect(requestUrl).toContain("maxPolicyViolationRate=0");
     expect(requestUrl).toContain("minEvidenceCoverageMean=1");
     expect(requestUrl).toContain("minVocabularyContinuityMean=1");
+  });
+
+  it("encodes config profile list query parameters", async () => {
+    const fetchMock = vi.fn(async (_input: string) =>
+      buildMockResponse({
+        ok: true,
+        data: {
+          projectId: "seed-verity",
+          userId: "local-user",
+          requestHash: "a".repeat(64),
+          ledgerHash: "b".repeat(64),
+          profiles: [],
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchConfigProfiles("seed-verity", "local-user");
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const requestUrl = String(fetchMock.mock.calls[0]?.[0]);
+    expect(requestUrl).toContain("/api/proofs/config-profiles?");
+    expect(requestUrl).toContain("projectId=seed-verity");
+    expect(requestUrl).toContain("userId=local-user");
+  });
+
+  it("posts and deletes config profile payloads deterministically", async () => {
+    const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        return buildMockResponse({
+          ok: true,
+          data: {
+            projectId: "seed-verity",
+            userId: "local-user",
+            profileId: "focused",
+            requestHash: "a".repeat(64),
+            ledgerHash: "b".repeat(64),
+            profile: {
+              storageKey: "project:seed-verity:user:local-user:profile:focused",
+              profileId: "focused",
+              projectId: "seed-verity",
+              userId: "local-user",
+              name: "Focused",
+              config: {},
+              configHash: "c".repeat(64),
+              createdAt: "2026-02-27T00:00:00.000Z",
+              updatedAt: "2026-02-27T00:00:00.000Z",
+            },
+            regenerationPlan: {
+              scope: "full",
+              changedFields: ["profile.create"],
+              reason: "new profile",
+            },
+          },
+        });
+      }
+
+      expect(init?.method).toBe("DELETE");
+      return buildMockResponse({
+        ok: true,
+        data: {
+          projectId: "seed-verity",
+          userId: "local-user",
+          profileId: "focused",
+          requestHash: "d".repeat(64),
+          ledgerHash: "e".repeat(64),
+          deleted: true,
+        },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await saveConfigProfile({
+      projectId: "seed-verity",
+      userId: "local-user",
+      profileId: "focused",
+      name: "Focused",
+      config: {
+        abstractionLevel: 4,
+        complexityLevel: 2,
+      },
+    });
+    await removeConfigProfile("seed-verity", "local-user", "focused");
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const saveCallUrl = String(fetchMock.mock.calls[0]?.[0]);
+    const saveCallInit = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(saveCallUrl).toBe("/api/proofs/config-profiles");
+    expect(saveCallInit.method).toBe("POST");
+    expect(saveCallInit.body).toBe(
+      JSON.stringify({
+        projectId: "seed-verity",
+        userId: "local-user",
+        profileId: "focused",
+        name: "Focused",
+        config: {
+          abstractionLevel: 4,
+          complexityLevel: 2,
+        },
+      }),
+    );
+
+    const deleteCallUrl = String(fetchMock.mock.calls[1]?.[0]);
+    expect(deleteCallUrl).toContain("/api/proofs/config-profiles/focused?");
+    expect(deleteCallUrl).toContain("projectId=seed-verity");
+    expect(deleteCallUrl).toContain("userId=local-user");
   });
 });
 

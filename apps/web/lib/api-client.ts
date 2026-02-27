@@ -358,6 +358,47 @@ export interface VerificationJobResponse {
   jobHash: string;
 }
 
+export interface ConfigProfilesResponse {
+  projectId: string;
+  userId: string;
+  requestHash: string;
+  ledgerHash: string;
+  profiles: Array<{
+    storageKey: string;
+    profileId: string;
+    projectId: string;
+    userId: string;
+    name: string;
+    config: Record<string, unknown>;
+    configHash: string;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+}
+
+export interface UpsertConfigProfileResponse {
+  projectId: string;
+  userId: string;
+  profileId: string;
+  requestHash: string;
+  ledgerHash: string;
+  profile: ConfigProfilesResponse["profiles"][number];
+  regenerationPlan: {
+    scope: "none" | "partial" | "full";
+    changedFields: string[];
+    reason: string;
+  };
+}
+
+export interface DeleteConfigProfileResponse {
+  projectId: string;
+  userId: string;
+  profileId: string;
+  requestHash: string;
+  ledgerHash: string;
+  deleted: boolean;
+}
+
 export async function fetchProofCatalog(): Promise<ProofCatalogResponse> {
   return requestJson<ProofCatalogResponse>("/api/proofs/seed");
 }
@@ -470,6 +511,38 @@ export async function fetchLeafVerificationJobs(proofId: string, leafId: string)
 
 export async function fetchVerificationJob(jobId: string): Promise<VerificationJobResponse> {
   return requestJson<VerificationJobResponse>(`/api/verification/jobs/${encodeURIComponent(jobId)}`);
+}
+
+export async function fetchConfigProfiles(projectId: string, userId: string): Promise<ConfigProfilesResponse> {
+  const params = new URLSearchParams({
+    projectId,
+    userId,
+  });
+  return requestJson<ConfigProfilesResponse>(`/api/proofs/config-profiles?${params.toString()}`);
+}
+
+export async function saveConfigProfile(payload: {
+  projectId: string;
+  userId: string;
+  profileId: string;
+  name: string;
+  config: ProofConfigInput;
+}): Promise<UpsertConfigProfileResponse> {
+  return requestJson<UpsertConfigProfileResponse>("/api/proofs/config-profiles", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function removeConfigProfile(projectId: string, userId: string, profileId: string): Promise<DeleteConfigProfileResponse> {
+  const params = new URLSearchParams({
+    projectId,
+    userId,
+  });
+  return requestJson<DeleteConfigProfileResponse>(`/api/proofs/config-profiles/${encodeURIComponent(profileId)}?${params.toString()}`, {
+    method: "DELETE",
+  });
 }
 
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
