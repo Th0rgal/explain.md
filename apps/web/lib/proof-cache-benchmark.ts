@@ -62,6 +62,20 @@ export interface ProofCacheBenchmarkReport {
       beforeChangeStatus: "hit" | "miss";
       afterChangeStatus: "hit" | "miss";
       afterChangeDiagnostics: string[];
+      afterChangeAdditionRecovery?: {
+        recoveryMode: "insertion" | "regeneration";
+        addedLeafCount: number;
+        insertedParentCount: number;
+        reusableParentSummaryCount: number;
+        reusedParentSummaryCount: number;
+        reusedParentSummaryByGroundingCount: number;
+        reusedParentSummaryByStatementSignatureCount: number;
+        generatedParentSummaryCount: number;
+        skippedAmbiguousStatementSignatureReuseCount: number;
+        skippedUnrebasableStatementSignatureReuseCount: number;
+        regenerationHash: string;
+        additionRecoveryHash: string;
+      };
       afterChangeRemovalRecovery?: {
         removedLeafCount: number;
         touchedParentCount: number;
@@ -241,6 +255,7 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
       beforeChangeStatus: beforeShapeChange.cache.status,
       afterChangeStatus: afterShapeChange.cache.status,
       afterChangeDiagnostics: afterShapeChange.cache.diagnostics.map((diagnostic) => diagnostic.code).sort(),
+      afterChangeAdditionRecovery: extractTopologyAdditionRecoveryDiagnostics(afterShapeChange.cache.diagnostics),
       afterChangeRemovalRecovery: extractTopologyRemovalRecoveryDiagnostics(afterShapeChange.cache.diagnostics),
       afterChangeRegenerationRecovery: extractTopologyRegenerationRecoveryDiagnostics(afterShapeChange.cache.diagnostics),
       afterChangeTopologyPlan: afterShapeChange.cache.blockedSubtreePlan
@@ -324,6 +339,7 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
         beforeChangeStatus: topologyShapeInvalidation.beforeChangeStatus,
         afterChangeStatus: topologyShapeInvalidation.afterChangeStatus,
         afterChangeDiagnostics: topologyShapeInvalidation.afterChangeDiagnostics,
+        afterChangeAdditionRecovery: topologyShapeInvalidation.afterChangeAdditionRecovery,
         afterChangeRemovalRecovery: topologyShapeInvalidation.afterChangeRemovalRecovery,
         afterChangeRegenerationRecovery: topologyShapeInvalidation.afterChangeRegenerationRecovery,
         afterChangeTopologyPlan: topologyShapeInvalidation.afterChangeTopologyPlan,
@@ -445,6 +461,39 @@ function extractTopologyRegenerationRecoveryDiagnostics(
       regeneration.details.skippedUnrebasableStatementSignatureReuseCount ?? 0,
     ),
     regenerationHash: String(regeneration.details.regenerationHash ?? ""),
+  };
+}
+
+function extractTopologyAdditionRecoveryDiagnostics(
+  diagnostics: Array<{ code: string; details?: Record<string, unknown> }>,
+): ProofCacheBenchmarkReport["scenarios"]["topologyShapeInvalidation"]["afterChangeAdditionRecovery"] {
+  const additionRecovery =
+    diagnostics.find((diagnostic) => diagnostic.code === "cache_topology_addition_subtree_insertion_rebuild_hit") ??
+    diagnostics.find((diagnostic) => diagnostic.code === "cache_topology_addition_subtree_regeneration_rebuild_hit");
+  if (!additionRecovery?.details) {
+    return undefined;
+  }
+  return {
+    recoveryMode: (additionRecovery.details.recoveryMode === "insertion" ? "insertion" : "regeneration") as
+      | "insertion"
+      | "regeneration",
+    addedLeafCount: Number(additionRecovery.details.addedLeafCount ?? 0),
+    insertedParentCount: Number(additionRecovery.details.insertedParentCount ?? 0),
+    reusableParentSummaryCount: Number(additionRecovery.details.reusableParentSummaryCount ?? 0),
+    reusedParentSummaryCount: Number(additionRecovery.details.reusedParentSummaryCount ?? 0),
+    reusedParentSummaryByGroundingCount: Number(additionRecovery.details.reusedParentSummaryByGroundingCount ?? 0),
+    reusedParentSummaryByStatementSignatureCount: Number(
+      additionRecovery.details.reusedParentSummaryByStatementSignatureCount ?? 0,
+    ),
+    generatedParentSummaryCount: Number(additionRecovery.details.generatedParentSummaryCount ?? 0),
+    skippedAmbiguousStatementSignatureReuseCount: Number(
+      additionRecovery.details.skippedAmbiguousStatementSignatureReuseCount ?? 0,
+    ),
+    skippedUnrebasableStatementSignatureReuseCount: Number(
+      additionRecovery.details.skippedUnrebasableStatementSignatureReuseCount ?? 0,
+    ),
+    regenerationHash: String(additionRecovery.details.regenerationHash ?? ""),
+    additionRecoveryHash: String(additionRecovery.details.additionRecoveryHash ?? ""),
   };
 }
 
