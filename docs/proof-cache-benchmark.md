@@ -14,7 +14,7 @@ By default this writes:
 - Cold path (`coldNoPersistentCache`): persistent cache removed before each iteration.
 - Warm path (`warmPersistentCache`): persistent cache prewarmed, in-memory cache cleared between iterations.
 - Semantic noop path (`semanticNoop`): applies a source-only comment mutation and verifies theorem-delta-aware cache reuse (`cache_semantic_hit`).
-- Invalidation path (`invalidation`): applies a theorem-level mutation and verifies deterministic miss-then-hit recovery.
+- Invalidation path (`invalidation`): applies a theorem-level mutation and verifies deterministic subtree recompute reuse (`cache_incremental_subtree_rebuild`) with hit recovery semantics.
 
 ## Determinism and Auditability
 - Report includes:

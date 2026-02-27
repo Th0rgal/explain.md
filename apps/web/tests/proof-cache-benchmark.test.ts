@@ -18,8 +18,9 @@ describe("proof cache benchmark", () => {
     expect(report.scenarios.semanticNoop.afterChangeStatus).toBe("hit");
     expect(report.scenarios.semanticNoop.afterChangeDiagnostics).toContain("cache_semantic_hit");
     expect(report.scenarios.invalidation.beforeChangeStatus).toBe("hit");
-    expect(report.scenarios.invalidation.afterChangeStatus).toBe("miss");
-    expect(report.scenarios.invalidation.afterChangeDiagnostics).toContain("cache_incremental_rebuild");
+    expect(report.scenarios.invalidation.afterChangeStatus).toBe("hit");
+    expect(report.scenarios.invalidation.afterChangeDiagnostics).toContain("cache_incremental_subtree_rebuild");
+    expect(report.scenarios.invalidation.afterChangeDiagnostics).not.toContain("cache_incremental_rebuild");
     expect(report.scenarios.invalidation.recoveryStatus).toBe("hit");
   });
 

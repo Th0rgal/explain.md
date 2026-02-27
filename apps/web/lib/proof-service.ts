@@ -15,6 +15,11 @@ import {
   mapLeanIngestionToTheoremLeaves,
   mapTheoremLeavesToTreeLeaves,
   normalizeConfig,
+  evaluatePreSummaryPolicy,
+  evaluatePostSummaryPolicy,
+  generateParentSummary,
+  SummaryValidationError,
+  TreePolicyError,
   validateExplanationTree,
   type DependencyGraph,
   type ExplanationTree,
@@ -88,6 +93,7 @@ export interface ProofDatasetCacheDiagnostic {
   code:
     | "cache_hit"
     | "cache_semantic_hit"
+    | "cache_incremental_subtree_rebuild"
     | "cache_incremental_rebuild"
     | "cache_miss"
     | "cache_write_failed"
@@ -927,6 +933,71 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
         }
       }
 
+      if (rebuiltIngestion.dependencyGraphHash === cached.entry.dependencyGraphHash) {
+        const incrementalSnapshot = await rebuildSnapshotForChangedLeaves({
+          snapshot: cached.entry.snapshot,
+          proofId,
+          leaves: rebuiltIngestion.theoremLeaves,
+          changedLeafIds: delta.changedLeafIds,
+          config,
+        });
+
+        if (incrementalSnapshot) {
+          const incrementalEntry: ProofDatasetCacheEntry = {
+            ...cached.entry,
+            sourceFingerprint,
+            ingestionHash: rebuiltIngestion.ingestionHash,
+            dependencyGraphHash: rebuiltIngestion.dependencyGraphHash,
+            snapshot: incrementalSnapshot.snapshot,
+            snapshotHash: incrementalSnapshot.snapshotHash,
+          };
+          const cacheWriteError = await writeProofDatasetCacheEntry(cachePath, incrementalEntry);
+          if (cacheWriteError) {
+            cacheDiagnostics.push({
+              code: "cache_write_failed",
+              message: "Failed writing persistent cache entry after incremental subtree rebuild.",
+              details: { cachePath, error: cacheWriteError },
+            });
+          }
+          cacheDiagnostics.push({
+            code: "cache_incremental_subtree_rebuild",
+            message:
+              "Detected theorem-level statement delta with stable topology; rebuilt affected parent subtrees only.",
+            details: {
+              cachePath,
+              changedLeafCount: delta.changedLeafCount,
+              changedLeafIds: delta.changedLeafIds.slice(0, 16),
+              affectedParentCount: incrementalSnapshot.affectedParentCount,
+              reusedNodeCount: incrementalSnapshot.reusedNodeCount,
+            },
+          });
+
+          return {
+            dataset: {
+              proofId,
+              title: `Lean Verity fixture (${rebuiltIngestion.theoremLeaves.length} declarations, ingestion=${rebuiltIngestion.ingestionHash.slice(0, 8)}, depgraph=${rebuiltIngestion.dependencyGraphHash.slice(0, 8)})`,
+              config,
+              configHash,
+              tree: incrementalSnapshot.tree,
+              leaves: rebuiltIngestion.theoremLeaves,
+              dependencyGraph: rebuiltIngestion.dependencyGraph,
+              dependencyGraphHash: rebuiltIngestion.dependencyGraphHash,
+            },
+            queryApi: createTreeQueryApi(incrementalSnapshot.snapshot),
+            cache: {
+              layer: "persistent",
+              status: "hit",
+              cacheKey,
+              sourceFingerprint,
+              cachePath,
+              snapshotHash: incrementalEntry.snapshotHash,
+              cacheEntryHash: computeProofDatasetCacheEntryHash(incrementalEntry),
+              diagnostics: cacheDiagnostics,
+            },
+          };
+        }
+      }
+
       cacheDiagnostics.push({
         code: "cache_incremental_rebuild",
         message: "Detected theorem-level delta; rebuilding explanation tree from updated leaves.",
@@ -1235,6 +1306,357 @@ function computeTheoremLeafSemanticHash(leaf: TheoremLeafRecord): string {
     tags: leaf.tags,
     dependencyIds: leaf.dependencyIds,
   });
+}
+
+function computeTheoremLeafStructureHash(leaf: TheoremLeafRecord): string {
+  return computeCanonicalRequestHash({
+    id: leaf.id,
+    declarationId: leaf.declarationId,
+    modulePath: leaf.modulePath,
+    declarationName: leaf.declarationName,
+    theoremKind: leaf.theoremKind,
+    dependencyIds: leaf.dependencyIds,
+  });
+}
+
+async function rebuildSnapshotForChangedLeaves(input: {
+  snapshot: TreeStorageSnapshot;
+  proofId: string;
+  leaves: TheoremLeafRecord[];
+  changedLeafIds: string[];
+  config: ExplanationConfig;
+}): Promise<
+  | {
+      tree: ExplanationTree;
+      snapshot: TreeStorageSnapshot;
+      snapshotHash: string;
+      affectedParentCount: number;
+      reusedNodeCount: number;
+    }
+  | undefined
+> {
+  if (input.changedLeafIds.length === 0) {
+    return undefined;
+  }
+
+  const previousLeafById = new Map(input.snapshot.leafRecords.map((leaf) => [leaf.id, leaf]));
+  const nextLeafById = new Map(input.leaves.map((leaf) => [leaf.id, leaf]));
+  if (previousLeafById.size !== nextLeafById.size) {
+    return undefined;
+  }
+
+  for (const [leafId, previousLeaf] of previousLeafById) {
+    const nextLeaf = nextLeafById.get(leafId);
+    if (!nextLeaf) {
+      return undefined;
+    }
+    if (computeTheoremLeafStructureHash(previousLeaf) !== computeTheoremLeafStructureHash(nextLeaf)) {
+      return undefined;
+    }
+  }
+
+  const imported = importTreeStorageSnapshot(input.snapshot);
+  const hasImportErrors = imported.diagnostics.some((diagnostic) => diagnostic.severity === "error");
+  if (hasImportErrors || !imported.tree) {
+    return undefined;
+  }
+
+  const treeNodes: Record<string, ExplanationTree["nodes"][string]> = {};
+  for (const node of Object.values(imported.tree.nodes)) {
+    treeNodes[node.id] = {
+      ...node,
+      childIds: node.childIds.slice(),
+      evidenceRefs: node.evidenceRefs.slice(),
+      newTermsIntroduced: node.newTermsIntroduced?.slice(),
+      policyDiagnostics: node.policyDiagnostics
+        ? {
+            depth: node.policyDiagnostics.depth,
+            groupIndex: node.policyDiagnostics.groupIndex,
+            retriesUsed: node.policyDiagnostics.retriesUsed,
+            preSummary: {
+              ...node.policyDiagnostics.preSummary,
+              violations: node.policyDiagnostics.preSummary.violations.map((violation) => ({ ...violation })),
+              metrics: { ...node.policyDiagnostics.preSummary.metrics },
+            },
+            postSummary: {
+              ...node.policyDiagnostics.postSummary,
+              violations: node.policyDiagnostics.postSummary.violations.map((violation) => ({ ...violation })),
+              metrics: { ...node.policyDiagnostics.postSummary.metrics },
+            },
+          }
+        : undefined,
+    };
+  }
+
+  const parentByChildId = new Map<string, string>();
+  for (const node of Object.values(treeNodes)) {
+    for (const childId of node.childIds) {
+      parentByChildId.set(childId, node.id);
+    }
+  }
+
+  for (const leafId of input.changedLeafIds) {
+    const node = treeNodes[leafId];
+    const leaf = nextLeafById.get(leafId);
+    if (!node || node.kind !== "leaf" || !leaf) {
+      return undefined;
+    }
+    node.statement = leaf.prettyStatement;
+    node.evidenceRefs = [leaf.id];
+  }
+
+  const affectedParents = collectAncestorParents(input.changedLeafIds, parentByChildId, treeNodes);
+  if (affectedParents.length === 0) {
+    return undefined;
+  }
+
+  const leafById = new Map(
+    input.leaves.map((leaf) => [
+      leaf.id,
+      {
+        prerequisiteIds: leaf.dependencyIds,
+      },
+    ]),
+  );
+  const provider = createDeterministicSummaryProvider();
+  const policyDiagnosticsByParent: ExplanationTree["policyDiagnosticsByParent"] = {
+    ...imported.tree.policyDiagnosticsByParent,
+  };
+
+  for (const parentId of affectedParents) {
+    const parentNode = treeNodes[parentId];
+    if (!parentNode || parentNode.kind !== "parent") {
+      return undefined;
+    }
+    const groupIndex = parentNode.policyDiagnostics?.groupIndex ?? parseParentGroupIndex(parentNode.id);
+    const children = parentNode.childIds.map((childId) => {
+      const child = treeNodes[childId];
+      if (!child) {
+        throw new Error(`Missing child node '${childId}' while rebuilding parent '${parentId}'.`);
+      }
+      return {
+        id: child.id,
+        statement: child.statement,
+        complexity: child.complexityScore,
+        prerequisiteIds: child.kind === "leaf" ? leafById.get(child.id)?.prerequisiteIds : [],
+      };
+    });
+    const preSummaryDecision = evaluatePreSummaryPolicy(children, input.config);
+    if (!preSummaryDecision.ok) {
+      throw new TreePolicyError("Pre-summary pedagogical policy failed during incremental subtree rebuild.", {
+        depth: parentNode.depth,
+        groupIndex,
+        retriesUsed: 0,
+        preSummary: preSummaryDecision,
+        postSummary: {
+          ok: true,
+          violations: [],
+          metrics: {
+            complexitySpread: 0,
+            prerequisiteOrderViolations: 0,
+            introducedTermCount: 0,
+            evidenceCoverageRatio: 1,
+            vocabularyContinuityRatio: 1,
+            vocabularyContinuityFloor: 1,
+          },
+        },
+      });
+    }
+    const parentSummary = await generatePolicyCompliantParentSummary(
+      provider,
+      children,
+      input.config,
+      parentNode.depth,
+      groupIndex,
+      preSummaryDecision,
+    );
+    parentNode.statement = parentSummary.summary.parent_statement;
+    parentNode.complexityScore = parentSummary.summary.complexity_score;
+    parentNode.abstractionScore = parentSummary.summary.abstraction_score;
+    parentNode.confidence = parentSummary.summary.confidence;
+    parentNode.whyTrueFromChildren = parentSummary.summary.why_true_from_children;
+    parentNode.newTermsIntroduced = parentSummary.summary.new_terms_introduced.slice();
+    parentNode.evidenceRefs = parentSummary.summary.evidence_refs.slice();
+    parentNode.policyDiagnostics = parentSummary.policyDiagnostics;
+    policyDiagnosticsByParent[parentId] = parentSummary.policyDiagnostics;
+  }
+
+  const tree: ExplanationTree = {
+    rootId: imported.tree.rootId,
+    leafIds: imported.tree.leafIds.slice(),
+    nodes: treeNodes,
+    configHash: computeConfigHash(input.config),
+    groupPlan: imported.tree.groupPlan.slice(),
+    groupingDiagnostics: imported.tree.groupingDiagnostics.slice(),
+    policyDiagnosticsByParent,
+    maxDepth: imported.tree.maxDepth,
+  };
+  const validation = validateExplanationTree(tree, input.config.maxChildrenPerParent);
+  if (!validation.ok) {
+    throw new Error(
+      `Incremental subtree rebuild validation failed: ${validation.issues.map((issue) => issue.code).join(", ")}`,
+    );
+  }
+
+  const snapshot = exportTreeStorageSnapshot(tree, {
+    proofId: input.proofId,
+    leaves: input.leaves,
+    config: input.config,
+  });
+  return {
+    tree,
+    snapshot,
+    snapshotHash: computeTreeStorageSnapshotHash(snapshot),
+    affectedParentCount: affectedParents.length,
+    reusedNodeCount: Object.keys(treeNodes).length - affectedParents.length,
+  };
+}
+
+function parseParentGroupIndex(parentId: string): number {
+  const match = parentId.match(/^p_\d+_(\d+)_/);
+  if (!match) {
+    return 0;
+  }
+  const parsed = Number(match[1]);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    return 0;
+  }
+  return parsed;
+}
+
+function collectAncestorParents(
+  changedLeafIds: string[],
+  parentByChildId: Map<string, string>,
+  nodes: Record<string, ExplanationTree["nodes"][string]>,
+): string[] {
+  const affected = new Set<string>();
+  for (const leafId of changedLeafIds) {
+    let cursor = parentByChildId.get(leafId);
+    while (cursor) {
+      affected.add(cursor);
+      cursor = parentByChildId.get(cursor);
+    }
+  }
+  return Array.from(affected).sort((left, right) => {
+    const depthDelta = (nodes[left]?.depth ?? 0) - (nodes[right]?.depth ?? 0);
+    if (depthDelta !== 0) {
+      return depthDelta;
+    }
+    return left.localeCompare(right);
+  });
+}
+
+async function generatePolicyCompliantParentSummary(
+  provider: ProviderClient,
+  children: Array<{ id: string; statement: string; complexity?: number; prerequisiteIds?: string[] }>,
+  config: ExplanationConfig,
+  depth: number,
+  groupIndex: number,
+  preSummaryDecision: ReturnType<typeof evaluatePreSummaryPolicy>,
+): Promise<{
+  summary: Awaited<ReturnType<typeof generateParentSummary>>["summary"];
+  policyDiagnostics: ExplanationTree["policyDiagnosticsByParent"][string];
+}> {
+  const maxAttempts = 2;
+  let lastPostSummary = evaluatePostSummaryPolicy(children, emptySummary(children), config);
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      const result = await generateParentSummary(provider, {
+        children,
+        config,
+        systemPrompt:
+          attempt === 0
+            ? undefined
+            : [
+                "You are a proof-grounded summarizer.",
+                "Use only child-grounded vocabulary except declared new_terms_introduced.",
+                "Cite every child ID in evidence_refs.",
+                "Keep parent claims explicitly entailed by child statements.",
+                "Output strict JSON only.",
+              ].join(" "),
+      });
+
+      const postSummaryDecision = evaluatePostSummaryPolicy(children, result.summary, config);
+      lastPostSummary = postSummaryDecision;
+      if (postSummaryDecision.ok) {
+        return {
+          summary: result.summary,
+          policyDiagnostics: {
+            depth,
+            groupIndex,
+            retriesUsed: attempt,
+            preSummary: preSummaryDecision,
+            postSummary: postSummaryDecision,
+          },
+        };
+      }
+    } catch (error) {
+      if (error instanceof SummaryValidationError) {
+        lastPostSummary = {
+          ok: false,
+          violations: error.diagnostics.violations.map((violation) => mapCriticViolationToPolicyViolation(violation)),
+          metrics: {
+            complexitySpread: 0,
+            prerequisiteOrderViolations: 0,
+            introducedTermCount: 0,
+            evidenceCoverageRatio: 0,
+            vocabularyContinuityRatio: 0,
+            vocabularyContinuityFloor: 1,
+          },
+        };
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  throw new TreePolicyError("Failed to produce a policy-compliant parent summary after deterministic retries.", {
+    depth,
+    groupIndex,
+    retriesUsed: maxAttempts - 1,
+    preSummary: preSummaryDecision,
+    postSummary: lastPostSummary,
+  });
+}
+
+function mapCriticViolationToPolicyViolation(
+  violation: SummaryValidationError["diagnostics"]["violations"][number],
+): ReturnType<typeof evaluatePostSummaryPolicy>["violations"][number] {
+  switch (violation.code) {
+    case "term_budget":
+      return { code: "term_budget", message: violation.message, details: violation.details };
+    case "evidence_refs":
+      return { code: "evidence_coverage", message: violation.message, details: violation.details };
+    case "schema":
+    case "complexity_band":
+    case "unsupported_terms":
+      return { code: "vocabulary_continuity", message: violation.message, details: violation.details };
+    default: {
+      const exhaustiveCheck: never = violation.code;
+      throw new Error(`Unhandled critic violation code: ${String(exhaustiveCheck)}`);
+    }
+  }
+}
+
+function emptySummary(children: Array<{ id: string }>): {
+  parent_statement: string;
+  why_true_from_children: string;
+  new_terms_introduced: string[];
+  complexity_score: number;
+  abstraction_score: number;
+  evidence_refs: string[];
+  confidence: number;
+} {
+  return {
+    parent_statement: "",
+    why_true_from_children: "",
+    new_terms_introduced: [],
+    complexity_score: 0,
+    abstraction_score: 0,
+    evidence_refs: children.map((child) => child.id),
+    confidence: 0,
+  };
 }
 
 function createDeterministicSummaryProvider(): ProviderClient {

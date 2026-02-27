@@ -1,18 +1,18 @@
 {
   "schemaVersion": "1.0.0",
-  "generatedAt": "2026-02-27T10:32:36.167Z",
+  "generatedAt": "2026-02-27T10:37:09.149Z",
   "proofId": "lean-verity-fixture",
   "configHash": "1b1e2b9ff73897b141a9f88c8d23a3b884495340813865fd955fa8fc3eaa4da2",
   "requestHash": "e6f53e14545f9579927084e1924992e7294f331551f9b89f4e93dc25669d6696",
-  "outcomeHash": "8c0e86920ad3b8955f1ccd0c8b1d2cba9bd8e19e87554844981e45a992acc4b8",
+  "outcomeHash": "54a874350b821815f02b66e980629593f87a0437e65b931f9e49ea642586678e",
   "parameters": {
     "coldIterations": 3,
     "warmIterations": 3,
     "mutationTargetPath": "Verity/Core.lean"
   },
   "paths": {
-    "fixtureProjectRootHash": "a9c68205d0f2ed503df015812328d0d78085e2201f475f135892a3fcb212559c",
-    "cacheDirHash": "bd8ba25b12884c023a95163dfa293b201ba2886d13e7e1c501bb22baf9fb47ed"
+    "fixtureProjectRootHash": "8840d855b46f6c0102ce26b416deb785e79f0702864d6421875e52212777eb00",
+    "cacheDirHash": "a4729a3286b96929d64e6050f7e5cf1d2cc807ffa33f7a4571673faa4fcabfe8"
   },
   "scenarios": {
     "coldNoPersistentCache": {
@@ -22,10 +22,10 @@
         "miss",
         "miss"
       ],
-      "meanMs": 12.169,
-      "medianMs": 7.939,
-      "minMs": 3.877,
-      "maxMs": 24.691
+      "meanMs": 13.318,
+      "medianMs": 6.845,
+      "minMs": 3.84,
+      "maxMs": 29.27
     },
     "warmPersistentCache": {
       "iterations": 3,
@@ -34,10 +34,10 @@
         "hit",
         "hit"
       ],
-      "meanMs": 1.641,
-      "medianMs": 1.485,
-      "minMs": 1.439,
-      "maxMs": 1.999
+      "meanMs": 1.879,
+      "medianMs": 1.739,
+      "minMs": 1.738,
+      "maxMs": 2.161
     },
     "semanticNoop": {
       "beforeChangeStatus": "hit",
@@ -50,9 +50,9 @@
     },
     "invalidation": {
       "beforeChangeStatus": "hit",
-      "afterChangeStatus": "miss",
+      "afterChangeStatus": "hit",
       "afterChangeDiagnostics": [
-        "cache_incremental_rebuild",
+        "cache_incremental_subtree_rebuild",
         "cache_miss"
       ],
       "afterChangeSnapshotHash": "6d82a245190ac7ac68063a9f778311c7ef4b62480843fc31410a5328efdff595",

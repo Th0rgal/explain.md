@@ -327,6 +327,60 @@ describe("proof service", () => {
       await fs.rm(tempFixtureRoot, { recursive: true, force: true });
     }
   });
+
+  it("rebuilds only affected parent subtrees when theorem statements change without topology deltas", async () => {
+    const previousCacheDir = process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR;
+    const previousFixtureRoot = process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT;
+    const tempCacheDir = await fs.mkdtemp(path.join(os.tmpdir(), "explain-md-proof-cache-"));
+    const sourceFixtureRoot = await resolveFixtureRootForTest();
+    const tempFixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), "explain-md-proof-fixture-"));
+    const tempCorePath = path.join(tempFixtureRoot, "Verity", "Core.lean");
+    process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR = tempCacheDir;
+    process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT = tempFixtureRoot;
+
+    try {
+      await fs.cp(sourceFixtureRoot, tempFixtureRoot, { recursive: true });
+
+      clearProofDatasetCacheForTests();
+      const first = await buildProofCacheReportView({
+        proofId: LEAN_FIXTURE_PROOF_ID,
+      });
+      expect(first.cache.status).toBe("miss");
+
+      const originalCore = await fs.readFile(tempCorePath, "utf8");
+      const mutatedCore = originalCore.includes("theorem core_safe (n : Nat) : inc n = Nat.succ n := by")
+        ? originalCore.replace(
+            "theorem core_safe (n : Nat) : inc n = Nat.succ n := by",
+            "theorem core_safe (n : Nat) : inc n = Nat.succ (Nat.succ n) := by",
+          )
+        : `${originalCore.trimEnd()}\ntheorem core_safe (n : Nat) : inc n = Nat.succ (Nat.succ n) := by\n`;
+      await fs.writeFile(tempCorePath, mutatedCore, "utf8");
+
+      clearProofDatasetCacheForTests();
+      const second = await buildProofCacheReportView({
+        proofId: LEAN_FIXTURE_PROOF_ID,
+      });
+
+      expect(second.cache.status).toBe("hit");
+      expect(second.cache.snapshotHash).not.toBe(first.cache.snapshotHash);
+      expect(second.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_incremental_subtree_rebuild")).toBe(true);
+      expect(second.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_incremental_rebuild")).toBe(false);
+    } finally {
+      clearProofDatasetCacheForTests();
+      if (previousCacheDir === undefined) {
+        delete process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR;
+      } else {
+        process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR = previousCacheDir;
+      }
+      if (previousFixtureRoot === undefined) {
+        delete process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT;
+      } else {
+        process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT = previousFixtureRoot;
+      }
+      await fs.rm(tempCacheDir, { recursive: true, force: true });
+      await fs.rm(tempFixtureRoot, { recursive: true, force: true });
+    }
+  });
 });
 
 async function resolveFixtureRootForTest(): Promise<string> {

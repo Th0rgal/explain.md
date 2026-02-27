@@ -294,6 +294,7 @@ export interface CacheReportResponse {
       code:
         | "cache_hit"
         | "cache_semantic_hit"
+        | "cache_incremental_subtree_rebuild"
         | "cache_incremental_rebuild"
         | "cache_miss"
         | "cache_write_failed"

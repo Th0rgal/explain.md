@@ -28,7 +28,7 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #3 follow-up: web proof service now exposes a deterministic Lean-ingested Verity fixture (`lean-verity-fixture`) through the same root/children/path/diff/leaf contracts as seed data.
 - Issue #4 follow-up: web proof service now exposes deterministic dependency graph query views (SCC/cycle totals + per-declaration support closure) via `GET /api/proofs/dependency-graph`.
 - Issue #12: Lean fixture web proof datasets now support deterministic persistent cache reuse/invalidation (source-fingerprint + config-hash keyed) with auditable cache telemetry via `GET /api/proofs/cache-report`.
-- Issue #12 follow-up: cache invalidation is now theorem-delta aware (`cache_semantic_hit` for source-only edits, `cache_incremental_rebuild` for theorem-level deltas), and benchmark artifacts record cold/warm/semantic-noop/invalidation outcomes with machine-checkable `requestHash`/`outcomeHash`.
+- Issue #12 follow-up: cache invalidation is now theorem-delta aware (`cache_semantic_hit` for source-only edits), with deterministic affected-ancestor subtree recompute on statement-only theorem deltas (`cache_incremental_subtree_rebuild`) and deterministic full rebuild fallback (`cache_incremental_rebuild`) for topology changes.
 - Issue #13: deterministic tree storage/query contract with versioned snapshot schema, root/children/ancestry/leaf-provenance reads, and canonical import/export hashing.
 
 ## Local checks

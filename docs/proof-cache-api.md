@@ -45,7 +45,8 @@ Deterministic cache-reuse diagnostics for proof dataset generation.
 - `sourceFingerprint` is computed from Lean fixture file paths + content hashes.
 - On `sourceFingerprint` mismatch, theorem-level canonical leaf deltas are computed:
   - empty delta: cached snapshot is reused (`cache_semantic_hit`) and cache entry is rebased to the new fingerprint;
-  - non-empty delta: deterministic rebuild runs with `cache_incremental_rebuild` diagnostics.
+  - non-empty delta + stable theorem topology (same IDs/dependencies): deterministic affected-ancestor subtree recompute runs with `cache_incremental_subtree_rebuild` diagnostics;
+  - non-empty delta + topology change: deterministic full rebuild runs with `cache_incremental_rebuild` diagnostics.
 - Cache entry integrity is checked by snapshot/dependency hash validation before reuse.
 - On mismatch or invalid entry, the dataset is rebuilt deterministically and cache is overwritten.
 
