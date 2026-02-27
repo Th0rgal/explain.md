@@ -19,6 +19,7 @@ describe("release gate", () => {
     const explanationDiffBenchmark = readJson("docs/benchmarks/explanation-diff-evaluation.json");
     const verificationReplayBenchmark = readJson("docs/benchmarks/verification-replay-evaluation.json");
     const proofCacheBenchmark = readJson("docs/benchmarks/proof-cache-benchmark.json");
+    const domainAdapterBenchmark = readJson("docs/benchmarks/domain-adapter-evaluation.json");
     const observabilitySloBaseline = readJson("docs/benchmarks/observability-slo-benchmark.json");
 
     const qualityBaselineCheck = {
@@ -36,6 +37,7 @@ describe("release gate", () => {
       explanationDiffBenchmark,
       verificationReplayBenchmark,
       proofCacheBenchmark,
+      domainAdapterBenchmark,
       observabilitySloBaseline,
       observabilitySloActual: observabilitySloBaseline,
       generatedAt: "2026-02-27T00:00:00.000Z",
@@ -49,6 +51,7 @@ describe("release gate", () => {
       explanationDiffBenchmark,
       verificationReplayBenchmark,
       proofCacheBenchmark,
+      domainAdapterBenchmark,
       observabilitySloBaseline,
       observabilitySloActual: observabilitySloBaseline,
       generatedAt: "2026-02-27T00:00:00.000Z",
@@ -89,11 +92,13 @@ describe("release gate", () => {
         explanationDiffOutcomeHash: "d",
         verificationReplayOutcomeHash: "v",
         proofCacheOutcomeHash: "c",
+        domainAdapterOutcomeHash: "da",
         observabilityOutcomeHash: "o",
       },
       checks: [
         { code: "quality_baseline_consistent", pass: true, details: "ok" },
         { code: "tree_scale_profiles_cover_modes", pass: true, details: "ok" },
+        { code: "domain_adapter_quality_floor", pass: true, details: "ok" },
         { code: "observability_slo_gate", pass: false, details: "bad" },
       ],
     });

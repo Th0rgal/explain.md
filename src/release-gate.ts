@@ -109,6 +109,22 @@ export interface ObservabilitySloBenchmarkArtifact {
   };
 }
 
+export interface DomainAdapterBenchmarkArtifact {
+  schemaVersion: string;
+  requestHash: string;
+  outcomeHash: string;
+  summary: {
+    profileCount: number;
+    passCount: number;
+    downgradedProfileCount: number;
+    manualOverrideProfileCount: number;
+    macroPrecision: number;
+    macroRecall: number;
+    macroF1: number;
+    taggingReportHash: string;
+  };
+}
+
 export interface BaselineCheckArtifact {
   schemaVersion: string;
   pass: boolean;
@@ -124,6 +140,7 @@ export interface ReleaseGateInput {
   explanationDiffBenchmark: ExplanationDiffBenchmarkArtifact;
   verificationReplayBenchmark: VerificationReplayBenchmarkArtifact;
   proofCacheBenchmark: ProofCacheBenchmarkArtifact;
+  domainAdapterBenchmark: DomainAdapterBenchmarkArtifact;
   observabilitySloBaseline: ObservabilitySloBenchmarkArtifact;
   observabilitySloActual: ObservabilitySloBenchmarkArtifact;
   generatedAt?: string;
@@ -140,6 +157,7 @@ export interface ReleaseGateCheck {
     | "verification_replay_contract_complete"
     | "cache_warm_speedup"
     | "cache_recovery_hits"
+    | "domain_adapter_quality_floor"
     | "observability_baseline_consistent"
     | "observability_slo_gate";
   pass: boolean;
@@ -163,6 +181,7 @@ export interface ReleaseGateReport {
     explanationDiffOutcomeHash: string;
     verificationReplayOutcomeHash: string;
     proofCacheOutcomeHash: string;
+    domainAdapterOutcomeHash: string;
     observabilityOutcomeHash: string;
   };
   checks: ReleaseGateCheck[];
@@ -198,6 +217,7 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
   const explanationDiffBenchmark = assertExplanationDiffBenchmarkArtifact(input.explanationDiffBenchmark);
   const verificationReplayBenchmark = assertVerificationReplayBenchmarkArtifact(input.verificationReplayBenchmark);
   const proofCacheBenchmark = assertProofCacheBenchmarkArtifact(input.proofCacheBenchmark);
+  const domainAdapterBenchmark = assertDomainAdapterBenchmarkArtifact(input.domainAdapterBenchmark);
   const observabilitySloBaseline = assertObservabilitySloBenchmarkArtifact(input.observabilitySloBaseline);
   const observabilitySloActual = assertObservabilitySloBenchmarkArtifact(input.observabilitySloActual);
 
@@ -294,6 +314,21 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
       details: "required_recovery_status=hit",
     },
     {
+      code: "domain_adapter_quality_floor",
+      pass:
+        domainAdapterBenchmark.summary.profileCount >= 4 &&
+        domainAdapterBenchmark.summary.passCount === domainAdapterBenchmark.summary.profileCount &&
+        domainAdapterBenchmark.summary.downgradedProfileCount > 0 &&
+        domainAdapterBenchmark.summary.manualOverrideProfileCount > 0 &&
+        domainAdapterBenchmark.summary.macroPrecision >= 0.8 &&
+        domainAdapterBenchmark.summary.macroRecall >= 0.8 &&
+        domainAdapterBenchmark.summary.macroF1 >= 0.8,
+      details:
+        `profiles=${domainAdapterBenchmark.summary.profileCount} pass=${domainAdapterBenchmark.summary.passCount} ` +
+        `downgraded=${domainAdapterBenchmark.summary.downgradedProfileCount} manual_override=${domainAdapterBenchmark.summary.manualOverrideProfileCount} ` +
+        `macro=${domainAdapterBenchmark.summary.macroPrecision.toFixed(4)}/${domainAdapterBenchmark.summary.macroRecall.toFixed(4)}/${domainAdapterBenchmark.summary.macroF1.toFixed(4)}`,
+    },
+    {
       code: "observability_baseline_consistent",
       pass:
         observabilitySloActual.requestHash === observabilitySloBaseline.requestHash &&
@@ -321,6 +356,7 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
     explanationDiffRequestHash: explanationDiffBenchmark.requestHash,
     verificationReplayRequestHash: verificationReplayBenchmark.requestHash,
     proofCacheRequestHash: proofCacheBenchmark.requestHash,
+    domainAdapterRequestHash: domainAdapterBenchmark.requestHash,
     observabilityRequestHash: observabilitySloActual.requestHash,
   });
 
@@ -341,6 +377,7 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
       explanationDiffOutcomeHash: explanationDiffBenchmark.outcomeHash,
       verificationReplayOutcomeHash: verificationReplayBenchmark.outcomeHash,
       proofCacheOutcomeHash: proofCacheBenchmark.outcomeHash,
+      domainAdapterOutcomeHash: domainAdapterBenchmark.outcomeHash,
       observabilityOutcomeHash: observabilitySloActual.outcomeHash,
     },
   });
@@ -362,6 +399,7 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
       explanationDiffOutcomeHash: explanationDiffBenchmark.outcomeHash,
       verificationReplayOutcomeHash: verificationReplayBenchmark.outcomeHash,
       proofCacheOutcomeHash: proofCacheBenchmark.outcomeHash,
+      domainAdapterOutcomeHash: domainAdapterBenchmark.outcomeHash,
       observabilityOutcomeHash: observabilitySloActual.outcomeHash,
     },
     checks,
@@ -625,6 +663,39 @@ export function assertProofCacheBenchmarkArtifact(input: unknown): ProofCacheBen
   };
 }
 
+export function assertDomainAdapterBenchmarkArtifact(input: unknown): DomainAdapterBenchmarkArtifact {
+  if (!isObject(input)) {
+    throw new Error("domain adapter benchmark artifact must be an object");
+  }
+  if (expectString(input.schemaVersion, "domainAdapter.schemaVersion") !== "1.0.0") {
+    throw new Error("domain adapter benchmark schemaVersion must be 1.0.0");
+  }
+  if (!isObject(input.summary)) {
+    throw new Error("domainAdapter.summary must be an object");
+  }
+  return {
+    schemaVersion: "1.0.0",
+    requestHash: expectString(input.requestHash, "domainAdapter.requestHash"),
+    outcomeHash: expectString(input.outcomeHash, "domainAdapter.outcomeHash"),
+    summary: {
+      profileCount: expectFiniteNumber(input.summary.profileCount, "domainAdapter.summary.profileCount"),
+      passCount: expectFiniteNumber(input.summary.passCount, "domainAdapter.summary.passCount"),
+      downgradedProfileCount: expectFiniteNumber(
+        input.summary.downgradedProfileCount,
+        "domainAdapter.summary.downgradedProfileCount",
+      ),
+      manualOverrideProfileCount: expectFiniteNumber(
+        input.summary.manualOverrideProfileCount,
+        "domainAdapter.summary.manualOverrideProfileCount",
+      ),
+      macroPrecision: expectFiniteNumber(input.summary.macroPrecision, "domainAdapter.summary.macroPrecision"),
+      macroRecall: expectFiniteNumber(input.summary.macroRecall, "domainAdapter.summary.macroRecall"),
+      macroF1: expectFiniteNumber(input.summary.macroF1, "domainAdapter.summary.macroF1"),
+      taggingReportHash: expectString(input.summary.taggingReportHash, "domainAdapter.summary.taggingReportHash"),
+    },
+  };
+}
+
 export function assertObservabilitySloBenchmarkArtifact(input: unknown): ObservabilitySloBenchmarkArtifact {
   if (!isObject(input)) {
     throw new Error("observability slo benchmark artifact must be an object");
@@ -711,6 +782,7 @@ function isKnownCheckCode(value: string): value is ReleaseGateCheck["code"] {
     value === "verification_replay_contract_complete" ||
     value === "cache_warm_speedup" ||
     value === "cache_recovery_hits" ||
+    value === "domain_adapter_quality_floor" ||
     value === "observability_baseline_consistent" ||
     value === "observability_slo_gate"
   );

@@ -57,6 +57,9 @@ jobs:
       - name: Run deterministic verification replay benchmark baseline check
         run: npm run web:eval:verification-replay:ci
 
+      - name: Run deterministic domain adapter benchmark baseline check
+        run: npm run eval:domain-adapters:ci
+
       - name: Validate research dossier evidence map
         run: npm run eval:research-dossier
 
@@ -75,6 +78,7 @@ jobs:
             .explain-md/tree-scale-evaluation-report.json
             .explain-md/explanation-diff-evaluation-report.json
             .explain-md/verification-replay-evaluation-report.json
+            .explain-md/domain-adapter-evaluation-report.json
             .explain-md/observability-slo-benchmark-report.json
             .explain-md/research-dossier-report.json
             .explain-md/release-gate-report.json

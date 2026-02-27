@@ -18,6 +18,7 @@ function parseArgs(argv) {
   let explanationDiffPath = path.resolve(cwd, "docs/benchmarks/explanation-diff-evaluation.json");
   let verificationReplayPath = path.resolve(cwd, "docs/benchmarks/verification-replay-evaluation.json");
   let proofCachePath = path.resolve(cwd, "docs/benchmarks/proof-cache-benchmark.json");
+  let domainAdapterPath = path.resolve(cwd, "docs/benchmarks/domain-adapter-evaluation.json");
   let observabilityBaselinePath = path.resolve(cwd, "docs/benchmarks/observability-slo-benchmark.json");
   let observabilityActualPath = path.resolve(cwd, ".explain-md/observability-slo-benchmark-report.json");
   let outputPath = path.resolve(cwd, ".explain-md/release-gate-report.json");
@@ -57,6 +58,10 @@ function parseArgs(argv) {
       proofCachePath = path.resolve(cwd, arg.slice("--proof-cache=".length));
       continue;
     }
+    if (arg.startsWith("--domain-adapter=")) {
+      domainAdapterPath = path.resolve(cwd, arg.slice("--domain-adapter=".length));
+      continue;
+    }
     if (arg.startsWith("--observability-baseline=")) {
       observabilityBaselinePath = path.resolve(cwd, arg.slice("--observability-baseline=".length));
       continue;
@@ -83,6 +88,7 @@ function parseArgs(argv) {
     explanationDiffPath,
     verificationReplayPath,
     proofCachePath,
+    domainAdapterPath,
     observabilityBaselinePath,
     observabilityActualPath,
     outputPath,
@@ -106,6 +112,7 @@ async function main() {
   const explanationDiffBenchmark = await readJson(args.explanationDiffPath);
   const verificationReplayBenchmark = await readJson(args.verificationReplayPath);
   const proofCacheBenchmark = await readJson(args.proofCachePath);
+  const domainAdapterBenchmark = await readJson(args.domainAdapterPath);
   const observabilitySloBaseline = await readJson(args.observabilityBaselinePath);
   const observabilitySloActual = await readJson(args.observabilityActualPath);
 
@@ -117,6 +124,7 @@ async function main() {
     explanationDiffBenchmark,
     verificationReplayBenchmark,
     proofCacheBenchmark,
+    domainAdapterBenchmark,
     observabilitySloBaseline,
     observabilitySloActual,
   });

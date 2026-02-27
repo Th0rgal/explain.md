@@ -1,0 +1,173 @@
+{
+  "schemaVersion": "1.0.0",
+  "requestHash": "e98ef4c3e157363a142e5b86f4de06cbb9680d8ef6d2d305608dfb976639a82f",
+  "outcomeHash": "5ed5276ef0b3e4a17408c4775d0f812196ce501361c11c5acc283038854f304e",
+  "summary": {
+    "profileCount": 4,
+    "passCount": 4,
+    "downgradedProfileCount": 2,
+    "manualOverrideProfileCount": 1,
+    "macroPrecision": 1,
+    "macroRecall": 1,
+    "macroF1": 1,
+    "taggingReportHash": "34b75e7d4f0be6108e1dd441fcf9d6d748ee388e6f37162118c6f2a8edfbbc01"
+  },
+  "profiles": [
+    {
+      "profileId": "generic_theorem",
+      "pass": true,
+      "adapterId": "lean-generic",
+      "confidence": 0.55,
+      "tags": [
+        "domain:lean/general",
+        "kind:theorem"
+      ],
+      "warningCodes": [],
+      "missingRequiredTags": [],
+      "presentForbiddenTags": [],
+      "missingWarningCodes": []
+    },
+    {
+      "profileId": "low_confidence_downgrade",
+      "pass": true,
+      "adapterId": "lean-generic",
+      "downgradedFromAdapterId": "verity-edsl",
+      "confidence": 0.55,
+      "tags": [
+        "domain:lean/general",
+        "kind:lemma"
+      ],
+      "warningCodes": [
+        "low_confidence_downgrade"
+      ],
+      "missingRequiredTags": [],
+      "presentForbiddenTags": [],
+      "missingWarningCodes": []
+    },
+    {
+      "profileId": "manual_override",
+      "pass": true,
+      "adapterId": "lean-generic",
+      "downgradedFromAdapterId": "verity-edsl",
+      "confidence": 0.55,
+      "tags": [
+        "concept:state",
+        "domain:lean/general"
+      ],
+      "warningCodes": [
+        "low_confidence_downgrade",
+        "manual_override_applied"
+      ],
+      "missingRequiredTags": [],
+      "presentForbiddenTags": [],
+      "missingWarningCodes": []
+    },
+    {
+      "profileId": "verity_loop_memory",
+      "pass": true,
+      "adapterId": "verity-edsl",
+      "confidence": 0.95,
+      "tags": [
+        "concept:compiler_correctness",
+        "concept:conditional",
+        "concept:loop",
+        "concept:memory",
+        "concept:state",
+        "domain:verity/edsl"
+      ],
+      "warningCodes": [],
+      "missingRequiredTags": [],
+      "presentForbiddenTags": [],
+      "missingWarningCodes": []
+    }
+  ],
+  "taggingReport": {
+    "sampleCount": 4,
+    "macroPrecision": 1,
+    "macroRecall": 1,
+    "macroF1": 1,
+    "perTag": [
+      {
+        "tag": "concept:compiler_correctness",
+        "truePositives": 1,
+        "falsePositives": 0,
+        "falseNegatives": 0,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      {
+        "tag": "concept:conditional",
+        "truePositives": 1,
+        "falsePositives": 0,
+        "falseNegatives": 0,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      {
+        "tag": "concept:loop",
+        "truePositives": 1,
+        "falsePositives": 0,
+        "falseNegatives": 0,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      {
+        "tag": "concept:memory",
+        "truePositives": 1,
+        "falsePositives": 0,
+        "falseNegatives": 0,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      {
+        "tag": "concept:state",
+        "truePositives": 2,
+        "falsePositives": 0,
+        "falseNegatives": 0,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      {
+        "tag": "domain:lean/general",
+        "truePositives": 3,
+        "falsePositives": 0,
+        "falseNegatives": 0,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      {
+        "tag": "domain:verity/edsl",
+        "truePositives": 1,
+        "falsePositives": 0,
+        "falseNegatives": 0,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      {
+        "tag": "kind:lemma",
+        "truePositives": 1,
+        "falsePositives": 0,
+        "falseNegatives": 0,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      {
+        "tag": "kind:theorem",
+        "truePositives": 1,
+        "falsePositives": 0,
+        "falseNegatives": 0,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      }
+    ]
+  }
+}

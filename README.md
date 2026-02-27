@@ -8,6 +8,7 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #3: deterministic Lean ingestion/indexer with stable declaration IDs, provenance spans/hashes, and unsupported-construct diagnostics.
 - Issue #4: deterministic Lean declaration dependency graph with SCC/cycle diagnostics, transitive support queries, and canonical graph hashing.
 - Issue #6: deterministic domain-adapter pipeline (Verity specialization + generic fallback), low-confidence downgrade, manual overrides, and sampled precision/recall reporting.
+- Issue #6 follow-up: deterministic domain-adapter benchmark is now fail-closed in CI and in the root release gate via baseline hash checks (`eval:domain-adapters:ci`).
 - Issue #11: OpenAI-compatible provider layer with deterministic retries, timeout handling, streaming SSE support, and typed error taxonomy.
 - Issue #7: inductive child-grouping algorithm with deterministic prerequisite-aware scheduling and complexity-bounded sibling partitioning.
 - Issue #8: parent-summary generation pipeline with strict structured-output schema, deterministic prompting, and critic validation diagnostics.
@@ -56,6 +57,7 @@ npm run build
 npm run bench:dependency-graph
 npm run ingest:lean -- /path/to/lean-project
 npm run eval:domain-adapters
+npm run eval:domain-adapters:ci
 npm run eval:tree-pipeline -- /path/to/lean-project --include=Verity --include=Compiler/ContractSpec.lean
 npm run eval:leaf-detail -- /path/to/lean-project --include=Verity --leaf=<leaf-id>
 npm run eval:quality -- /path/to/lean-project --include=Verity --include=Compiler/ContractSpec.lean
@@ -74,6 +76,7 @@ npm run web:eval:tree-a11y:ci
 npm run web:eval:tree-scale:ci
 npm run web:eval:explanation-diff:ci
 npm run web:eval:verification-replay:ci
+npm run eval:domain-adapters:ci
 ```
 
 ## Live provider check

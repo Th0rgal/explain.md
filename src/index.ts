@@ -3,6 +3,8 @@ export * from "./leaf-schema.js";
 export * from "./dependency-graph.js";
 export * from "./lean-ingestion.js";
 export * from "./domain-adapters.js";
+export * from "./domain-adapter-benchmark.js";
+export * from "./domain-adapter-benchmark-baseline.js";
 export * from "./child-grouping.js";
 export * from "./openai-provider.js";
 export * from "./summary-pipeline.js";

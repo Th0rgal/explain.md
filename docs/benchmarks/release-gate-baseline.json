@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0.0",
-  "requestHash": "3f7f8c95a06ae733c6122c022d7993b7ba8be61573f5ed1f4c57c55c4deee843",
-  "outcomeHash": "bf5663135191a7dc44273956183323745dffec745253d18b15a80134ff5bdde2",
+  "requestHash": "17331118143b0640f5f6d771aa3c44cd1dd86af5c162b1e325499111ad44ebcb",
+  "outcomeHash": "e6664d69042f9bfed203aad22b931a0a70691a4e77a0bb7e6becccd9b68c3fe5",
   "thresholdPass": true,
   "checkStatus": [
     {
@@ -10,6 +10,10 @@
     },
     {
       "code": "cache_warm_speedup",
+      "pass": true
+    },
+    {
+      "code": "domain_adapter_quality_floor",
       "pass": true
     },
     {

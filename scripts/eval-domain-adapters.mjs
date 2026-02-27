@@ -1,64 +1,64 @@
-import {
-  classifyDeclarationDomain,
-  computeDomainTaggingReportHash,
-  evaluateDomainTagging,
-  renderDomainTaggingReport,
-} from "../dist/domain-adapters.js";
+import path from "node:path";
+import process from "node:process";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { assertDomainAdapterBenchmarkBaseline, evaluateDomainAdapterBenchmark } from "../dist/index.js";
 
-const labeledSamples = [
-  {
-    sampleId: "verity_loop_memory",
-    input: {
-      declarationId: "lean:Verity/Compiler:loop_ok:10:1",
-      modulePath: "Verity/Compiler",
-      declarationName: "loop_ok",
-      theoremKind: "theorem",
-      statementText: "if loop invariant holds then compiler preserves memory state",
-    },
-    expectedTags: [
-      "domain:verity/edsl",
-      "concept:loop",
-      "concept:conditional",
-      "concept:memory",
-      "concept:state",
-      "concept:compiler_correctness",
-    ],
-  },
-  {
-    sampleId: "generic_theorem",
-    input: {
-      declarationId: "lean:Math/Core:refl_demo:1:1",
-      modulePath: "Math/Core",
-      declarationName: "refl_demo",
-      theoremKind: "theorem",
-      statementText: "forall n, n = n",
-    },
-    expectedTags: ["domain:lean/general", "kind:theorem"],
-  },
-  {
-    sampleId: "verity_arithmetic",
-    input: {
-      declarationId: "lean:Verity/Arith:inc_ok:4:1",
-      modulePath: "Verity/Arith",
-      declarationName: "inc_ok",
-      theoremKind: "lemma",
-      statementText: "Nat.succ preserves arithmetic relation",
-    },
-    expectedTags: ["domain:verity/edsl", "concept:arithmetic"],
-  },
-];
+function parseArgs(argv) {
+  const cwd = process.cwd();
+  let baselinePath;
+  let outputPath;
+  let writeBaseline = false;
 
-const samples = labeledSamples.map((sample) => {
-  const classification = classifyDeclarationDomain(sample.input);
+  for (const arg of argv.slice(2)) {
+    if (arg === "--write-baseline") {
+      writeBaseline = true;
+      continue;
+    }
+    if (arg.startsWith("--baseline=")) {
+      baselinePath = path.resolve(cwd, arg.slice("--baseline=".length));
+      continue;
+    }
+    if (arg.startsWith("--out=")) {
+      outputPath = path.resolve(cwd, arg.slice("--out=".length));
+      continue;
+    }
+  }
+
   return {
-    sampleId: sample.sampleId,
-    expectedTags: sample.expectedTags,
-    predictedTags: classification.tags,
+    baselinePath,
+    outputPath,
+    writeBaseline,
   };
+}
+
+async function main() {
+  const args = parseArgs(process.argv);
+  const report = evaluateDomainAdapterBenchmark();
+
+  if (args.writeBaseline) {
+    const baselinePath = args.baselinePath ?? path.resolve(process.cwd(), "docs/benchmarks/domain-adapter-evaluation.json");
+    await mkdir(path.dirname(baselinePath), { recursive: true });
+    await writeFile(baselinePath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+    process.stdout.write(`Wrote domain adapter baseline to ${baselinePath}\n`);
+    return;
+  }
+
+  if (args.baselinePath) {
+    const baselineRaw = JSON.parse(await readFile(args.baselinePath, "utf8"));
+    assertDomainAdapterBenchmarkBaseline(baselineRaw, report);
+  }
+
+  if (args.outputPath) {
+    await mkdir(path.dirname(args.outputPath), { recursive: true });
+    await writeFile(args.outputPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+    process.stdout.write(`Wrote domain adapter evaluation report to ${args.outputPath}\n`);
+    return;
+  }
+
+  process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+}
+
+main().catch((error) => {
+  process.stderr.write(`eval-domain-adapters failed: ${error instanceof Error ? error.message : String(error)}\n`);
+  process.exitCode = 1;
 });
-
-const report = evaluateDomainTagging(samples);
-const rendered = renderDomainTaggingReport(report);
-const hash = computeDomainTaggingReportHash(report);
-
-process.stdout.write(`${rendered}\nreport_hash=${hash}\n`);
