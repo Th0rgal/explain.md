@@ -38,6 +38,7 @@ import {
   resolveTreeVirtualizationSettings,
   resolveVirtualScrollTopForRowIndex,
 } from "../lib/tree-virtualization";
+import { buildTreeAccessibilityMetadata } from "../lib/tree-accessibility";
 
 export const DEFAULT_CONFIG: ProofConfigInput = {
   abstractionLevel: 3,
@@ -350,6 +351,26 @@ export function ProofExplorer(props: ProofExplorerProps) {
         isExpanded: row.node.kind === "parent" && expandedNodeIds.includes(row.node.id),
       })),
     [expandedNodeIds, visibleRows],
+  );
+
+  const treeAccessibility = useMemo(
+    () =>
+      buildTreeAccessibilityMetadata(
+        visibleRows.map((row) => ({
+          nodeId: row.node.id,
+          parentId: row.parentId,
+          depthFromRoot: row.depthFromRoot,
+        })),
+        {
+          orderedChildIdsByParentId: Object.fromEntries(
+            Object.entries(childrenByParentId).map(([parentId, state]) => [parentId, state.childIds]),
+          ),
+          totalChildrenByParentId: Object.fromEntries(
+            Object.entries(childrenByParentId).map(([parentId, state]) => [parentId, state.totalChildren]),
+          ),
+        },
+      ),
+    [childrenByParentId, visibleRows],
   );
 
   const renderedRows = useMemo(
@@ -938,6 +959,8 @@ export function ProofExplorer(props: ProofExplorerProps) {
           className="tree-list"
           role="tree"
           tabIndex={0}
+          aria-label="Explanation tree"
+          aria-describedby="tree-keyboard-help tree-live-status"
           aria-activedescendant={activeTreeNodeId ? `treeitem-${activeTreeNodeId}` : undefined}
           onScroll={(event) => {
             if (!isVirtualizedTree) {
@@ -973,13 +996,19 @@ export function ProofExplorer(props: ProofExplorerProps) {
             const indentStyle = { paddingLeft: `${row.depthFromRoot * 1.25}rem` };
             const isSelectedLeaf = node.kind === "leaf" && selectedLeafId === node.id;
             const isActiveRow = node.id === activeTreeNodeId;
+            const rowAccessibility = treeAccessibility.byNodeId[node.id];
             return (
               <li
                 key={node.id}
                 id={`treeitem-${node.id}`}
                 role="treeitem"
                 aria-expanded={node.kind === "parent" ? isExpanded : undefined}
-                aria-selected={isSelectedLeaf || isActiveRow}
+                aria-selected={isSelectedLeaf}
+                aria-current={isActiveRow ? "true" : undefined}
+                aria-level={rowAccessibility?.level}
+                aria-posinset={rowAccessibility?.posInSet}
+                aria-setsize={rowAccessibility?.setSize}
+                className={`tree-item${isActiveRow ? " tree-item-active" : ""}${isSelectedLeaf ? " tree-item-selected" : ""}`}
                 style={isVirtualizedTree ? { minHeight: `${TREE_VIRTUALIZATION_SETTINGS.rowHeightPx}px` } : undefined}
               >
                 <div className="tree-row" style={indentStyle}>
@@ -993,7 +1022,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
                   <button
                     type="button"
                     className="statement-button"
-                    aria-pressed={isSelectedLeaf || isActiveRow}
+                    aria-pressed={isSelectedLeaf}
                     onClick={() => {
                       setActiveTreeNodeId(node.id);
                       if (node.kind === "leaf") {
@@ -1067,17 +1096,15 @@ export function ProofExplorer(props: ProofExplorerProps) {
             />
           ) : null}
         </ul>
+        <p id="tree-keyboard-help" className="sr-only">
+          Keyboard: Up and Down move rows, Left and Right collapse or expand parent rows, Home and End jump, Enter or
+          Space activates the active row.
+        </p>
         <p
+          id="tree-live-status"
+          className="sr-only"
           aria-live="polite"
           aria-atomic="true"
-          style={{
-            position: "absolute",
-            width: "1px",
-            height: "1px",
-            overflow: "hidden",
-            clip: "rect(0 0 0 0)",
-            whiteSpace: "nowrap",
-          }}
         >
           {treeA11yAnnouncement}
         </p>

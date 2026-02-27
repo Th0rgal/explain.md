@@ -81,6 +81,10 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
     - `ArrowUp/ArrowDown`, `Home/End`, `PageUp/PageDown` move active row
     - `ArrowRight` expands collapsed parents or enters first visible child
     - `ArrowLeft` collapses expanded parents or moves to ancestor row
+  - tree rows expose deterministic accessibility metadata:
+    - `aria-level`, `aria-posinset`, `aria-setsize` on each rendered tree item
+    - position metadata is derived from stable loaded-child ordering + total child counts
+    - `aria-current="true"` identifies keyboard-active row while `aria-selected` is reserved for selected leaves
   - active-row diagnostics remain machine-checkable (`data-tree-active-node-id`, `data-tree-active-row-index`)
   - assistive-tech announcements are deterministic and surfaced on the tree panel as `data-tree-live-message`
   - `Enter` / `Space` applies the active row action (parent expand/collapse, leaf selection)

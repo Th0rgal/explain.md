@@ -59,6 +59,10 @@ The tree panel uses incremental root/children/path queries:
     - `ArrowRight` expands a collapsed parent, or moves to its first visible child when already expanded.
     - `ArrowLeft` collapses an expanded parent, or moves focus to its parent row.
     - `Enter` / `Space` activate the row action (expand/collapse parent or select leaf).
+  - Row semantics are screen-reader deterministic:
+    - each `treeitem` includes `aria-level`, `aria-posinset`, and `aria-setsize`
+    - loaded child order and total-child counts are used to keep sibling position metadata stable
+    - active-row state is exposed with `aria-current="true"` while selected leaves remain `aria-selected`
   - Active-row diagnostics remain machine-checkable via `data-tree-active-node-id` and `data-tree-active-row-index`.
   - Screen-reader activity announcements are deterministic and queryable via `data-tree-live-message`.
 - Config profile persistence/query is deterministic and file-backed:

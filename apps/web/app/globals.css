@@ -147,6 +147,30 @@ nav {
   padding: 0;
 }
 
+.tree-item {
+  border-radius: var(--radius-sm);
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.tree-item-active {
+  background: linear-gradient(90deg, rgb(84 224 199 / 15%), rgb(84 224 199 / 5%) 70%, transparent);
+  box-shadow: inset 0 0 0 1px rgb(84 224 199 / 35%);
+}
+
+.tree-item-selected {
+  background: linear-gradient(90deg, rgb(130 219 255 / 20%), rgb(130 219 255 / 7%) 70%, transparent);
+  box-shadow: inset 0 0 0 1px rgb(130 219 255 / 45%);
+}
+
+.tree-item-active .statement-button,
+.tree-item-selected .statement-button {
+  color: var(--color-text-primary);
+}
+
+.tree-item-active .statement-button {
+  font-weight: 620;
+}
+
 .tree-row {
   display: flex;
   gap: 0.56rem;
@@ -253,6 +277,18 @@ summary:focus-visible,
 a:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  border: 0;
+  white-space: nowrap;
 }
 
 .home {
