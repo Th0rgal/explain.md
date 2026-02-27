@@ -1156,6 +1156,7 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
           recoveryMode: topologyAdditionRecovery.recoveryMode,
           addedLeafCount: topologyAdditionRecovery.addedLeafIds.length,
           insertionFrontierCount: topologyAdditionRecovery.insertionFrontierCount,
+          insertionAnchorCount: topologyAdditionRecovery.insertionAnchorCount,
           insertionMergeParentCount: topologyAdditionRecovery.insertionMergeParentCount,
           insertedParentCount: topologyAdditionRecovery.insertedParentCount,
           insertionScheduledAttachmentCount: topologyAdditionRecovery.insertionScheduledAttachmentCount,
@@ -1780,11 +1781,12 @@ interface TopologyAdditionRecoveryResult {
   recoveryMode: "insertion" | "regeneration";
   addedLeafIds: string[];
   insertionFrontierCount: number;
+  insertionAnchorCount: number;
   insertionMergeParentCount: number;
   insertedParentCount: number;
   insertionScheduledAttachmentCount: number;
   insertionRecomputedAncestorCount: number;
-  insertionStrategy: "edge_connector_ancestor_recompute" | "regeneration";
+  insertionStrategy: "anchor_grouped_connector_ancestor_recompute" | "regeneration";
   reusableParentSummaryCount: number;
   reusedParentSummaryCount: number;
   reusedParentSummaryByGroundingCount: number;
@@ -2552,6 +2554,7 @@ async function attemptTopologyAdditionRecovery(
     recoveryMode: "regeneration",
     addedLeafIds,
     insertionFrontierCount: 0,
+    insertionAnchorCount: 0,
     insertionMergeParentCount: 0,
     insertedParentCount: 0,
     insertionScheduledAttachmentCount: 0,
@@ -2833,27 +2836,71 @@ async function attemptTopologyAdditionSubtreeInsertionRecovery(
   const insertionGroupingEntries: Array<{ outputNodeId: string; orderedNodeIds: string[]; complexitySpread: number }> = [];
   const pendingRecomputeParentIds = new Set<string>();
   const recomputedAncestorIds = new Set<string>();
-  for (let frontierIndex = 0; frontierIndex < insertionFrontiers.length; frontierIndex += 1) {
-    const frontier = insertionFrontiers[frontierIndex];
-    const frontierRootId = frontierSubtreeRootIds[frontierIndex];
-    if (!frontierRootId || !(frontierRootId in mergedNodes)) {
-      return undefined;
-    }
+  const parentsByChildIdBeforeInsertion = buildParentsByChildId(mergedNodes);
+  const frontierAssignments = insertionFrontiers
+    .map((frontier, frontierIndex) => {
+      const frontierRootId = frontierSubtreeRootIds[frontierIndex];
+      if (!frontierRootId || !(frontierRootId in mergedNodes)) {
+        return undefined;
+      }
+      const anchorNodeId = resolveInsertionAnchorNodeId({
+        rootId: request.cachedTree.rootId,
+        frontierLeafIds: frontier.frontierLeafIds,
+        parentsByChildId: parentsByChildIdBeforeInsertion,
+      });
+      if (!anchorNodeId || !(anchorNodeId in mergedNodes)) {
+        return undefined;
+      }
+      return {
+        frontierIndex,
+        frontierKey: frontier.frontierKey,
+        frontierRootId,
+        anchorNodeId,
+      };
+    })
+    .filter(
+      (
+        assignment,
+      ): assignment is {
+        frontierIndex: number;
+        frontierKey: string;
+        frontierRootId: string;
+        anchorNodeId: string;
+      } => Boolean(assignment),
+    );
+  if (frontierAssignments.length !== insertionFrontiers.length) {
+    return undefined;
+  }
 
-    const parentsByChildId = buildParentsByChildId(mergedNodes);
-    const anchorNodeId = resolveInsertionAnchorNodeId({
-      rootId: mergedRootId,
-      frontierLeafIds: frontier.frontierLeafIds,
-      parentsByChildId,
+  const anchorGroupsById = new Map<
+    string,
+    Array<{
+      frontierIndex: number;
+      frontierKey: string;
+      frontierRootId: string;
+    }>
+  >();
+  for (const assignment of frontierAssignments) {
+    const group = anchorGroupsById.get(assignment.anchorNodeId) ?? [];
+    group.push({
+      frontierIndex: assignment.frontierIndex,
+      frontierKey: assignment.frontierKey,
+      frontierRootId: assignment.frontierRootId,
     });
-    if (!anchorNodeId || !(anchorNodeId in mergedNodes)) {
-      return undefined;
-    }
-    const insertionChildIds = dedupeOrdered([anchorNodeId, frontierRootId]);
-    if (insertionChildIds.length < 2) {
-      return undefined;
-    }
-    const insertionChildren = insertionChildIds.map((childId) => {
+    anchorGroupsById.set(assignment.anchorNodeId, group);
+  }
+
+  const sortedAnchorNodeIds = [...anchorGroupsById.keys()].sort((left, right) => left.localeCompare(right));
+  const insertionAnchorCount = sortedAnchorNodeIds.length;
+  let insertionScheduledAttachmentCount = 0;
+  let insertionMergeParentCount = 0;
+
+  const createInsertionParentNode = async (requestInput: {
+    childIds: string[];
+    groupIndex: number;
+    seed: Record<string, unknown>;
+  }): Promise<{ parentId: string; complexitySpread: number } | undefined> => {
+    const insertionChildren = requestInput.childIds.map((childId) => {
       const childNode = mergedNodes[childId];
       if (!childNode) {
         return undefined;
@@ -2892,17 +2939,15 @@ async function attemptTopologyAdditionSubtreeInsertionRecovery(
     }
     const insertionParentId = `p_addition_${computeCanonicalRequestHash({
       planHash: request.blockedSubtreePlan.planHash,
-      frontierKey: frontier.frontierKey,
-      frontierIndex,
-      anchorNodeId,
-      frontierRootId,
+      ...requestInput.seed,
+      childIds: requestInput.childIds.slice(),
     }).slice(0, 16)}`;
     if (insertionParentId in mergedNodes) {
       return undefined;
     }
     const insertionPolicyDiagnostics: ParentPolicyDiagnostics = {
       depth: 0,
-      groupIndex: frontierIndex,
+      groupIndex: requestInput.groupIndex,
       retriesUsed: 0,
       preSummary: preSummaryDecision,
       postSummary: postSummaryDecision,
@@ -2911,7 +2956,7 @@ async function attemptTopologyAdditionSubtreeInsertionRecovery(
       id: insertionParentId,
       kind: "parent",
       statement: insertionSummary.summary.parent_statement,
-      childIds: insertionChildIds.slice(),
+      childIds: requestInput.childIds.slice(),
       depth: 0,
       complexityScore: insertionSummary.summary.complexity_score,
       abstractionScore: insertionSummary.summary.abstraction_score,
@@ -2925,17 +2970,110 @@ async function attemptTopologyAdditionSubtreeInsertionRecovery(
     insertionParentIds.push(insertionParentId);
     insertionPlanEntries.push({
       outputNodeId: insertionParentId,
-      index: frontierIndex,
-      inputNodeIds: insertionChildIds.slice(),
+      index: insertionPlanEntries.length,
+      inputNodeIds: requestInput.childIds.slice(),
       complexitySpread: preSummaryDecision.metrics.complexitySpread,
     });
     insertionGroupingEntries.push({
       outputNodeId: insertionParentId,
-      orderedNodeIds: insertionChildIds.slice(),
+      orderedNodeIds: requestInput.childIds.slice(),
       complexitySpread: preSummaryDecision.metrics.complexitySpread,
     });
+    return {
+      parentId: insertionParentId,
+      complexitySpread: preSummaryDecision.metrics.complexitySpread,
+    };
+  };
 
-    const anchorParentIds = (parentsByChildId.get(anchorNodeId) ?? []).slice().sort((left, right) => left.localeCompare(right));
+  const composeFrontierRootsByAnchor = async (requestInput: {
+    anchorNodeId: string;
+    anchorGroupIndex: number;
+    frontierRootIds: string[];
+    frontierKeys: string[];
+  }): Promise<string | undefined> => {
+    let levelNodeIds = requestInput.frontierRootIds.slice();
+    let level = 0;
+    while (levelNodeIds.length > 1) {
+      const nextLevelNodeIds: string[] = [];
+      for (let index = 0; index < levelNodeIds.length; index += request.config.maxChildrenPerParent) {
+        const chunkNodeIds = levelNodeIds.slice(index, index + request.config.maxChildrenPerParent);
+        if (chunkNodeIds.length === 1) {
+          nextLevelNodeIds.push(chunkNodeIds[0] as string);
+          continue;
+        }
+        const mergedParent = await createInsertionParentNode({
+          childIds: chunkNodeIds,
+          groupIndex: requestInput.anchorGroupIndex,
+          seed: {
+            mode: "frontier_merge",
+            anchorNodeId: requestInput.anchorNodeId,
+            anchorGroupIndex: requestInput.anchorGroupIndex,
+            frontierKeys: requestInput.frontierKeys.slice(),
+            mergeLevel: level,
+            mergeChunkIndex: index / request.config.maxChildrenPerParent,
+          },
+        });
+        if (!mergedParent) {
+          return undefined;
+        }
+        insertionMergeParentCount += 1;
+        nextLevelNodeIds.push(mergedParent.parentId);
+      }
+      levelNodeIds = nextLevelNodeIds;
+      level += 1;
+    }
+    return levelNodeIds[0];
+  };
+
+  for (let anchorGroupIndex = 0; anchorGroupIndex < sortedAnchorNodeIds.length; anchorGroupIndex += 1) {
+    const anchorNodeId = sortedAnchorNodeIds[anchorGroupIndex] as string;
+    const anchorGroup = (anchorGroupsById.get(anchorNodeId) ?? [])
+      .slice()
+      .sort((left, right) => {
+        const keyComparison = left.frontierKey.localeCompare(right.frontierKey);
+        if (keyComparison !== 0) {
+          return keyComparison;
+        }
+        return left.frontierIndex - right.frontierIndex;
+      });
+    if (anchorGroup.length === 0) {
+      continue;
+    }
+
+    const frontierRootIds = anchorGroup.map((entry) => entry.frontierRootId);
+    const frontierKeys = anchorGroup.map((entry) => entry.frontierKey);
+    const frontierCompositeRootId = await composeFrontierRootsByAnchor({
+      anchorNodeId,
+      anchorGroupIndex,
+      frontierRootIds,
+      frontierKeys,
+    });
+    if (!frontierCompositeRootId || !(frontierCompositeRootId in mergedNodes)) {
+      return undefined;
+    }
+
+    const connectorChildIds = dedupeOrdered([anchorNodeId, frontierCompositeRootId]);
+    if (connectorChildIds.length < 2) {
+      return undefined;
+    }
+    const connectorParent = await createInsertionParentNode({
+      childIds: connectorChildIds,
+      groupIndex: anchorGroupIndex,
+      seed: {
+        mode: "anchor_attachment",
+        anchorNodeId,
+        anchorGroupIndex,
+        frontierKeys: frontierKeys.slice(),
+      },
+    });
+    if (!connectorParent) {
+      return undefined;
+    }
+    insertionScheduledAttachmentCount += 1;
+    const insertionParentId = connectorParent.parentId;
+    const anchorParentIds = (parentsByChildIdBeforeInsertion.get(anchorNodeId) ?? [])
+      .slice()
+      .sort((left, right) => left.localeCompare(right));
     if (anchorParentIds.length === 0) {
       mergedRootId = insertionParentId;
       continue;
@@ -3172,22 +3310,31 @@ async function attemptTopologyAdditionSubtreeInsertionRecovery(
     snapshot: recoveredSnapshot,
   };
 
-  const insertionMergeParentCount = insertionParentIds.length;
-  const insertedParentCount = addedSubtreeParentCount + insertionMergeParentCount;
+  const insertedParentCount = addedSubtreeParentCount + insertionParentIds.length;
   const insertionRecomputedAncestorCount = recomputedAncestorIds.size;
-  const insertionStrategy = "edge_connector_ancestor_recompute" as const;
+  const insertionStrategy = "anchor_grouped_connector_ancestor_recompute" as const;
   const generatedParentSummaryCount = insertedParentCount + insertionRecomputedAncestorCount;
   const insertionHash = computeCanonicalRequestHash({
     planHash: request.blockedSubtreePlan.planHash,
     addedLeafIds: request.addedLeafIds.slice(),
     insertionFrontierCount: insertionFrontiers.length,
+    insertionAnchorCount,
     insertionFrontierKeys: insertionFrontiers.map((frontier) => frontier.frontierKey),
     insertionFrontierLeafIds: insertionFrontiers.map((frontier) => frontier.frontierLeafIds),
+    frontierAnchorAssignments: frontierAssignments.map((assignment) => ({
+      frontierIndex: assignment.frontierIndex,
+      frontierKey: assignment.frontierKey,
+      frontierRootId: assignment.frontierRootId,
+      anchorNodeId: assignment.anchorNodeId,
+    })),
+    sortedAnchorNodeIds: sortedAnchorNodeIds.slice(),
     frontierSubtreeRootIds: frontierSubtreeRootIds.slice(),
     insertionParentIds: insertionParentIds.slice(),
     insertionRecomputedAncestorIds: [...recomputedAncestorIds].sort((left, right) => left.localeCompare(right)),
     mergedRootId,
     insertionStrategy,
+    insertionMergeParentCount,
+    insertionScheduledAttachmentCount,
     insertedParentCount,
     insertionRecomputedAncestorCount,
     generatedParentSummaryCount,
@@ -3201,9 +3348,10 @@ async function attemptTopologyAdditionSubtreeInsertionRecovery(
     recoveryMode: "insertion",
     addedLeafIds: request.addedLeafIds.slice(),
     insertionFrontierCount: insertionFrontiers.length,
+    insertionAnchorCount,
     insertionMergeParentCount,
     insertedParentCount,
-    insertionScheduledAttachmentCount: insertionParentIds.length,
+    insertionScheduledAttachmentCount,
     insertionRecomputedAncestorCount,
     insertionStrategy,
     reusableParentSummaryCount: 0,
@@ -3218,9 +3366,10 @@ async function attemptTopologyAdditionSubtreeInsertionRecovery(
       planHash: request.blockedSubtreePlan.planHash,
       addedLeafIds: request.addedLeafIds.slice(),
       insertionFrontierCount: insertionFrontiers.length,
+      insertionAnchorCount,
       insertionMergeParentCount,
       insertedParentCount,
-      insertionScheduledAttachmentCount: insertionParentIds.length,
+      insertionScheduledAttachmentCount,
       insertionRecomputedAncestorCount,
       insertionStrategy,
       generatedParentSummaryCount,

@@ -34,6 +34,9 @@ describe("proof cache benchmark", () => {
     expect((report.scenarios.topologyShapeInvalidation.afterChangeAdditionRecovery?.insertionFrontierCount ?? 0) > 0).toBe(
       true,
     );
+    expect((report.scenarios.topologyShapeInvalidation.afterChangeAdditionRecovery?.insertionAnchorCount ?? 0) > 0).toBe(
+      true,
+    );
     expect(
       (report.scenarios.topologyShapeInvalidation.afterChangeAdditionRecovery?.insertionMergeParentCount ?? 0) > 0,
     ).toBe(true);
@@ -44,10 +47,14 @@ describe("proof cache benchmark", () => {
       (report.scenarios.topologyShapeInvalidation.afterChangeAdditionRecovery?.insertionScheduledAttachmentCount ?? 0) > 0,
     ).toBe(true);
     expect(
+      (report.scenarios.topologyShapeInvalidation.afterChangeAdditionRecovery?.insertionScheduledAttachmentCount ?? 0) <=
+        (report.scenarios.topologyShapeInvalidation.afterChangeAdditionRecovery?.insertionFrontierCount ?? 0),
+    ).toBe(true);
+    expect(
       (report.scenarios.topologyShapeInvalidation.afterChangeAdditionRecovery?.insertionRecomputedAncestorCount ?? 0) >= 0,
     ).toBe(true);
     expect(report.scenarios.topologyShapeInvalidation.afterChangeAdditionRecovery?.insertionStrategy).toBe(
-      "edge_connector_ancestor_recompute",
+      "anchor_grouped_connector_ancestor_recompute",
     );
     expect(
       report.scenarios.topologyShapeInvalidation.afterChangeAdditionRecovery?.additionRecoveryHash,

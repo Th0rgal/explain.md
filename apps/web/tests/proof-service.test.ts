@@ -485,8 +485,10 @@ describe("proof service", () => {
 
       const corePath = path.join(tempFixtureRoot, "Verity", "Core.lean");
       const coreBefore = await fs.readFile(corePath, "utf8");
-      const addedTheorem = "\n\ntheorem cache_shape_added : True := by\n  trivial\n";
-      await fs.writeFile(corePath, `${coreBefore.trimEnd()}${addedTheorem}`, "utf8");
+      const addedTheorems =
+        "\n\ntheorem cache_shape_added_a : True := by\n  trivial\n" +
+        "\n\ntheorem cache_shape_added_b : True := by\n  trivial\n";
+      await fs.writeFile(corePath, `${coreBefore.trimEnd()}${addedTheorems}`, "utf8");
 
       clearProofDatasetCacheForTests();
       const rebuilt = await buildProofCacheReportView({
@@ -517,11 +519,16 @@ describe("proof service", () => {
       expect(additionDiagnostic?.details?.recoveryMode).toBe("insertion");
       expect((additionDiagnostic?.details?.addedLeafCount as number) > 0).toBe(true);
       expect((additionDiagnostic?.details?.insertionFrontierCount as number) > 0).toBe(true);
+      expect((additionDiagnostic?.details?.insertionAnchorCount as number) > 0).toBe(true);
       expect((additionDiagnostic?.details?.insertionMergeParentCount as number) > 0).toBe(true);
       expect((additionDiagnostic?.details?.insertedParentCount as number) > 0).toBe(true);
       expect((additionDiagnostic?.details?.insertionScheduledAttachmentCount as number) > 0).toBe(true);
+      expect(
+        (additionDiagnostic?.details?.insertionScheduledAttachmentCount as number) <=
+          (additionDiagnostic?.details?.insertionFrontierCount as number),
+      ).toBe(true);
       expect((additionDiagnostic?.details?.insertionRecomputedAncestorCount as number) >= 0).toBe(true);
-      expect(additionDiagnostic?.details?.insertionStrategy).toBe("edge_connector_ancestor_recompute");
+      expect(additionDiagnostic?.details?.insertionStrategy).toBe("anchor_grouped_connector_ancestor_recompute");
       expect((additionDiagnostic?.details?.reusableParentSummaryCount as number) >= 0).toBe(true);
       expect((additionDiagnostic?.details?.reusedParentSummaryCount as number) >= 0).toBe(true);
       expect(
