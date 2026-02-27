@@ -12,19 +12,33 @@ This Next.js app provides a deterministic frontend scaffold for explain.md.
   - `POST /api/proofs/view`
   - `POST /api/proofs/diff`
   - `GET /api/proofs/leaves/:leafId`
+  - `POST /api/proofs/leaves/:leafId/verify`
+  - `GET /api/proofs/leaves/:leafId/verification-jobs`
+  - `GET /api/verification/jobs/:jobId`
 - Client API layer in `lib/api-client.ts`.
 - Loading and error boundaries (`app/loading.tsx`, `app/error.tsx`).
 
 ## State Management
 This scaffold uses local React state + deterministic API payloads as the baseline state strategy.
 
-The tree panel now uses incremental root/children/path queries:
+The tree panel uses incremental root/children/path queries:
 - Load root snapshot (`/api/proofs/root`).
 - Expand parent nodes with bounded child pages (`/api/proofs/nodes/:nodeId/children`, `limit=maxChildrenPerParent`).
 - Resolve selected leaf ancestry (`/api/proofs/nodes/:nodeId/path`) to expand prerequisite parents deterministically.
 - Keep leaf-detail and diff panels wired to provenance-aware contracts (`/api/proofs/leaves/:leafId`, `/api/proofs/diff`).
 - Surface per-parent policy diagnostics (pre/post compliance + metrics) directly in tree rows.
 - Use shared config parser (`lib/config-input.ts`) across query routes to keep config semantics consistent.
+
+## Verification integration
+- Leaf panel can trigger server-side verification and render status/log diagnostics.
+- Verification history is persisted to `.explain-md/web-verification-ledger.json`.
+- Job IDs are deterministic and monotonic (`job-000001`, `job-000002`, ...).
+- Reproducibility contract values can be configured with:
+  - `EXPLAIN_MD_VERIFICATION_PROJECT_ROOT`
+  - `EXPLAIN_MD_SOURCE_REVISION`
+  - `EXPLAIN_MD_VERIFICATION_LEAN_VERSION`
+  - `EXPLAIN_MD_VERIFICATION_LAKE_VERSION`
+  - `EXPLAIN_MD_VERIFICATION_TIMEOUT_MS`
 
 ## Local commands
 ```bash

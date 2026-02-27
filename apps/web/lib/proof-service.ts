@@ -47,6 +47,7 @@ export interface LeafDetailRequest {
   proofId: string;
   leafId: string;
   config?: ExplanationConfigInput;
+  verificationJobs?: VerificationJob[];
 }
 
 export interface NodeChildrenRequest {
@@ -151,7 +152,7 @@ export function buildSeedDiff(request: DiffRequest) {
 
 export function buildSeedLeafDetail(request: LeafDetailRequest) {
   const dataset = loadSeedDataset(request.proofId, request.config);
-  const jobs = sampleVerificationJobs(request.proofId, request.leafId);
+  const jobs = request.verificationJobs ?? sampleVerificationJobs(request.proofId, request.leafId);
   const result = buildLeafDetailView(dataset.tree as never, dataset.leaves, request.leafId, {
     verificationJobs: jobs,
   });
@@ -246,6 +247,11 @@ export function buildSeedNodePathView(request: NodePathRequest) {
     snapshotHash: computeTreeStorageSnapshotHash(api.snapshot),
     path,
   };
+}
+
+export function findSeedLeaf(proofId: string, leafId: string) {
+  const dataset = loadSeedDataset(proofId, {});
+  return dataset.leaves.find((leaf) => leaf.id === leafId);
 }
 
 function assertSupportedProof(proofId: string): void {

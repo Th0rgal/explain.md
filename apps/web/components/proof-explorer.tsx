@@ -4,9 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import {
   fetchDiff,
   fetchLeafDetail,
+  fetchLeafVerificationJobs,
   fetchNodeChildren,
   fetchNodePath,
   fetchRoot,
+  fetchVerificationJob,
+  verifyLeaf,
   type DiffResponse,
   type LeafDetailResponse,
   type NodeChildrenResponse,
@@ -14,6 +17,8 @@ import {
   type ProofConfigInput,
   type RootResponse,
   type TreeNodeRecord,
+  type VerificationJobResponse,
+  type VerificationJobsResponse,
 } from "../lib/api-client";
 
 const DEFAULT_CONFIG: ProofConfigInput = {
@@ -41,6 +46,11 @@ export function ProofExplorer(props: ProofExplorerProps) {
   const [pathResult, setPathResult] = useState<NodePathResponse | null>(null);
   const [selectedLeafId, setSelectedLeafId] = useState<string | null>(null);
   const [leafDetail, setLeafDetail] = useState<LeafDetailResponse | null>(null);
+  const [verificationJobs, setVerificationJobs] = useState<VerificationJobsResponse | null>(null);
+  const [selectedVerificationJobId, setSelectedVerificationJobId] = useState<string | null>(null);
+  const [selectedVerificationJob, setSelectedVerificationJob] = useState<VerificationJobResponse | null>(null);
+  const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
@@ -72,7 +82,10 @@ export function ProofExplorer(props: ProofExplorerProps) {
         const rootNode = rootData.root.node;
         const initialChildren =
           rootNode.kind === "parent"
-            ? await fetchNodeChildren(props.proofId, rootNode.id, config, { offset: 0, limit: config.maxChildrenPerParent ?? 3 })
+            ? await fetchNodeChildren(props.proofId, rootNode.id, config, {
+                offset: 0,
+                limit: config.maxChildrenPerParent ?? 3,
+              })
             : null;
 
         if (cancelled) {
@@ -128,18 +141,29 @@ export function ProofExplorer(props: ProofExplorerProps) {
   useEffect(() => {
     if (!selectedLeafId) {
       setLeafDetail(null);
+      setVerificationJobs(null);
+      setSelectedVerificationJobId(null);
+      setSelectedVerificationJob(null);
+      setVerificationError(null);
       return;
     }
-    const leafId = selectedLeafId;
 
     let cancelled = false;
 
-    async function loadLeaf() {
+    async function loadLeafPanel(leafId: string) {
       try {
-        const result = await fetchLeafDetail(props.proofId, leafId, config);
-        if (!cancelled) {
-          setLeafDetail(result);
+        const [leafResult, jobsResult] = await Promise.all([
+          fetchLeafDetail(props.proofId, leafId, config),
+          fetchLeafVerificationJobs(props.proofId, leafId),
+        ]);
+
+        if (cancelled) {
+          return;
         }
+
+        setLeafDetail(leafResult);
+        setVerificationJobs(jobsResult);
+        setSelectedVerificationJobId(jobsResult.jobs[jobsResult.jobs.length - 1]?.jobId ?? null);
       } catch (leafError) {
         if (!cancelled) {
           setLeafDetail({
@@ -154,15 +178,44 @@ export function ProofExplorer(props: ProofExplorerProps) {
               },
             ],
           });
+          setVerificationJobs(null);
         }
       }
     }
 
-    loadLeaf();
+    loadLeafPanel(selectedLeafId);
     return () => {
       cancelled = true;
     };
   }, [config, props.proofId, selectedLeafId]);
+
+  useEffect(() => {
+    if (!selectedVerificationJobId) {
+      setSelectedVerificationJob(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadSelectedJob(jobId: string) {
+      try {
+        const result = await fetchVerificationJob(jobId);
+        if (!cancelled) {
+          setSelectedVerificationJob(result);
+        }
+      } catch (jobError) {
+        if (!cancelled) {
+          setSelectedVerificationJob(null);
+          setVerificationError(jobError instanceof Error ? jobError.message : String(jobError));
+        }
+      }
+    }
+
+    loadSelectedJob(selectedVerificationJobId);
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedVerificationJobId]);
 
   const visibleRows = useMemo(() => {
     if (!root?.root.node) {
@@ -300,7 +353,9 @@ export function ProofExplorer(props: ProofExplorerProps) {
       setPathResult(path);
       if (path.path.ok) {
         const expandableAncestors = path.path.path.filter((node) => node.kind === "parent").map((node) => node.id);
-        setExpandedNodeIds((current) => Array.from(new Set([...current, ...expandableAncestors])).sort((left, right) => left.localeCompare(right)));
+        setExpandedNodeIds((current) =>
+          Array.from(new Set([...current, ...expandableAncestors])).sort((left, right) => left.localeCompare(right)),
+        );
         for (const ancestorId of expandableAncestors) {
           if (!childrenByParentId[ancestorId]) {
             await loadChildrenPage(ancestorId);
@@ -310,6 +365,30 @@ export function ProofExplorer(props: ProofExplorerProps) {
     } catch (pathError) {
       setPathResult(null);
       setError(pathError instanceof Error ? pathError.message : String(pathError));
+    }
+  }
+
+  async function runVerificationForSelectedLeaf() {
+    if (!selectedLeafId) {
+      return;
+    }
+
+    setVerificationError(null);
+    setIsVerifying(true);
+
+    try {
+      await verifyLeaf(props.proofId, selectedLeafId, true);
+      const [leafResult, jobsResult] = await Promise.all([
+        fetchLeafDetail(props.proofId, selectedLeafId, config),
+        fetchLeafVerificationJobs(props.proofId, selectedLeafId),
+      ]);
+      setLeafDetail(leafResult);
+      setVerificationJobs(jobsResult);
+      setSelectedVerificationJobId(jobsResult.jobs[jobsResult.jobs.length - 1]?.jobId ?? null);
+    } catch (runError) {
+      setVerificationError(runError instanceof Error ? runError.message : String(runError));
+    } finally {
+      setIsVerifying(false);
     }
   }
 
@@ -382,12 +461,13 @@ export function ProofExplorer(props: ProofExplorerProps) {
             const childrenState = childrenByParentId[node.id];
             const isExpanded = expandedNodeIds.includes(node.id);
             const indentStyle = { paddingLeft: `${row.depthFromRoot * 1.25}rem` };
+            const isSelectedLeaf = node.kind === "leaf" && selectedLeafId === node.id;
             return (
               <li
                 key={node.id}
                 role="treeitem"
                 aria-expanded={node.kind === "parent" ? isExpanded : undefined}
-                aria-selected={node.kind === "leaf" ? selectedLeafId === node.id : false}
+                aria-selected={isSelectedLeaf}
               >
                 <div className="tree-row" style={indentStyle}>
                   {node.kind === "parent" ? (
@@ -397,7 +477,12 @@ export function ProofExplorer(props: ProofExplorerProps) {
                   ) : (
                     <span className="leaf-pill">Leaf</span>
                   )}
-                  <button type="button" className="statement-button" onClick={() => (node.kind === "leaf" ? selectLeaf(node.id) : setSelectedLeafId(null))}>
+                  <button
+                    type="button"
+                    className="statement-button"
+                    aria-pressed={isSelectedLeaf}
+                    onClick={() => (node.kind === "leaf" ? selectLeaf(node.id) : setSelectedLeafId(null))}
+                  >
                     {node.statement}
                   </button>
                   {node.kind === "parent" && childrenState ? (
@@ -472,9 +557,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
         <h2>Leaf detail</h2>
         {!selectedLeafId && <p>Select a leaf node to inspect provenance and verification metadata.</p>}
         {selectedLeafId && !leafDetail && <p>Loading leaf detail for {selectedLeafId}...</p>}
-        {pathResult?.path.path.length ? (
-          <p className="meta">Ancestry: {pathResult.path.path.map((node) => node.id).join(" -> ")}</p>
-        ) : null}
+        {pathResult?.path.path.length ? <p className="meta">Ancestry: {pathResult.path.path.map((node) => node.id).join(" -> ")}</p> : null}
         {leafDetail?.view && (
           <>
             <p>
@@ -483,6 +566,42 @@ export function ProofExplorer(props: ProofExplorerProps) {
             <p>{leafDetail.view.leaf.statementText}</p>
             <p>Share: {leafDetail.view.shareReference.compact}</p>
             <p>Verification jobs: {leafDetail.view.verification.summary.totalJobs}</p>
+            <p>Latest status: {leafDetail.view.verification.summary.latestStatus ?? "none"}</p>
+            <button type="button" onClick={runVerificationForSelectedLeaf} disabled={isVerifying}>
+              {isVerifying ? "Running verification..." : "Verify leaf proof"}
+            </button>
+            {verificationError && (
+              <p role="alert" className="meta">
+                Verification error: {verificationError}
+              </p>
+            )}
+            <ul>
+              {(verificationJobs?.jobs ?? []).map((job) => (
+                <li key={job.jobId}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedVerificationJobId(job.jobId)}
+                    aria-pressed={selectedVerificationJobId === job.jobId}
+                  >
+                    {job.jobId} - {job.status}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {selectedVerificationJob && (
+              <div>
+                <p className="meta">Selected job hash: {selectedVerificationJob.jobHash}</p>
+                <p className="meta">Exit code: {selectedVerificationJob.job.result?.exitCode ?? "none"}</p>
+                <p className="meta">Duration: {selectedVerificationJob.job.result?.durationMs ?? "none"}ms</p>
+                <ul>
+                  {selectedVerificationJob.job.logs.slice(0, 6).map((logLine) => (
+                    <li key={`${selectedVerificationJob.job.jobId}:${logLine.index}`}>
+                      [{logLine.stream}] {logLine.message}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </>
         )}
         {leafDetail && !leafDetail.ok && (

@@ -194,10 +194,62 @@ export interface LeafDetailResponse {
       summary: {
         totalJobs: number;
         latestStatus?: string;
+        latestJobId?: string;
+        statusCounts: Record<"queued" | "running" | "success" | "failure" | "timeout", number>;
       };
+      jobs: Array<{
+        jobId: string;
+        queueSequence: number;
+        status: "queued" | "running" | "success" | "failure" | "timeout";
+        createdAt: string;
+        startedAt?: string;
+        finishedAt?: string;
+        durationMs?: number;
+        jobHash: string;
+      }>;
     };
   };
   diagnostics?: Array<{ code: string; severity: string; message: string }>;
+}
+
+export interface VerificationJobsResponse {
+  proofId: string;
+  leafId: string;
+  jobs: Array<{
+    jobId: string;
+    queueSequence: number;
+    status: "queued" | "running" | "success" | "failure" | "timeout";
+    createdAt: string;
+    updatedAt: string;
+    startedAt?: string;
+    finishedAt?: string;
+    result?: {
+      exitCode: number | null;
+      signal: string | null;
+      durationMs: number;
+      logsTruncated: boolean;
+      logLineCount: number;
+    };
+    logs: Array<{
+      index: number;
+      stream: "stdout" | "stderr" | "system";
+      message: string;
+    }>;
+  }>;
+  jobHashes: Array<{ jobId: string; hash: string }>;
+}
+
+export interface VerifyLeafResponse {
+  requestHash: string;
+  queuedJob: VerificationJobsResponse["jobs"][number];
+  queuedJobHash: string;
+  finalJob: VerificationJobsResponse["jobs"][number];
+  finalJobHash: string;
+}
+
+export interface VerificationJobResponse {
+  job: VerificationJobsResponse["jobs"][number];
+  jobHash: string;
 }
 
 export async function fetchProofCatalog(): Promise<ProofCatalogResponse> {
@@ -258,6 +310,28 @@ export async function fetchNodeChildren(
 export async function fetchNodePath(proofId: string, nodeId: string, config: ProofConfigInput): Promise<NodePathResponse> {
   const params = toConfigSearchParams(proofId, config);
   return requestJson<NodePathResponse>(`/api/proofs/nodes/${encodeURIComponent(nodeId)}/path?${params.toString()}`);
+}
+
+export async function verifyLeaf(proofId: string, leafId: string, autoRun = true): Promise<VerifyLeafResponse> {
+  return requestJson<VerifyLeafResponse>(`/api/proofs/leaves/${encodeURIComponent(leafId)}/verify`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      proofId,
+      autoRun,
+    }),
+  });
+}
+
+export async function fetchLeafVerificationJobs(proofId: string, leafId: string): Promise<VerificationJobsResponse> {
+  const params = new URLSearchParams({ proofId });
+  return requestJson<VerificationJobsResponse>(
+    `/api/proofs/leaves/${encodeURIComponent(leafId)}/verification-jobs?${params.toString()}`,
+  );
+}
+
+export async function fetchVerificationJob(jobId: string): Promise<VerificationJobResponse> {
+  return requestJson<VerificationJobResponse>(`/api/verification/jobs/${encodeURIComponent(jobId)}`);
 }
 
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
