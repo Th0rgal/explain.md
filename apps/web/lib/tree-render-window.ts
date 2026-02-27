@@ -48,7 +48,7 @@ export function computeTreeRenderWindow(input: TreeRenderWindowInput): TreeRende
   }
 
   const maxVisibleRows = toPositiveInteger(input.maxVisibleRows, 120);
-  const overscanRows = Math.max(0, Math.floor(input.overscanRows));
+  const overscanRows = Number.isFinite(input.overscanRows) ? Math.max(0, Math.floor(input.overscanRows)) : 0;
   const clampedAnchor = clamp(input.anchorRowIndex ?? 0, 0, totalRowCount - 1);
   const coreWindowSize = Math.min(totalRowCount, maxVisibleRows);
   const coreStart = clamp(clampedAnchor - Math.floor(coreWindowSize / 2), 0, totalRowCount - coreWindowSize);
