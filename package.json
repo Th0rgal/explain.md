@@ -13,6 +13,7 @@
     "ingest:lean": "npm run -s build && node scripts/lean-ingest.mjs",
     "eval:domain-adapters": "npm run -s build && node scripts/eval-domain-adapters.mjs",
     "eval:tree-pipeline": "npm run -s build && node scripts/eval-tree-pipeline.mjs",
+    "eval:leaf-detail": "npm run -s build && node scripts/eval-leaf-detail.mjs",
     "serve:verification": "npm run -s build && node scripts/verification-server.mjs"
   },
   "devDependencies": {
