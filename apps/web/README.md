@@ -87,6 +87,8 @@ The tree panel uses incremental root/children/path queries:
 - Run deterministic cache benchmark evidence generation with `npm run benchmark:cache` (writes `docs/benchmarks/proof-cache-benchmark.json` from repo root).
 - Run deterministic assistive-tech interaction benchmark evidence with `npm run benchmark:tree-a11y` (writes `docs/benchmarks/tree-a11y-evaluation.json` from repo root).
 - CI enforces assistive-tech benchmark determinism with `npm run benchmark:tree-a11y:ci` (compares against `docs/benchmarks/tree-a11y-evaluation.json` and writes `.explain-md/tree-a11y-evaluation-report.json`).
+- Run deterministic verification replay artifact benchmark evidence with `npm run benchmark:verification-replay` (writes `docs/benchmarks/verification-replay-evaluation.json` from repo root).
+- CI enforces verification replay benchmark determinism with `npm run benchmark:verification-replay:ci` (compares against `docs/benchmarks/verification-replay-evaluation.json` and writes `.explain-md/verification-replay-evaluation-report.json`).
 - Run deterministic observability SLO benchmark evidence with `npm run benchmark:observability-slo` (writes `docs/benchmarks/observability-slo-benchmark.json` from repo root).
   - Default benchmark profiles are deterministic and include both datasets:
     - `seed-verity`

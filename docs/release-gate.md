@@ -29,9 +29,11 @@ This document defines the machine-checkable release gate for explain.md.
 It composes benchmark evidence from:
 - `docs/benchmarks/quality-gate-baseline.json`
 - `docs/benchmarks/tree-a11y-evaluation.json`
+- `docs/benchmarks/verification-replay-evaluation.json`
 - `docs/benchmarks/proof-cache-benchmark.json`
 - `docs/benchmarks/observability-slo-benchmark.json`
 - `.explain-md/quality-gate-baseline-check.json`
+- `.explain-md/verification-replay-evaluation-report.json`
 - `.explain-md/observability-slo-benchmark-report.json`
 
 Gate checks:
@@ -39,6 +41,7 @@ Gate checks:
 - `quality_thresholds_pass`
 - `strict_entailment_presets_present`
 - `tree_a11y_transcript_complete`
+- `verification_replay_contract_complete`
 - `cache_warm_speedup`
 - `cache_recovery_hits`
 - `observability_baseline_consistent`

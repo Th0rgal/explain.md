@@ -19,7 +19,7 @@
     "eval:quality:ci": "npm run -s build && node scripts/eval-quality-harness.mjs --preset=fixture-verity-pressure --out=.explain-md/quality-gate-report-pressure.json && node scripts/eval-quality-harness.mjs --preset=fixture-verity-broad --out=.explain-md/quality-gate-report-broad.json && node scripts/eval-quality-harness.mjs --preset=fixture-verity-counter-snapshot --out=.explain-md/quality-gate-report-counter-snapshot.json && node scripts/eval-quality-harness.mjs --preset=fixture-verity-counter-snapshot-strict --out=.explain-md/quality-gate-report-counter-snapshot-strict.json && node scripts/eval-quality-harness.mjs --preset=fixture-verity-token-snapshot --out=.explain-md/quality-gate-report-token-snapshot.json && node scripts/eval-quality-harness.mjs --preset=fixture-verity-token-snapshot-strict --out=.explain-md/quality-gate-report-token-snapshot-strict.json && node scripts/eval-quality-baseline.mjs --reports=.explain-md/quality-gate-report-pressure.json,.explain-md/quality-gate-report-broad.json,.explain-md/quality-gate-report-counter-snapshot.json,.explain-md/quality-gate-report-counter-snapshot-strict.json,.explain-md/quality-gate-report-token-snapshot.json,.explain-md/quality-gate-report-token-snapshot-strict.json --baseline=docs/benchmarks/quality-gate-baseline.json --out=.explain-md/quality-gate-baseline-check.json",
     "eval:research-dossier": "npm run -s build && node scripts/eval-research-dossier.mjs --out=.explain-md/research-dossier-report.json",
     "eval:release-gate": "npm run -s build && node scripts/eval-release-gate.mjs",
-    "eval:release-gate:ci": "npm run -s eval:quality:ci && npm run -s web:eval:tree-a11y:ci && npm run -s web:eval:observability-slo:ci && npm run -s eval:release-gate -- --baseline=docs/benchmarks/release-gate-baseline.json --out=.explain-md/release-gate-report.json",
+    "eval:release-gate:ci": "npm run -s eval:quality:ci && npm run -s web:eval:tree-a11y:ci && npm run -s web:eval:verification-replay:ci && npm run -s web:eval:observability-slo:ci && npm run -s eval:release-gate -- --baseline=docs/benchmarks/release-gate-baseline.json --out=.explain-md/release-gate-report.json",
     "serve:verification": "npm run -s build && node scripts/verification-server.mjs",
     "web:dev": "npm --prefix apps/web run dev",
     "web:build": "npm --prefix apps/web run build",
@@ -29,6 +29,8 @@
     "web:bench:cache": "npm --prefix apps/web run benchmark:cache",
     "web:bench:tree-a11y": "npm --prefix apps/web run benchmark:tree-a11y",
     "web:eval:tree-a11y:ci": "npm --prefix apps/web run benchmark:tree-a11y:ci",
+    "web:bench:verification-replay": "npm --prefix apps/web run benchmark:verification-replay",
+    "web:eval:verification-replay:ci": "npm --prefix apps/web run benchmark:verification-replay:ci",
     "web:bench:observability-slo": "npm --prefix apps/web run benchmark:observability-slo",
     "web:eval:observability-slo:ci": "npm --prefix apps/web run benchmark:observability-slo:ci"
   },

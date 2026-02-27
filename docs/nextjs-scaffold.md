@@ -105,6 +105,8 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 - Deterministic benchmark artifact generation is available via `npm run web:bench:cache` (writes `docs/benchmarks/proof-cache-benchmark.json`).
 - Deterministic assistive-tech interaction benchmark is available via `npm run web:bench:tree-a11y` (writes `docs/benchmarks/tree-a11y-evaluation.json`).
 - CI enforces assistive-tech benchmark reproducibility via `npm run web:eval:tree-a11y:ci` (baseline-compares request/outcome hashes and emits `.explain-md/tree-a11y-evaluation-report.json`).
+- Deterministic verification replay benchmark is available via `npm run web:bench:verification-replay` (writes `docs/benchmarks/verification-replay-evaluation.json`).
+- CI enforces verification replay benchmark reproducibility via `npm run web:eval:verification-replay:ci` (baseline-compares request/outcome hashes and emits `.explain-md/verification-replay-evaluation-report.json`).
 - Deterministic observability SLO benchmark is available via `npm run web:bench:observability-slo` (writes `docs/benchmarks/observability-slo-benchmark.json`).
   - Default run covers both deterministic proof profiles (`seed-verity` and `lean-verity-fixture`) and emits aggregate + per-profile evidence (`parameters.profiles`, `profileReports`, `evaluation.byProfile`).
 - CI enforces observability SLO benchmark reproducibility via `npm run web:eval:observability-slo:ci` (baseline-compares request/outcome hashes and emits `.explain-md/observability-slo-benchmark-report.json`).

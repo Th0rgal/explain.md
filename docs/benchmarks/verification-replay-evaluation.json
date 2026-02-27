@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0.0",
+  "requestHash": "c38fc29da899af673dbc7bdad5064543dd316bc138d9df0aad839e6fe345d3d2",
+  "outcomeHash": "fc361f0f01027309f6203bfac5ae68f10a58b4645fc17c73d3808cc537cb34c5",
+  "parameters": {
+    "proofId": "seed-verity",
+    "leafId": "leaf/tx prover",
+    "jobId": "job 1"
+  },
+  "summary": {
+    "exportFilename": "verification-replay-seed-verity-leaf-tx-prover-job-1-ffffffffffff.json",
+    "requestHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "jobHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "reproducibilityHash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "replayCommand": "cd /tmp/verity && lake env lean Verity/Core.lean",
+    "envKeyCount": 2,
+    "logLineCount": 2,
+    "jsonLineCount": 57
+  }
+}

@@ -8,11 +8,11 @@ import {
 
 function createResponseFixture(): VerificationJobResponse {
   return {
-    requestHash: "r".repeat(64),
-    jobHash: "j".repeat(64),
+    requestHash: "a".repeat(64),
+    jobHash: "b".repeat(64),
     jobReplay: {
       jobId: "job 1",
-      jobHash: "j".repeat(64),
+      jobHash: "b".repeat(64),
       reproducibilityHash: "f".repeat(64),
       replayCommand: "cd /tmp/verity && lake env lean Verity/Core.lean",
     },
@@ -61,7 +61,7 @@ describe("verification replay artifact", () => {
     expect(Object.keys(artifact.job.reproducibility.env)).toEqual(["ALPHA", "ZED"]);
     expect(artifact.job.logs.map((entry) => entry.index)).toEqual([3, 8]);
     expect(artifact.replay).toEqual({
-      jobHash: "j".repeat(64),
+      jobHash: "b".repeat(64),
       reproducibilityHash: "f".repeat(64),
       replayCommand: "cd /tmp/verity && lake env lean Verity/Core.lean",
     });

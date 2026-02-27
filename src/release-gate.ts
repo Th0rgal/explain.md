@@ -42,6 +42,22 @@ export interface ProofCacheBenchmarkArtifact {
   };
 }
 
+export interface VerificationReplayBenchmarkArtifact {
+  schemaVersion: string;
+  requestHash: string;
+  outcomeHash: string;
+  summary: {
+    exportFilename: string;
+    requestHash: string;
+    jobHash: string;
+    reproducibilityHash: string;
+    replayCommand: string;
+    envKeyCount: number;
+    logLineCount: number;
+    jsonLineCount: number;
+  };
+}
+
 export interface ObservabilitySloBenchmarkArtifact {
   schemaVersion: string;
   requestHash: string;
@@ -67,6 +83,7 @@ export interface ReleaseGateInput {
   qualityBaseline: QualityGateBaseline;
   qualityBaselineCheck: BaselineCheckArtifact;
   treeA11yBenchmark: TreeA11yBenchmarkArtifact;
+  verificationReplayBenchmark: VerificationReplayBenchmarkArtifact;
   proofCacheBenchmark: ProofCacheBenchmarkArtifact;
   observabilitySloBaseline: ObservabilitySloBenchmarkArtifact;
   observabilitySloActual: ObservabilitySloBenchmarkArtifact;
@@ -79,6 +96,7 @@ export interface ReleaseGateCheck {
     | "quality_thresholds_pass"
     | "strict_entailment_presets_present"
     | "tree_a11y_transcript_complete"
+    | "verification_replay_contract_complete"
     | "cache_warm_speedup"
     | "cache_recovery_hits"
     | "observability_baseline_consistent"
@@ -100,6 +118,7 @@ export interface ReleaseGateReport {
     parentCount: number;
     qualityOutcomeHash: string;
     treeA11yOutcomeHash: string;
+    verificationReplayOutcomeHash: string;
     proofCacheOutcomeHash: string;
     observabilityOutcomeHash: string;
   };
@@ -126,10 +145,13 @@ export interface ReleaseGateBaselineComparison {
   failures: ReleaseGateBaselineFailure[];
 }
 
+const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/;
+
 export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport {
   const qualityBaseline = assertQualityGateBaseline(input.qualityBaseline);
   const qualityBaselineCheck = assertBaselineCheckArtifact(input.qualityBaselineCheck, "qualityBaselineCheck");
   const treeA11yBenchmark = assertTreeA11yBenchmarkArtifact(input.treeA11yBenchmark);
+  const verificationReplayBenchmark = assertVerificationReplayBenchmarkArtifact(input.verificationReplayBenchmark);
   const proofCacheBenchmark = assertProofCacheBenchmarkArtifact(input.proofCacheBenchmark);
   const observabilitySloBaseline = assertObservabilitySloBenchmarkArtifact(input.observabilitySloBaseline);
   const observabilitySloActual = assertObservabilitySloBenchmarkArtifact(input.observabilitySloActual);
@@ -166,6 +188,19 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
         treeA11yBenchmark.summary.collapseActionCount > 0 &&
         treeA11yBenchmark.summary.virtualizedStepCount === treeA11yBenchmark.summary.totalSteps,
       details: `steps=${treeA11yBenchmark.summary.totalSteps} announcements=${treeA11yBenchmark.summary.activeAnnouncementCount} expand=${treeA11yBenchmark.summary.expandActionCount} collapse=${treeA11yBenchmark.summary.collapseActionCount}`,
+    },
+    {
+      code: "verification_replay_contract_complete",
+      pass:
+        verificationReplayBenchmark.summary.exportFilename.endsWith(".json") &&
+        SHA256_HEX_PATTERN.test(verificationReplayBenchmark.summary.requestHash) &&
+        SHA256_HEX_PATTERN.test(verificationReplayBenchmark.summary.jobHash) &&
+        SHA256_HEX_PATTERN.test(verificationReplayBenchmark.summary.reproducibilityHash) &&
+        verificationReplayBenchmark.summary.replayCommand.includes("lake env lean") &&
+        verificationReplayBenchmark.summary.envKeyCount > 0 &&
+        verificationReplayBenchmark.summary.logLineCount > 0 &&
+        verificationReplayBenchmark.summary.jsonLineCount > 1,
+      details: `export=${verificationReplayBenchmark.summary.exportFilename} env_keys=${verificationReplayBenchmark.summary.envKeyCount} log_lines=${verificationReplayBenchmark.summary.logLineCount} replay=${verificationReplayBenchmark.summary.replayCommand}`,
     },
     {
       code: "cache_warm_speedup",
@@ -207,6 +242,7 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
     schemaVersion: RELEASE_GATE_SCHEMA_VERSION,
     qualityOutcomeHash: qualityBaseline.outcomeHash,
     treeA11yRequestHash: treeA11yBenchmark.requestHash,
+    verificationReplayRequestHash: verificationReplayBenchmark.requestHash,
     proofCacheRequestHash: proofCacheBenchmark.requestHash,
     observabilityRequestHash: observabilitySloActual.requestHash,
   });
@@ -224,6 +260,7 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
     evidence: {
       qualityOutcomeHash: qualityBaseline.outcomeHash,
       treeA11yOutcomeHash: treeA11yBenchmark.outcomeHash,
+      verificationReplayOutcomeHash: verificationReplayBenchmark.outcomeHash,
       proofCacheOutcomeHash: proofCacheBenchmark.outcomeHash,
       observabilityOutcomeHash: observabilitySloActual.outcomeHash,
     },
@@ -242,6 +279,7 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
       parentCount: qualityBaseline.entries.reduce((sum, entry) => sum + entry.parentCount, 0),
       qualityOutcomeHash: qualityBaseline.outcomeHash,
       treeA11yOutcomeHash: treeA11yBenchmark.outcomeHash,
+      verificationReplayOutcomeHash: verificationReplayBenchmark.outcomeHash,
       proofCacheOutcomeHash: proofCacheBenchmark.outcomeHash,
       observabilityOutcomeHash: observabilitySloActual.outcomeHash,
     },
@@ -360,6 +398,33 @@ export function assertTreeA11yBenchmarkArtifact(input: unknown): TreeA11yBenchma
         "treeA11y.summary.activeAnnouncementCount",
       ),
       virtualizedStepCount: expectFiniteNumber(input.summary.virtualizedStepCount, "treeA11y.summary.virtualizedStepCount"),
+    },
+  };
+}
+
+export function assertVerificationReplayBenchmarkArtifact(input: unknown): VerificationReplayBenchmarkArtifact {
+  if (!isObject(input)) {
+    throw new Error("verification replay benchmark artifact must be an object");
+  }
+  if (expectString(input.schemaVersion, "verificationReplay.schemaVersion") !== "1.0.0") {
+    throw new Error("verification replay benchmark schemaVersion must be 1.0.0");
+  }
+  if (!isObject(input.summary)) {
+    throw new Error("verificationReplay.summary must be an object");
+  }
+  return {
+    schemaVersion: "1.0.0",
+    requestHash: expectString(input.requestHash, "verificationReplay.requestHash"),
+    outcomeHash: expectString(input.outcomeHash, "verificationReplay.outcomeHash"),
+    summary: {
+      exportFilename: expectString(input.summary.exportFilename, "verificationReplay.summary.exportFilename"),
+      requestHash: expectString(input.summary.requestHash, "verificationReplay.summary.requestHash"),
+      jobHash: expectString(input.summary.jobHash, "verificationReplay.summary.jobHash"),
+      reproducibilityHash: expectString(input.summary.reproducibilityHash, "verificationReplay.summary.reproducibilityHash"),
+      replayCommand: expectString(input.summary.replayCommand, "verificationReplay.summary.replayCommand"),
+      envKeyCount: expectFiniteNumber(input.summary.envKeyCount, "verificationReplay.summary.envKeyCount"),
+      logLineCount: expectFiniteNumber(input.summary.logLineCount, "verificationReplay.summary.logLineCount"),
+      jsonLineCount: expectFiniteNumber(input.summary.jsonLineCount, "verificationReplay.summary.jsonLineCount"),
     },
   };
 }
@@ -485,6 +550,7 @@ function isKnownCheckCode(value: string): value is ReleaseGateCheck["code"] {
     value === "quality_thresholds_pass" ||
     value === "strict_entailment_presets_present" ||
     value === "tree_a11y_transcript_complete" ||
+    value === "verification_replay_contract_complete" ||
     value === "cache_warm_speedup" ||
     value === "cache_recovery_hits" ||
     value === "observability_baseline_consistent" ||

@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0.0",
-  "requestHash": "1b56f23e7f268a0df74930f7b1292e1ca5bfecb86be9ab1c577961061213aea9",
-  "outcomeHash": "1ab746a9ca70114f06edab5d002e37b9b6885b86349eedf9a93a13048e24b211",
+  "requestHash": "b24d4ee7d5ba62fb6c5bbc0d97eee7570210e9e4f7afb0054d0985b15332263e",
+  "outcomeHash": "f1f550541e8445a4e1771b182cb237162ecaee8709b3849b19793c73843389cc",
   "thresholdPass": true,
   "checkStatus": [
     {
@@ -34,6 +34,10 @@
     },
     {
       "code": "tree_a11y_transcript_complete",
+      "pass": true
+    },
+    {
+      "code": "verification_replay_contract_complete",
       "pass": true
     }
   ]
