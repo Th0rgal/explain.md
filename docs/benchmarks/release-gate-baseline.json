@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "1.0.0",
+  "requestHash": "e172f5004b07e7cf963868f14c37b21c22af4a29be28d35e147e7ed854824a33",
+  "outcomeHash": "b80a98ec042ed552a89cb2c3975482ada3f08bd835f94f6fbafa0cdf91fdd71e",
+  "thresholdPass": true,
+  "checkStatus": [
+    {
+      "code": "cache_recovery_hits",
+      "pass": true
+    },
+    {
+      "code": "cache_warm_speedup",
+      "pass": true
+    },
+    {
+      "code": "observability_baseline_consistent",
+      "pass": true
+    },
+    {
+      "code": "observability_slo_gate",
+      "pass": true
+    },
+    {
+      "code": "quality_baseline_consistent",
+      "pass": true
+    },
+    {
+      "code": "quality_thresholds_pass",
+      "pass": true
+    },
+    {
+      "code": "strict_entailment_presets_present",
+      "pass": true
+    },
+    {
+      "code": "tree_a11y_transcript_complete",
+      "pass": true
+    }
+  ]
+}

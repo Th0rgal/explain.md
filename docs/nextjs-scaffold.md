@@ -89,6 +89,7 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 - Deterministic assistive-tech interaction benchmark is available via `npm run web:bench:tree-a11y` (writes `docs/benchmarks/tree-a11y-evaluation.json`).
 - Deterministic observability SLO benchmark is available via `npm run web:bench:observability-slo` (writes `docs/benchmarks/observability-slo-benchmark.json`).
 - CI enforces observability SLO benchmark reproducibility via `npm run web:eval:observability-slo:ci` (baseline-compares request/outcome hashes and emits `.explain-md/observability-slo-benchmark-report.json`).
+- Root release gate composes quality baseline and web benchmark evidence via `npm run eval:release-gate:ci` (emits `.explain-md/release-gate-report.json`).
 - The Lean fixture uses a deterministic summary provider (`temperature=0` behavior with fixed evidence-only synthesis), so parent statements remain child-entailed and reproducible.
 - Reproducibility contract for each queued job is derived from the selected theorem leaf:
   - source revision (`EXPLAIN_MD_SOURCE_REVISION` or Vercel commit SHA fallback)

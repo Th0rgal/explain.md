@@ -12,6 +12,7 @@ export * from "./leaf-detail.js";
 export * from "./evaluation-harness.js";
 export * from "./quality-benchmark-presets.js";
 export * from "./quality-gate-baseline.js";
+export * from "./release-gate.js";
 export * from "./verification-flow.js";
 export * from "./verification-api.js";
 export * from "./pedagogical-policy.js";

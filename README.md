@@ -28,6 +28,7 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #18/#25 follow-up: CI now includes a frozen real-Verity counter snapshot preset with explicit fixture provenance and baseline drift checks.
 - Issue #18/#25 follow-up: CI baseline now also gates a strict-entailment variant of the frozen counter snapshot preset.
 - Issue #18/#25 follow-up: CI quality baseline now also gates a frozen real-Verity SimpleToken snapshot in calibrated and strict entailment modes.
+- Issue #1 follow-up: deterministic cross-benchmark release-gate contract now composes quality baseline, a11y transcript evidence, cache benchmark evidence, and observability SLO baseline checks into one auditable pass/fail report.
 - Issue #15 (backend contract): deterministic progressive-disclosure projection and config-aware explanation diff contract for root-first UI rendering.
 - Issue #14: Next.js App Router scaffold with deterministic seeded-proof API adapters, frontend client layer, and accessible loading/error shell.
 - Issue #3 follow-up: web proof service now exposes a deterministic Lean-ingested Verity fixture (`lean-verity-fixture`) through the same root/children/path/diff/leaf contracts as seed data.
@@ -51,6 +52,7 @@ npm run eval:quality -- /path/to/lean-project --include=Verity --include=Compile
 npm run eval:quality -- --list-presets
 npm run eval:quality:ci
 npm run eval:quality:baseline
+npm run eval:release-gate:ci
 npm run serve:verification
 npm run web:lint
 npm run web:typecheck
@@ -77,6 +79,7 @@ EXPLAIN_MD_LIVE_RPC_API_KEY=... npm run test:live:summary
 - [Prompt security model](docs/security-prompt-safety.md)
 - [Recursive tree builder](docs/tree-builder.md)
 - [Evaluation harness](docs/evaluation-harness.md)
+- [Release gate charter](docs/release-gate.md)
 - [Pedagogical policy engine](docs/pedagogical-policy.md)
 - [Policy report API](docs/policy-report-api.md)
 - [Proof cache report API](docs/proof-cache-api.md)
