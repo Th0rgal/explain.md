@@ -37,7 +37,7 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #12: Lean fixture web proof datasets now support deterministic persistent cache reuse/invalidation (source-fingerprint + config-hash keyed) with auditable cache telemetry via `GET /api/proofs/cache-report`.
 - Issue #12 follow-up: deterministic cache benchmark harness now records cold/warm latency profiles plus source-fingerprint invalidation recovery with machine-checkable `requestHash`/`outcomeHash`.
 - Issue #13: deterministic tree storage/query contract with versioned snapshot schema, root/children/ancestry/leaf-provenance reads, and canonical import/export hashing.
-- Issue #19 follow-up: deterministic prompt-boundary hardening for parent-summary generation with child-ID safety validation, untrusted-text sanitization, secret/injection redaction, auditable boundary markers, and fail-closed output rejection (`secret_leak` / `prompt_injection`).
+- Issue #19 follow-up: deterministic prompt-boundary hardening for parent-summary generation with child-ID safety validation, untrusted-text sanitization, secret/injection redaction, configured-secret-value leak checks, auditable boundary markers, and fail-closed output rejection (`secret_leak` / `prompt_injection`).
 - Issue #24: research dossier with machine-checkable issue-to-evidence mapping for inductive tree design decisions, pedagogy controls, and evaluation strategy.
 - Issue #24 follow-up: research dossier decisions now include pinned artifact-hash evidence checks plus pinned command-replay outcome hashes, fail-closed in CI via `eval:research-dossier`.
 - Issue #15 follow-up: deterministic tree accessibility benchmark is now fail-closed in CI via baseline hash checks (`web:eval:tree-a11y:ci`).

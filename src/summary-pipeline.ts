@@ -100,6 +100,8 @@ const MAX_CHILD_ID_LENGTH = 128;
 const CHILD_ID_PATTERN = /^[A-Za-z0-9._:/-]+$/;
 const REDACTED_SECRET_TOKEN = "[REDACTED_SECRET]";
 const REDACTED_INSTRUCTION_TOKEN = "[REDACTED_INSTRUCTION]";
+const MIN_CONFIG_SECRET_LENGTH = 20;
+const SENSITIVE_ENV_KEY_PATTERN = /(API[_-]?KEY|TOKEN|SECRET|PASSWORD|PRIVATE[_-]?KEY)/i;
 const SECRET_PATTERNS: RegExp[] = [
   /(?:sk|rk)-[A-Za-z0-9]{20,}/g,
   /gh[pousr]_[A-Za-z0-9]{20,}/g,
@@ -118,6 +120,7 @@ export async function generateParentSummary(
   request: SummaryPipelineRequest,
 ): Promise<SummaryPipelineResult> {
   const normalizedChildren = normalizeChildren(request.children);
+  const configuredSecrets = getConfiguredSecretsForLeakDetection();
   const messages = buildSummaryPromptMessages(normalizedChildren, request.config, request.systemPrompt);
 
   const generated = await provider.generate({
@@ -139,6 +142,28 @@ export async function generateParentSummary(
             details: {
               location: "raw_output",
               redactedSecrets: rawOutputSecretScan.redactedSecrets,
+            },
+          },
+        ],
+      },
+      generated.text,
+    );
+  }
+  const rawOutputConfiguredSecretScan = scanTextForConfiguredSecretLeaks(generated.text, configuredSecrets);
+  if (rawOutputConfiguredSecretScan.matchedSecretKeys.length > 0) {
+    throw new SummaryValidationError(
+      "Generated parent summary leaked configured secret value in raw output.",
+      {
+        ok: false,
+        violations: [
+          {
+            code: "secret_leak",
+            message: "Generated output contains configured secret values.",
+            details: {
+              location: "raw_output",
+              detection: "configured_secret_value",
+              matchedSecretKeyCount: rawOutputConfiguredSecretScan.matchedSecretKeys.length,
+              matchedSecretKeys: rawOutputConfiguredSecretScan.matchedSecretKeys,
             },
           },
         ],
@@ -168,7 +193,7 @@ export async function generateParentSummary(
   }
 
   const parsed = parseSummaryJson(generated.text);
-  const diagnostics = validateParentSummary(parsed, normalizedChildren, request.config);
+  const diagnostics = validateParentSummary(parsed, normalizedChildren, request.config, configuredSecrets);
 
   if (!diagnostics.ok) {
     throw new SummaryValidationError("Generated parent summary failed critic validation.", diagnostics, generated.text);
@@ -249,6 +274,7 @@ export function validateParentSummary(
   summary: ParentSummary,
   children: ChildNodeInput[],
   config: ExplanationConfig,
+  configuredSecrets = getConfiguredSecretsForLeakDetection(),
 ): SummaryDiagnostics {
   const violations: CriticViolation[] = [];
   const hasValidNewTerms = Array.isArray(summary.new_terms_introduced) && summary.new_terms_introduced.every((term) => typeof term === "string");
@@ -379,6 +405,20 @@ export function validateParentSummary(
         location: "parsed_summary",
         redactedSecrets: summarySecretScan.redactedSecrets,
         fields: summarySecretScan.fields,
+      },
+    });
+  }
+  const summaryConfiguredSecretScan = scanSummaryForConfiguredSecretLeaks(summary, configuredSecrets);
+  if (summaryConfiguredSecretScan.matchedSecretKeys.length > 0) {
+    violations.push({
+      code: "secret_leak",
+      message: "Summary fields contain configured secret values.",
+      details: {
+        location: "parsed_summary",
+        detection: "configured_secret_value",
+        matchedSecretKeyCount: summaryConfiguredSecretScan.matchedSecretKeys.length,
+        matchedSecretKeys: summaryConfiguredSecretScan.matchedSecretKeys,
+        fields: summaryConfiguredSecretScan.fields,
       },
     });
   }
@@ -601,9 +641,73 @@ function scanSummaryForSecretLeaks(summary: ParentSummary): {
   };
 }
 
+function scanSummaryForConfiguredSecretLeaks(
+  summary: ParentSummary,
+  configuredSecrets: Array<{ key: string; value: string }>,
+): {
+  matchedSecretKeys: string[];
+  fields: string[];
+} {
+  const newTerms = Array.isArray(summary.new_terms_introduced) ? summary.new_terms_introduced : [];
+  const fieldMatches: Array<{ field: string; keys: string[] }> = [
+    { field: "parent_statement", keys: scanTextForConfiguredSecretLeaks(summary.parent_statement, configuredSecrets).matchedSecretKeys },
+    {
+      field: "why_true_from_children",
+      keys: scanTextForConfiguredSecretLeaks(summary.why_true_from_children, configuredSecrets).matchedSecretKeys,
+    },
+    {
+      field: "new_terms_introduced",
+      keys: newTerms.flatMap((term) => scanTextForConfiguredSecretLeaks(term, configuredSecrets).matchedSecretKeys),
+    },
+  ];
+
+  const allKeys = fieldMatches.flatMap((entry) => entry.keys);
+  return {
+    matchedSecretKeys: [...new Set(allKeys)].sort(),
+    fields: fieldMatches.filter((entry) => entry.keys.length > 0).map((entry) => entry.field),
+  };
+}
+
 function scanTextForSecretLeaks(value: string): { redactedSecrets: number } {
   const sanitized = sanitizeUntrustedPromptText(value);
   return { redactedSecrets: sanitized.redactedSecrets };
+}
+
+function scanTextForConfiguredSecretLeaks(
+  value: string,
+  configuredSecrets: Array<{ key: string; value: string }>,
+): { matchedSecretKeys: string[] } {
+  if (configuredSecrets.length === 0 || value.length === 0) {
+    return { matchedSecretKeys: [] };
+  }
+
+  const matchedSecretKeys = configuredSecrets
+    .filter((secret) => value.includes(secret.value))
+    .map((secret) => secret.key)
+    .sort();
+  return { matchedSecretKeys };
+}
+
+function getConfiguredSecretsForLeakDetection(): Array<{ key: string; value: string }> {
+  return Object.entries(process.env)
+    .filter(([key, value]) => {
+      if (typeof value !== "string") {
+        return false;
+      }
+      if (!SENSITIVE_ENV_KEY_PATTERN.test(key)) {
+        return false;
+      }
+      const trimmed = value.trim();
+      if (trimmed.length < MIN_CONFIG_SECRET_LENGTH) {
+        return false;
+      }
+      return true;
+    })
+    .map(([key, value]) => ({
+      key,
+      value: String(value).trim(),
+    }))
+    .sort((left, right) => left.key.localeCompare(right.key));
 }
 
 function scanSummaryForPromptInjection(summary: ParentSummary): {

@@ -353,6 +353,37 @@ describe("summary pipeline", () => {
     expect((thrown as SummaryValidationError).diagnostics.violations.map((v) => v.code)).toContain("secret_leak");
   });
 
+  test("rejects configured secret leakage in raw model output before JSON parsing", async () => {
+    const config = normalizeConfig({});
+    const secretValue = "STATIC_CONFIG_SECRET_VALUE_123456789";
+    const provider = {
+      generate: async () => ({
+        text: `leak=${secretValue}\n${JSON.stringify(validSummary(["c1"]))}`,
+        model: "test",
+        finishReason: "stop",
+        raw: {},
+      }),
+      stream: async function* () {
+        return;
+      },
+    } satisfies ProviderClient;
+
+    const thrown = await withTemporaryEnv("EXPLAIN_MD_TEST_SECRET", secretValue, async () =>
+      captureError(() =>
+        generateParentSummary(provider, {
+          config,
+          children: [{ id: "c1", statement: "Storage bounds are preserved." }],
+        }),
+      ),
+    );
+
+    expect(thrown).toBeInstanceOf(SummaryValidationError);
+    const secretViolation = (thrown as SummaryValidationError).diagnostics.violations.find((v) => v.code === "secret_leak");
+    expect(secretViolation).toBeTruthy();
+    expect(secretViolation?.details?.location).toBe("raw_output");
+    expect(secretViolation?.details?.detection).toBe("configured_secret_value");
+  });
+
   test("rejects prompt-injection-like output leakage before JSON parsing", async () => {
     const config = normalizeConfig({});
     const provider = {
@@ -393,6 +424,26 @@ describe("summary pipeline", () => {
     const secretViolation = diagnostics.violations.find((v) => v.code === "secret_leak");
     expect(secretViolation).toBeTruthy();
     expect(secretViolation?.details?.location).toBe("parsed_summary");
+  });
+
+  test("validateParentSummary flags configured secret leakage in summary fields", async () => {
+    const secretValue = "STATIC_CONFIG_SECRET_VALUE_123456789";
+    const diagnostics = await withTemporaryEnv("EXPLAIN_MD_TEST_API_KEY", secretValue, async () =>
+      validateParentSummary(
+        {
+          ...validSummary(["c1"]),
+          why_true_from_children: `Child claims entail this and leak ${secretValue}.`,
+        },
+        [{ id: "c1", statement: "Storage bounds are preserved." }],
+        normalizeConfig({}),
+      ),
+    );
+
+    expect(diagnostics.ok).toBe(false);
+    const secretViolation = diagnostics.violations.find((v) => v.code === "secret_leak");
+    expect(secretViolation).toBeTruthy();
+    expect(secretViolation?.details?.location).toBe("parsed_summary");
+    expect(secretViolation?.details?.detection).toBe("configured_secret_value");
   });
 
   test("validateParentSummary flags prompt-injection-like directives in summary fields", () => {
@@ -494,5 +545,20 @@ async function captureError(run: () => Promise<unknown>): Promise<unknown> {
     throw new Error("Expected rejection.");
   } catch (error) {
     return error;
+  }
+}
+
+async function withTemporaryEnv<T>(key: string, value: string, run: () => Promise<T>): Promise<T> {
+  const hadKey = Object.prototype.hasOwnProperty.call(process.env, key);
+  const previous = process.env[key];
+  process.env[key] = value;
+  try {
+    return await run();
+  } finally {
+    if (hadKey) {
+      process.env[key] = previous;
+    } else {
+      delete process.env[key];
+    }
   }
 }

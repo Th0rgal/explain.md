@@ -24,8 +24,10 @@ Issue #19 hardening for summary generation focuses on deterministic prompt-bound
   - includes `sanitization_redacted_instructions` for auditability
 - Output leak critic:
   - raw provider output is scanned for secret-like token patterns before JSON parsing
+  - raw provider output is scanned for configured secret values loaded from sensitive env vars (`*API_KEY*`, `*TOKEN*`, `*SECRET*`, `*PASSWORD*`, `*PRIVATE_KEY*`; length `>= 20`)
   - raw provider output is scanned for prompt-injection-like directives before JSON parsing
   - parsed summary fields are scanned again during schema/critic validation
+  - parsed summary fields are scanned for configured secret values using the same env-derived set
   - any detection fails with machine-readable `secret_leak` or `prompt_injection` diagnostics
 
 ## Test Coverage
@@ -33,4 +35,5 @@ Issue #19 hardening for summary generation focuses on deterministic prompt-bound
 - Unsafe child IDs are rejected with deterministic errors.
 - Prompt contract includes untrusted boundary markers for auditability.
 - Secret-like leakage from model output is rejected deterministically.
+- Configured-secret-value leakage from model output is rejected deterministically.
 - Prompt-injection-like leakage from model output is rejected deterministically.

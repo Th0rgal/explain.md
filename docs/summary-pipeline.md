@@ -42,7 +42,9 @@ Children are normalized and sorted by `id` before generation to keep prompt cons
   - If token coverage drops below the configured floor, output is rejected as potential unsupported-claim drift.
 - Secret leak detection:
   - raw provider output is scanned for secret-like token patterns before JSON parsing.
+  - raw provider output is scanned for configured secret values from sensitive env vars before JSON parsing.
   - parsed summary fields are scanned for secret-like token patterns during critic validation.
+  - parsed summary fields are scanned for configured secret values during critic validation.
   - detected leaks fail with `secret_leak` diagnostics.
 - Prompt-injection detection:
   - raw provider output is scanned for prompt-injection-like directives before JSON parsing.
@@ -65,6 +67,7 @@ Failures raise `SummaryValidationError` with machine-readable `diagnostics`.
   - prompt-injection-like directives and boundary-marker tokens are deterministically redacted to `[REDACTED_INSTRUCTION]`
 - Model output is treated as untrusted:
   - secret-like tokens in raw output or parsed summary fields are rejected deterministically.
+  - configured secret values from runtime env are rejected deterministically if echoed in raw output or parsed summary fields.
   - prompt-injection-like directives in raw output or parsed summary fields are rejected deterministically.
 - Prompt includes explicit boundary rules and untrusted payload markers:
   - `UNTRUSTED_CHILDREN_JSON_BEGIN`

@@ -171,8 +171,8 @@
           "id": "issue-8-summary-pipeline-test-contract",
           "command": "npm run -s test -- tests/summary-pipeline.test.ts",
           "artifactPath": "tests/summary-pipeline.test.ts",
-          "expectedSha256": "7429d0956dc5c6710f805bc7b7f401303cf379905fbbe6dbef81e0d5b8c029e0",
-          "expectedCommandOutcomeSha256": "d08c7adf2cae0aeccd3df46f4d8753d99a06e0df00281ef58bfb8aec0b3a9c8e"
+          "expectedSha256": "b99f22183105705ea75719ada799a035c8dad69a49c809be271f10d3fc338064",
+          "expectedCommandOutcomeSha256": "f26c6e548722adc98facf23b6461786def213c38063f7e545ee115fc6ee8b96e"
         }
       ]
     },
