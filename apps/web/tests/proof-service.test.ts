@@ -485,8 +485,13 @@ describe("proof service", () => {
 
       const corePath = path.join(tempFixtureRoot, "Verity", "Core.lean");
       const coreBefore = await fs.readFile(corePath, "utf8");
-      const addedTheorem = "\n\ntheorem cache_shape_added : True := by\n  trivial\n";
-      await fs.writeFile(corePath, `${coreBefore.trimEnd()}${addedTheorem}`, "utf8");
+      const coreAddedTheorem = "\n\ntheorem cache_shape_added_core : True := by\n  trivial\n";
+      await fs.writeFile(corePath, `${coreBefore.trimEnd()}${coreAddedTheorem}`, "utf8");
+
+      const loopPath = path.join(tempFixtureRoot, "Verity", "Loop.lean");
+      const loopBefore = await fs.readFile(loopPath, "utf8");
+      const loopAddedTheorem = "\n\ntheorem cache_shape_added_loop : True := by\n  trivial\n";
+      await fs.writeFile(loopPath, `${loopBefore.trimEnd()}${loopAddedTheorem}`, "utf8");
 
       clearProofDatasetCacheForTests();
       const rebuilt = await buildProofCacheReportView({
@@ -516,7 +521,12 @@ describe("proof service", () => {
       );
       expect(additionDiagnostic?.details?.recoveryMode).toBe("insertion");
       expect((additionDiagnostic?.details?.addedLeafCount as number) > 0).toBe(true);
+      expect((additionDiagnostic?.details?.insertionFrontierCount as number) >= 2).toBe(true);
+      expect((additionDiagnostic?.details?.insertionMergeParentCount as number) > 0).toBe(true);
       expect((additionDiagnostic?.details?.insertedParentCount as number) > 0).toBe(true);
+      expect((additionDiagnostic?.details?.insertedParentCount as number)).toBeGreaterThanOrEqual(
+        additionDiagnostic?.details?.insertionMergeParentCount as number,
+      );
       expect((additionDiagnostic?.details?.reusableParentSummaryCount as number) >= 0).toBe(true);
       expect((additionDiagnostic?.details?.reusedParentSummaryCount as number) >= 0).toBe(true);
       expect(

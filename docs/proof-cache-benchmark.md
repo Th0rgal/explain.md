@@ -16,11 +16,13 @@ By default this writes:
 - Invalidation path (`invalidation`): mutates `Verity/Core.lean` in a temporary fixture copy, then verifies deterministic topology-plan evidence plus recovery.
   - benchmark mutation rewrites one declaration statement (topology-stable semantic delta), so `afterChangeTopologyPlan.fullRebuildRequired=true` while recovery can still return `cache_blocked_subtree_rebuild_hit`.
   - expected status flow is `beforeChangeStatus=hit`, `afterChangeStatus=hit`, `recoveryStatus=hit`.
-- Topology-shape invalidation path (`topologyShapeInvalidation`): appends a declaration in `Verity/Core.lean` to force declaration-set shape change.
+- Topology-shape invalidation path (`topologyShapeInvalidation`): appends declarations in `Verity/Core.lean` to force declaration-set shape change.
   - expected diagnostics include `cache_topology_addition_subtree_insertion_rebuild_hit`, and `afterChangeTopologyPlan.topologyShapeChanged=true`.
   - `afterChangeAdditionRecovery` records deterministic addition-only recovery telemetry:
     - `recoveryMode`
     - `addedLeafCount`
+    - `insertionFrontierCount`
+    - `insertionMergeParentCount`
     - `insertedParentCount`
     - `reusableParentSummaryCount`
     - `reusedParentSummaryCount`

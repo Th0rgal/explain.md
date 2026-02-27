@@ -65,6 +65,8 @@ export interface ProofCacheBenchmarkReport {
       afterChangeAdditionRecovery?: {
         recoveryMode: "insertion" | "regeneration";
         addedLeafCount: number;
+        insertionFrontierCount: number;
+        insertionMergeParentCount: number;
         insertedParentCount: number;
         reusableParentSummaryCount: number;
         reusedParentSummaryCount: number;
@@ -239,7 +241,9 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
     const beforeShapeChange = await buildProofCacheReportView({ proofId, config: normalizedConfig });
     const topologyShapeMutationPath = path.join(fixtureProjectRoot, MUTATION_TARGET_RELATIVE_PATH);
     const topologyShapeBefore = await fs.readFile(topologyShapeMutationPath, "utf8");
-    const topologyShapeAddition = "\n\ntheorem cache_shape_added : True := by\n  trivial\n";
+    const topologyShapeAddition =
+      "\n\ntheorem cache_shape_added_alpha : True := by\n  trivial\n\n" +
+      "theorem cache_shape_added_beta : True := by\n  trivial\n";
     let afterShapeChange: Awaited<ReturnType<typeof buildProofCacheReportView>>;
     let afterShapeRecovery: Awaited<ReturnType<typeof buildProofCacheReportView>>;
     try {
@@ -478,6 +482,8 @@ function extractTopologyAdditionRecoveryDiagnostics(
       | "insertion"
       | "regeneration",
     addedLeafCount: Number(additionRecovery.details.addedLeafCount ?? 0),
+    insertionFrontierCount: Number(additionRecovery.details.insertionFrontierCount ?? 0),
+    insertionMergeParentCount: Number(additionRecovery.details.insertionMergeParentCount ?? 0),
     insertedParentCount: Number(additionRecovery.details.insertedParentCount ?? 0),
     reusableParentSummaryCount: Number(additionRecovery.details.reusableParentSummaryCount ?? 0),
     reusedParentSummaryCount: Number(additionRecovery.details.reusedParentSummaryCount ?? 0),
