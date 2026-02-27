@@ -17,6 +17,7 @@ Issue: #9
 - Parent IDs are deterministic hashes of `(depth, groupIndex, childIds)`.
 - Parent generation runs in deterministic request order.
 - Grouping diagnostics are preserved per depth for auditability.
+- Grouping diagnostics include deterministic `repartitionEvents` whenever a policy-failing group is split.
 - Policy diagnostics are attached per parent (`preSummary`, `postSummary`, `retriesUsed`).
 
 ## Tree validity checks
@@ -40,7 +41,9 @@ Issue: #9
   - vocabulary continuity ratio must satisfy deterministic audience/detail floor
 - Rewrite loop:
   - the builder retries once with a stricter deterministic system prompt
-  - if still non-compliant, the builder fails with `TreePolicyError` and machine-readable diagnostics
+  - if a group remains non-compliant, the builder deterministically repartitions that group into two ordered subgroups and retries
+  - repartition is bounded: groups of size `<= 2` cannot be split further and fail fast with `TreePolicyError`
+  - every repartition is recorded in `groupingDiagnostics[].repartitionEvents` with reason and violation codes
 
 ## Degenerate and boundary cases
 - One leaf: returns that leaf as root with depth `0`.

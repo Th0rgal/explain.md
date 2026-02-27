@@ -144,6 +144,46 @@ describe("tree builder", () => {
     expect(diagnostics.postSummary.violations.map((violation) => violation.code)).toContain("evidence_coverage");
   });
 
+  test("repartitions deterministically when post-summary policy fails for a wide group", async () => {
+    const config = normalizeConfig({ maxChildrenPerParent: 4, complexityBandWidth: 2 });
+    const tree = await buildRecursiveExplanationTree(compliantUpToPairProvider(), {
+      config,
+      leaves: [
+        { id: "l1", statement: "Invariant holds." },
+        { id: "l2", statement: "Transition preserves invariant." },
+        { id: "l3", statement: "Loop guard constrains iteration." },
+        { id: "l4", statement: "Bounded counter ensures termination." },
+      ],
+    });
+
+    const layerDiagnostics = tree.groupingDiagnostics[0];
+    expect(layerDiagnostics.repartitionEvents).toBeDefined();
+    expect(layerDiagnostics.repartitionEvents?.length).toBeGreaterThan(0);
+    expect(layerDiagnostics.repartitionEvents?.[0].reason).toBe("post_summary_policy");
+    expect(layerDiagnostics.repartitionEvents?.[0].outputGroups).toHaveLength(2);
+    expect(validateExplanationTree(tree, config.maxChildrenPerParent).ok).toBe(true);
+  });
+
+  test("fails fast after repartition budget is exhausted", async () => {
+    const config = normalizeConfig({ maxChildrenPerParent: 3, complexityBandWidth: 2 });
+    const thrown = await captureError(() =>
+      buildRecursiveExplanationTree(nonCompliantEvidenceProvider(), {
+        config,
+        leaves: [
+          { id: "l1", statement: "Invariant holds at initialization." },
+          { id: "l2", statement: "Invariant is preserved by transition." },
+          { id: "l3", statement: "Invariant implies post-condition." },
+        ],
+      }),
+    );
+
+    expect(thrown).toBeInstanceOf(TreePolicyError);
+    const diagnostics = (thrown as TreePolicyError).diagnostics;
+    expect(diagnostics.preSummary.ok).toBe(true);
+    expect(diagnostics.postSummary.ok).toBe(false);
+    expect(diagnostics.postSummary.violations.map((violation) => violation.code)).toContain("evidence_coverage");
+  });
+
   test("builds when prerequisite order is topological but not lexical by id", async () => {
     const config = normalizeConfig({ maxChildrenPerParent: 2, complexityBandWidth: 2 });
     const tree = await buildRecursiveExplanationTree(deterministicSummaryProvider(), {
@@ -254,6 +294,32 @@ function nonCompliantEvidenceProvider(): ProviderClient {
       finishReason: "stop",
       raw: {},
     }),
+    stream: async function* () {
+      return;
+    },
+  };
+}
+
+function compliantUpToPairProvider(): ProviderClient {
+  return {
+    generate: async (request: GenerateRequest) => {
+      const childIds = extractChildIds(request);
+      const evidenceRefs = childIds.length > 2 ? childIds.slice(0, 2) : childIds;
+      return {
+        text: JSON.stringify({
+          parent_statement: `Parent(${childIds.join("+")})`,
+          why_true_from_children: `${childIds.join(", ")} jointly entail the parent claim.`,
+          new_terms_introduced: [],
+          complexity_score: 3,
+          abstraction_score: 3,
+          evidence_refs: evidenceRefs,
+          confidence: 0.9,
+        }),
+        model: "mock",
+        finishReason: "stop",
+        raw: {},
+      };
+    },
     stream: async function* () {
       return;
     },

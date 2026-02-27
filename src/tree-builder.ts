@@ -4,6 +4,7 @@ import { groupChildrenDeterministically, type GroupingWarning } from "./child-gr
 import {
   evaluatePostSummaryPolicy,
   evaluatePreSummaryPolicy,
+  type PolicyViolationCode,
   type ParentPolicyDiagnostics,
 } from "./pedagogical-policy.js";
 import type { ProviderClient } from "./openai-provider.js";
@@ -46,6 +47,17 @@ export interface GroupingLayerDiagnostics {
   orderedNodeIds: string[];
   complexitySpreadByGroup: number[];
   warnings: GroupingWarning[];
+  repartitionEvents?: RepartitionEvent[];
+}
+
+export interface RepartitionEvent {
+  depth: number;
+  groupIndex: number;
+  round: number;
+  reason: "pre_summary_policy" | "post_summary_policy";
+  inputNodeIds: string[];
+  outputGroups: string[][];
+  violationCodes: PolicyViolationCode[];
 }
 
 export interface ExplanationTree {
@@ -167,92 +179,57 @@ export async function buildRecursiveExplanationTree(
       complexityBandWidth: request.config.complexityBandWidth,
     });
     const groups = groupingResult.groups;
+    const nextLayerIds: string[] = [];
+    const complexitySpreadByGroup: number[] = [];
+    const repartitionEvents: RepartitionEvent[] = [];
+    let nextGroupIndex = 0;
+
+    for (let index = 0; index < groups.length; index += 1) {
+      const result = await buildGroupWithDeterministicRepartition({
+        provider,
+        depth,
+        initialGroupIndex: index,
+        nodeIds: groups[index],
+        round: 0,
+        maxChildrenPerParent: request.config.maxChildrenPerParent,
+        leafById,
+        nodes,
+        config: request.config,
+        getNextGroupIndex: () => {
+          const value = nextGroupIndex;
+          nextGroupIndex += 1;
+          return value;
+        },
+      });
+
+      for (const parent of result.createdParents) {
+        nodes[parent.parentId] = parent.node;
+        policyDiagnosticsByParent[parent.parentId] = parent.node.policyDiagnostics as ParentPolicyDiagnostics;
+        nextLayerIds.push(parent.parentId);
+        groupPlan.push({
+          depth,
+          index: parent.groupIndex,
+          inputNodeIds: parent.inputNodeIds.slice(),
+          outputNodeId: parent.parentId,
+          complexitySpread: parent.complexitySpread,
+        });
+        complexitySpreadByGroup.push(parent.complexitySpread);
+      }
+
+      for (const passthroughLeafId of result.passthroughLeafIds) {
+        nextLayerIds.push(passthroughLeafId);
+      }
+
+      repartitionEvents.push(...result.repartitionEvents);
+    }
+
     groupingDiagnostics.push({
       depth,
       orderedNodeIds: groupingResult.diagnostics.orderedNodeIds,
-      complexitySpreadByGroup: groupingResult.diagnostics.complexitySpreadByGroup,
+      complexitySpreadByGroup,
       warnings: groupingResult.diagnostics.warnings,
+      repartitionEvents,
     });
-    const nextLayerIds: string[] = [];
-
-    for (let index = 0; index < groups.length; index += 1) {
-      const groupNodeIds = groups[index];
-      if (groupNodeIds.length === 1) {
-        nextLayerIds.push(groupNodeIds[0]);
-        continue;
-      }
-
-      const orderedGroupNodeIds = reorderGroupNodeIdsByPrerequisites(groupNodeIds, nodes, leafById);
-
-      const children = orderedGroupNodeIds.map((nodeId) => {
-        const node = nodes[nodeId];
-        const leafInput = leafById.get(node.id);
-        return {
-          id: node.id,
-          statement: node.statement,
-          complexity: node.complexityScore,
-          prerequisiteIds: leafInput?.prerequisiteIds,
-        };
-      });
-
-      const preSummaryDecision = evaluatePreSummaryPolicy(children, request.config);
-      if (!preSummaryDecision.ok) {
-        throw new TreePolicyError("Pre-summary pedagogical policy failed.", {
-          depth,
-          groupIndex: index,
-          retriesUsed: 0,
-          preSummary: preSummaryDecision,
-          postSummary: {
-            ok: true,
-            violations: [],
-            metrics: {
-              complexitySpread: 0,
-              prerequisiteOrderViolations: 0,
-              introducedTermCount: 0,
-              evidenceCoverageRatio: 1,
-              vocabularyContinuityRatio: 1,
-              vocabularyContinuityFloor: 1,
-            },
-          },
-        });
-      }
-
-      const parentSummary = await generatePolicyCompliantParentSummary(
-        provider,
-        children,
-        request.config,
-        depth,
-        index,
-        preSummaryDecision,
-      );
-
-      const parentId = buildParentNodeId(depth, index, orderedGroupNodeIds);
-      const parentNode: ExplanationTreeNode = {
-        id: parentId,
-        kind: "parent",
-        statement: parentSummary.summary.parent_statement,
-        childIds: orderedGroupNodeIds.slice(),
-        depth,
-        complexityScore: parentSummary.summary.complexity_score,
-        abstractionScore: parentSummary.summary.abstraction_score,
-        confidence: parentSummary.summary.confidence,
-        whyTrueFromChildren: parentSummary.summary.why_true_from_children,
-        newTermsIntroduced: parentSummary.summary.new_terms_introduced,
-        evidenceRefs: parentSummary.summary.evidence_refs,
-        policyDiagnostics: parentSummary.policyDiagnostics,
-      };
-
-      nodes[parentId] = parentNode;
-      policyDiagnosticsByParent[parentId] = parentSummary.policyDiagnostics;
-      nextLayerIds.push(parentId);
-      groupPlan.push({
-        depth,
-        index,
-        inputNodeIds: orderedGroupNodeIds.slice(),
-        outputNodeId: parentId,
-        complexitySpread: groupingResult.diagnostics.complexitySpreadByGroup[index] ?? 0,
-      });
-    }
 
     if (nextLayerIds.length >= activeNodeIds.length) {
       throw new Error(
@@ -280,6 +257,254 @@ export async function buildRecursiveExplanationTree(
   }
 
   return tree;
+}
+
+interface BuildGroupWithRepartitionRequest {
+  provider: ProviderClient;
+  depth: number;
+  initialGroupIndex: number;
+  nodeIds: string[];
+  round: number;
+  maxChildrenPerParent: number;
+  leafById: Map<string, LeafNodeInput>;
+  nodes: Record<string, ExplanationTreeNode>;
+  config: ExplanationConfig;
+  getNextGroupIndex: () => number;
+}
+
+interface CreatedParentRecord {
+  parentId: string;
+  node: ExplanationTreeNode;
+  inputNodeIds: string[];
+  groupIndex: number;
+  complexitySpread: number;
+}
+
+interface BuildGroupWithRepartitionResult {
+  createdParents: CreatedParentRecord[];
+  passthroughLeafIds: string[];
+  repartitionEvents: RepartitionEvent[];
+}
+
+async function buildGroupWithDeterministicRepartition(
+  request: BuildGroupWithRepartitionRequest,
+): Promise<BuildGroupWithRepartitionResult> {
+  if (request.nodeIds.length === 1) {
+    return {
+      createdParents: [],
+      passthroughLeafIds: [request.nodeIds[0]],
+      repartitionEvents: [],
+    };
+  }
+
+  const orderedGroupNodeIds = reorderGroupNodeIdsByPrerequisites(request.nodeIds, request.nodes, request.leafById);
+  const children = orderedGroupNodeIds.map((nodeId) => {
+    const node = request.nodes[nodeId];
+    const leafInput = request.leafById.get(node.id);
+    return {
+      id: node.id,
+      statement: node.statement,
+      complexity: node.complexityScore,
+      prerequisiteIds: leafInput?.prerequisiteIds,
+    };
+  });
+
+  const preSummaryDecision = evaluatePreSummaryPolicy(children, request.config);
+  if (!preSummaryDecision.ok) {
+    const splitGroups = splitGroupDeterministically(orderedGroupNodeIds, request.maxChildrenPerParent);
+    if (!splitGroups) {
+      throw new TreePolicyError("Pre-summary pedagogical policy failed.", {
+        depth: request.depth,
+        groupIndex: request.initialGroupIndex,
+        retriesUsed: request.round,
+        preSummary: preSummaryDecision,
+        postSummary: buildDefaultPassingPostSummary(request.config),
+      });
+    }
+
+    const repartitionEvent = buildRepartitionEvent(
+      request.depth,
+      request.initialGroupIndex,
+      request.round,
+      "pre_summary_policy",
+      orderedGroupNodeIds,
+      splitGroups,
+      preSummaryDecision.violations.map((violation) => violation.code),
+    );
+
+    const nestedResults: BuildGroupWithRepartitionResult[] = [];
+    for (const groupNodeIds of splitGroups) {
+      nestedResults.push(
+        await buildGroupWithDeterministicRepartition({
+          ...request,
+          nodeIds: groupNodeIds,
+          round: request.round + 1,
+        }),
+      );
+    }
+
+    return mergeRepartitionResults(repartitionEvent, nestedResults);
+  }
+
+  let parentSummary:
+    | {
+        summary: Awaited<ReturnType<typeof generateParentSummary>>["summary"];
+        policyDiagnostics: ParentPolicyDiagnostics;
+      }
+    | undefined;
+  try {
+    parentSummary = await generatePolicyCompliantParentSummary(
+      request.provider,
+      children,
+      request.config,
+      request.depth,
+      request.initialGroupIndex,
+      preSummaryDecision,
+    );
+  } catch (error) {
+    if (!(error instanceof TreePolicyError)) {
+      throw error;
+    }
+
+    const splitGroups = splitGroupDeterministically(orderedGroupNodeIds, request.maxChildrenPerParent);
+    if (!splitGroups) {
+      throw error;
+    }
+
+    const repartitionEvent = buildRepartitionEvent(
+      request.depth,
+      request.initialGroupIndex,
+      request.round,
+      "post_summary_policy",
+      orderedGroupNodeIds,
+      splitGroups,
+      [
+        ...error.diagnostics.preSummary.violations.map((violation) => violation.code),
+        ...error.diagnostics.postSummary.violations.map((violation) => violation.code),
+      ],
+    );
+
+    const nestedResults: BuildGroupWithRepartitionResult[] = [];
+    for (const groupNodeIds of splitGroups) {
+      nestedResults.push(
+        await buildGroupWithDeterministicRepartition({
+          ...request,
+          nodeIds: groupNodeIds,
+          round: request.round + 1,
+        }),
+      );
+    }
+
+    return mergeRepartitionResults(repartitionEvent, nestedResults);
+  }
+
+  const groupIndex = request.getNextGroupIndex();
+  const parentId = buildParentNodeId(request.depth, groupIndex, orderedGroupNodeIds);
+  const parentNode: ExplanationTreeNode = {
+    id: parentId,
+    kind: "parent",
+    statement: parentSummary.summary.parent_statement,
+    childIds: orderedGroupNodeIds.slice(),
+    depth: request.depth,
+    complexityScore: parentSummary.summary.complexity_score,
+    abstractionScore: parentSummary.summary.abstraction_score,
+    confidence: parentSummary.summary.confidence,
+    whyTrueFromChildren: parentSummary.summary.why_true_from_children,
+    newTermsIntroduced: parentSummary.summary.new_terms_introduced,
+    evidenceRefs: parentSummary.summary.evidence_refs,
+    policyDiagnostics: parentSummary.policyDiagnostics,
+  };
+
+  return {
+    createdParents: [
+      {
+        parentId,
+        node: parentNode,
+        inputNodeIds: orderedGroupNodeIds,
+        groupIndex,
+        complexitySpread: preSummaryDecision.metrics.complexitySpread,
+      },
+    ],
+    passthroughLeafIds: [],
+    repartitionEvents: [],
+  };
+}
+
+function splitGroupDeterministically(nodeIds: string[], maxChildrenPerParent: number): string[][] | undefined {
+  if (nodeIds.length <= 2) {
+    return undefined;
+  }
+
+  const pivot = Math.ceil(nodeIds.length / 2);
+  const left = nodeIds.slice(0, pivot);
+  const right = nodeIds.slice(pivot);
+
+  if (left.length === 0 || right.length === 0) {
+    return undefined;
+  }
+
+  if (left.length > maxChildrenPerParent || right.length > maxChildrenPerParent) {
+    return undefined;
+  }
+
+  return [left, right];
+}
+
+function buildDefaultPassingPostSummary(config: ExplanationConfig): ParentPolicyDiagnostics["postSummary"] {
+  void config;
+  return {
+    ok: true,
+    violations: [],
+    metrics: {
+      complexitySpread: 0,
+      prerequisiteOrderViolations: 0,
+      introducedTermCount: 0,
+      evidenceCoverageRatio: 1,
+      vocabularyContinuityRatio: 1,
+      vocabularyContinuityFloor: 1,
+    },
+  };
+}
+
+function buildRepartitionEvent(
+  depth: number,
+  groupIndex: number,
+  round: number,
+  reason: RepartitionEvent["reason"],
+  inputNodeIds: string[],
+  outputGroups: string[][],
+  violationCodes: PolicyViolationCode[],
+): RepartitionEvent {
+  return {
+    depth,
+    groupIndex,
+    round,
+    reason,
+    inputNodeIds: inputNodeIds.slice(),
+    outputGroups: outputGroups.map((group) => group.slice()),
+    violationCodes: Array.from(new Set(violationCodes)).sort((left, right) => left.localeCompare(right)),
+  };
+}
+
+function mergeRepartitionResults(
+  repartitionEvent: RepartitionEvent,
+  nestedResults: BuildGroupWithRepartitionResult[],
+): BuildGroupWithRepartitionResult {
+  const createdParents: CreatedParentRecord[] = [];
+  const passthroughLeafIds: string[] = [];
+  const repartitionEvents: RepartitionEvent[] = [repartitionEvent];
+
+  for (const nested of nestedResults) {
+    createdParents.push(...nested.createdParents);
+    passthroughLeafIds.push(...nested.passthroughLeafIds);
+    repartitionEvents.push(...nested.repartitionEvents);
+  }
+
+  return {
+    createdParents,
+    passthroughLeafIds,
+    repartitionEvents,
+  };
 }
 
 export function validateExplanationTree(tree: ExplanationTree, maxChildrenPerParent: number): TreeValidationResult {
