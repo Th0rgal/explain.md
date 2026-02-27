@@ -22,7 +22,8 @@ This module enforces deterministic pedagogy constraints around parent generation
   - `baseline`
   - targeted rewrite (`evidence_strict` or `vocabulary_strict`) chosen from prior violation codes
   - escalation to `strict_all` when needed
-- If all bounded attempts fail, the builder throws `TreePolicyError` with machine-readable diagnostics.
+- If all bounded rewrite attempts fail, the builder deterministically repartitions the failing sibling group (bounded rounds, stable order-preserving splits) and retries group synthesis.
+- If repartition budget is exhausted, the builder throws `TreePolicyError` with machine-readable diagnostics.
 - Successful parent nodes persist diagnostics (`preSummary`, `postSummary`, `retriesUsed`, `rewriteTrace`) for UI/evaluation.
 
 ## Why this matters

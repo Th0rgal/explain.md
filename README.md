@@ -23,6 +23,7 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #17 follow-up: browser-callable verification HTTP API with deterministic route payloads, persisted ledger-backed job querying, and command-runner integration.
 - Issue #16: deterministic leaf-detail/provenance contract for theorem inspection, source linking/share references, and verification-job binding for browser panels.
 - Issue #18: deterministic faithfulness/simplicity evaluation harness with per-parent/per-depth quality metrics, threshold gating, and canonical report hashing.
+- Issue #18 follow-up: deterministic benchmark presets + CI quality-gate workflow with uploaded machine-checkable report artifacts.
 - Issue #15 (backend contract): deterministic progressive-disclosure projection and config-aware explanation diff contract for root-first UI rendering.
 - Issue #14: Next.js App Router scaffold with deterministic seeded-proof API adapters, frontend client layer, and accessible loading/error shell.
 - Issue #3 follow-up: web proof service now exposes a deterministic Lean-ingested Verity fixture (`lean-verity-fixture`) through the same root/children/path/diff/leaf contracts as seed data.
@@ -30,6 +31,8 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #12: Lean fixture web proof datasets now support deterministic persistent cache reuse/invalidation (source-fingerprint + config-hash keyed) with auditable cache telemetry via `GET /api/proofs/cache-report`.
 - Issue #12 follow-up: cache invalidation is theorem-delta aware (`cache_semantic_hit` for source-only edits), with deterministic affected-ancestor subtree recompute on statement-only deltas (`cache_incremental_subtree_rebuild`) and deterministic topology-aware rebuild with auditable stable-id, same-depth child-hash, and same-depth child-statement-hash parent-summary reuse on topology/structure deltas (`cache_incremental_topology_rebuild`, fallback `cache_incremental_rebuild`, including frontier-disambiguated reuse/ambiguity-skip counters plus frontier-partition recovery telemetry and retry warm-start summary carry-over counters).
 - Issue #13: deterministic tree storage/query contract with versioned snapshot schema, root/children/ancestry/leaf-provenance reads, and canonical import/export hashing.
+- Issue #46: tokenized web design system with AI-2027-leaning palette, unified editorial layout, and deterministic accessibility/focus styles across explorer panels.
+- Issue #47: whole-tree 3D explanation mode with deterministic scene transform/hash, policy overlays, and shared list/3D selection semantics.
 
 ## Local checks
 ```bash
@@ -42,6 +45,8 @@ npm run eval:domain-adapters
 npm run eval:tree-pipeline -- /path/to/lean-project --include=Verity --include=Compiler/ContractSpec.lean
 npm run eval:leaf-detail -- /path/to/lean-project --include=Verity --leaf=<leaf-id>
 npm run eval:quality -- /path/to/lean-project --include=Verity --include=Compiler/ContractSpec.lean
+npm run eval:quality -- --list-presets
+npm run eval:quality:ci
 npm run serve:verification
 npm run web:lint
 npm run web:typecheck
@@ -78,3 +83,5 @@ EXPLAIN_MD_LIVE_RPC_API_KEY=... npm run test:live:summary
 - [Progressive disclosure + explanation diff](docs/progressive-disclosure.md)
 - [Tree storage + query APIs](docs/tree-storage.md)
 - [Next.js web scaffold](docs/nextjs-scaffold.md)
+- [Web design system](docs/web-design-system.md)
+- [3D tree mode](docs/tree-3d-mode.md)

@@ -28,6 +28,7 @@ function buildFixtureTree(): ExplanationTree {
         orderedNodeIds: ["leaf:a", "leaf:b"],
         complexitySpreadByGroup: [0],
         warnings: [],
+        repartitionEvents: [],
       },
     ],
     policyDiagnosticsByParent: {

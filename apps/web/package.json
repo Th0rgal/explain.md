@@ -13,9 +13,13 @@
     "benchmark:cache": "tsx scripts/proof-cache-benchmark.ts --out ../../docs/benchmarks/proof-cache-benchmark.json"
   },
   "dependencies": {
+    "@react-three/drei": "^9.122.0",
+    "@react-three/fiber": "^8.17.14",
+    "@types/three": "^0.183.1",
     "next": "^14.2.32",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "three": "^0.183.1"
   },
   "devDependencies": {
     "@types/node": "^24.4.0",

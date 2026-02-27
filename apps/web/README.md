@@ -4,6 +4,8 @@ This Next.js app provides a deterministic frontend scaffold for explain.md.
 
 ## Scope
 - App Router shell with deterministic proof explorer entrypoint.
+- Tokenized design system and editorial dark theme for proof/evidence surfaces (issue #46).
+- Whole-tree 3D explanation mode (`List | 3D Tree`) backed by deterministic scene transforms (issue #47).
 - API routes backed by core provenance contracts:
   - `GET /api/proofs/seed`
   - `GET /api/proofs/root`
@@ -53,6 +55,9 @@ The tree panel uses incremental root/children/path queries:
   - response hashes: `requestHash`, `ledgerHash`
   - persisted profile `configHash` for auditability
 - Proof switching is supported through `/proofs?proofId=<id>` with validation against supported IDs.
+- 3D mode hydrates full reachable parent pages, then renders a deterministic scene hash contract from loaded tree data.
+  - Scene transform implementation: `apps/web/lib/tree-scene.ts`
+  - 3D renderer: `apps/web/components/proof-tree-3d.tsx`
 
 ## Verification integration
 - Leaf panel can trigger server-side verification and render status/log diagnostics.

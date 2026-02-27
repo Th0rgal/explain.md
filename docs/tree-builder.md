@@ -27,6 +27,7 @@ Issue: #9
   - `reusedByFrontierChildStatementHashGroupIndexes` when child-statement-hash fallback was ambiguous and deterministically resolved by ordered descendant-leaf frontier hash.
   - `skippedAmbiguousChildHashGroupIndexes` when child-hash fallback has multiple deterministic candidates at a depth and reuse is intentionally skipped.
   - `skippedAmbiguousChildStatementHashGroupIndexes` when child-statement-hash fallback has multiple deterministic candidates at a depth and reuse is intentionally skipped.
+- Repartition diagnostics are preserved per depth with reason codes and violation codes.
 - Policy diagnostics are attached per parent (`preSummary`, `postSummary`, `retriesUsed`, `rewriteTrace`).
 
 ## Tree validity checks
@@ -52,7 +53,9 @@ Issue: #9
   - the builder executes a bounded deterministic rewrite loop (up to 4 attempts)
   - retry prompt strategy is chosen deterministically from prior violation codes (`evidence_strict`, `vocabulary_strict`, `strict_all`)
   - every attempt is recorded in `rewriteTrace` with strategy + post-summary decision
-  - if still non-compliant, the builder fails with `TreePolicyError` and machine-readable diagnostics
+  - if still non-compliant after rewrite attempts, the builder deterministically repartitions the failing sibling group (bounded rounds)
+  - repartition happens in-place (FIFO) with stable contiguous splits of ordered children
+  - if repartition budget is exhausted, the builder fails with `TreePolicyError` and machine-readable diagnostics
 
 ## Degenerate and boundary cases
 - One leaf: returns that leaf as root with depth `0`.
@@ -86,3 +89,15 @@ Request shape:
 Output includes:
 - `rootId`, `leafIds`, `nodes`, `configHash`, `groupPlan`, `groupingDiagnostics`, `maxDepth`
 - `policyDiagnosticsByParent`
+
+Each `groupingDiagnostics` entry includes:
+- `orderedNodeIds`
+- `complexitySpreadByGroup`
+- `warnings`
+- `repartitionEvents[]` with:
+  - `reason`: `pre_summary_policy | post_summary_policy`
+  - `originalGroupIndex`
+  - `repartitionRound`
+  - `inputNodeIds`
+  - `outputGroups`
+  - `violationCodes`

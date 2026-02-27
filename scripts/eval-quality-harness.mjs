@@ -1,13 +1,17 @@
 import path from "node:path";
 import process from "node:process";
+import { mkdir, writeFile } from "node:fs/promises";
 import {
   buildRecursiveExplanationTree,
+  computeQualityBenchmarkPresetHash,
   computeTreeQualityReportHash,
   evaluateExplanationTreeQuality,
   ingestLeanProject,
+  listQualityBenchmarkPresets,
   mapLeanIngestionToTheoremLeaves,
   mapTheoremLeavesToTreeLeaves,
   normalizeConfig,
+  resolveQualityBenchmarkPreset,
   validateExplanationTree,
 } from "../dist/index.js";
 
@@ -16,10 +20,26 @@ function parseArgs(argv) {
   const cwd = process.cwd();
 
   let projectRoot = cwd;
+  let projectRootExplicit = false;
+  let outputPath;
+  let presetName;
+  let listPresets = false;
   const includePaths = [];
   const thresholdOverrides = {};
 
   for (const arg of args) {
+    if (arg === "--list-presets") {
+      listPresets = true;
+      continue;
+    }
+    if (arg.startsWith("--preset=")) {
+      presetName = arg.slice("--preset=".length);
+      continue;
+    }
+    if (arg.startsWith("--out=")) {
+      outputPath = path.resolve(cwd, arg.slice("--out=".length));
+      continue;
+    }
     if (arg.startsWith("--include=")) {
       includePaths.push(arg.slice("--include=".length));
       continue;
@@ -56,10 +76,11 @@ function parseArgs(argv) {
     }
     if (!arg.startsWith("--")) {
       projectRoot = path.resolve(cwd, arg);
+      projectRootExplicit = true;
     }
   }
 
-  return { projectRoot, includePaths, thresholdOverrides };
+  return { projectRoot, projectRootExplicit, includePaths, thresholdOverrides, outputPath, presetName, listPresets };
 }
 
 function extractChildren(prompt) {
@@ -111,9 +132,38 @@ function deterministicSummaryProvider() {
 }
 
 async function main() {
-  const { projectRoot, includePaths, thresholdOverrides } = parseArgs(process.argv);
-  const ingestion = await ingestLeanProject(projectRoot, {
-    includePaths: includePaths.length > 0 ? includePaths : undefined,
+  const {
+    projectRoot,
+    projectRootExplicit,
+    includePaths,
+    thresholdOverrides,
+    outputPath,
+    presetName,
+    listPresets,
+  } = parseArgs(process.argv);
+
+  if (listPresets) {
+    process.stdout.write(`${JSON.stringify({ presets: listQualityBenchmarkPresets() }, null, 2)}\n`);
+    return;
+  }
+
+  const preset = presetName ? resolveQualityBenchmarkPreset(presetName) : undefined;
+  if (presetName && !preset) {
+    throw new Error(`Unknown preset '${presetName}'. Use --list-presets to inspect available presets.`);
+  }
+  if (preset && projectRootExplicit) {
+    throw new Error("Cannot set both positional projectRoot and --preset.");
+  }
+
+  const effectiveProjectRoot = preset ? path.resolve(process.cwd(), preset.projectRoot) : projectRoot;
+  const effectiveIncludePaths = uniqSorted([...(preset?.includePaths ?? []), ...includePaths]);
+  const effectiveThresholdOverrides = {
+    ...(preset?.thresholdOverrides ?? {}),
+    ...thresholdOverrides,
+  };
+
+  const ingestion = await ingestLeanProject(effectiveProjectRoot, {
+    includePaths: effectiveIncludePaths.length > 0 ? effectiveIncludePaths : undefined,
   });
 
   const leaves = mapTheoremLeavesToTreeLeaves(mapLeanIngestionToTheoremLeaves(ingestion));
@@ -133,11 +183,12 @@ async function main() {
   const elapsedMs = Date.now() - started;
 
   const validation = validateExplanationTree(tree, config.maxChildrenPerParent);
-  const report = evaluateExplanationTreeQuality(tree, config, { thresholds: thresholdOverrides });
+  const report = evaluateExplanationTreeQuality(tree, config, { thresholds: effectiveThresholdOverrides });
 
   const result = {
-    projectRoot,
-    includePaths,
+    projectRoot: effectiveProjectRoot,
+    includePaths: effectiveIncludePaths,
+    preset: preset ? { name: preset.name, hash: computeQualityBenchmarkPresetHash(preset) } : null,
     ingestionRecords: ingestion.records.length,
     ingestionWarnings: ingestion.warnings.length,
     leafCount: leaves.length,
@@ -155,9 +206,17 @@ async function main() {
   };
 
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  if (outputPath) {
+    await mkdir(path.dirname(outputPath), { recursive: true });
+    await writeFile(outputPath, `${JSON.stringify(result, null, 2)}\n`, "utf8");
+  }
   if (!report.thresholdPass || !validation.ok) {
     process.exitCode = 2;
   }
+}
+
+function uniqSorted(values) {
+  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
 
 main().catch((error) => {

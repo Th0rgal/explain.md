@@ -51,6 +51,7 @@ export interface GroupingLayerDiagnostics {
   warnings: GroupingWarning[];
   summaryBatches?: SummaryBatchDiagnostics[];
   summaryReuse?: SummaryReuseDiagnostics;
+  repartitionEvents: RepartitionEvent[];
 }
 
 export interface SummaryBatchDiagnostics {
@@ -81,6 +82,16 @@ export interface ExplanationTree {
   groupingDiagnostics: GroupingLayerDiagnostics[];
   policyDiagnosticsByParent: Record<string, ParentPolicyDiagnostics>;
   maxDepth: number;
+}
+
+export interface RepartitionEvent {
+  depth: number;
+  originalGroupIndex: number;
+  repartitionRound: number;
+  reason: "pre_summary_policy" | "post_summary_policy";
+  inputNodeIds: string[];
+  outputGroups: string[][];
+  violationCodes: string[];
 }
 
 export interface TreeBuildRequest {
@@ -272,16 +283,22 @@ export async function buildRecursiveExplanationTree(
     const skippedAmbiguousChildHashGroupIndexes: number[] = [];
     const skippedAmbiguousChildStatementHashGroupIndexes: number[] = [];
     const blockedGenerationGroups: FrontierGenerationBlockedGroup[] = [];
+    const repartitionEvents: RepartitionEvent[] = [];
+    const queue: GroupBuildWorkItem[] = groups.map((groupNodeIds, index) => ({
+      nodeIds: groupNodeIds.slice(),
+      originalGroupIndex: index,
+      repartitionRound: 0,
+    }));
 
-    for (let index = 0; index < groups.length; index += 1) {
-      const groupNodeIds = groups[index];
-      if (groupNodeIds.length === 1) {
-        nextLayerByGroupIndex[index] = groupNodeIds[0];
+    while (queue.length > 0) {
+      const workItem = queue.shift() as GroupBuildWorkItem;
+      const index = workItem.originalGroupIndex;
+      if (workItem.nodeIds.length === 1) {
+        nextLayerByGroupIndex[index] = workItem.nodeIds[0];
         continue;
       }
 
-      const orderedGroupNodeIds = reorderGroupNodeIdsByPrerequisites(groupNodeIds, nodes, leafById);
-
+      const orderedGroupNodeIds = reorderGroupNodeIdsByPrerequisites(workItem.nodeIds, nodes, leafById);
       const children = orderedGroupNodeIds.map((nodeId) => {
         const node = nodes[nodeId];
         const leafInput = leafById.get(node.id);
@@ -296,9 +313,28 @@ export async function buildRecursiveExplanationTree(
 
       const preSummaryDecision = evaluatePreSummaryPolicy(children, request.config);
       if (!preSummaryDecision.ok) {
+        const repartitionGroups = repartitionGroupDeterministically(
+          orderedGroupNodeIds,
+          workItem.repartitionRound,
+          request.config.maxChildrenPerParent,
+        );
+        if (repartitionGroups) {
+          recordRepartitionEvent(
+            repartitionEvents,
+            depth,
+            workItem,
+            "pre_summary_policy",
+            orderedGroupNodeIds,
+            repartitionGroups,
+            preSummaryDecision.violations.map((violation) => violation.code),
+          );
+          enqueueRepartitionGroups(queue, workItem, repartitionGroups);
+          continue;
+        }
+
         throw new TreePolicyError("Pre-summary pedagogical policy failed.", {
           depth,
-          groupIndex: index,
+          groupIndex: workItem.originalGroupIndex,
           retriesUsed: 0,
           preSummary: preSummaryDecision,
           postSummary: {
@@ -541,6 +577,7 @@ export async function buildRecursiveExplanationTree(
               skippedAmbiguousChildStatementHashGroupIndexes,
             }
           : undefined,
+      repartitionEvents,
     });
 
     if (nextLayerIds.length >= activeNodeIds.length) {
@@ -828,6 +865,82 @@ function collectLeafFrontier(
   const signature = { leafIds, leafStatements };
   memo.set(nodeId, signature);
   return signature;
+}
+
+interface GroupBuildWorkItem {
+  nodeIds: string[];
+  originalGroupIndex: number;
+  repartitionRound: number;
+}
+
+const MAX_REPARTITION_ROUNDS = 2;
+
+function repartitionGroupDeterministically(
+  groupNodeIds: string[],
+  repartitionRound: number,
+  maxChildrenPerParent: number,
+): string[][] | undefined {
+  if (groupNodeIds.length <= 2 || repartitionRound >= MAX_REPARTITION_ROUNDS) {
+    return undefined;
+  }
+
+  const boundedSize = Math.min(maxChildrenPerParent, Math.ceil(groupNodeIds.length / 2));
+  const leftSize = Math.max(1, boundedSize);
+  const left = groupNodeIds.slice(0, leftSize);
+  const right = groupNodeIds.slice(leftSize);
+  return right.length > 0 ? [left, right] : [left];
+}
+
+function enqueueRepartitionGroups(
+  queue: GroupBuildWorkItem[],
+  source: GroupBuildWorkItem,
+  repartitionGroups: string[][],
+): void {
+  const nextItems = repartitionGroups.map((nodeIds) => ({
+    nodeIds,
+    originalGroupIndex: source.originalGroupIndex,
+    repartitionRound: source.repartitionRound + 1,
+  }));
+
+  for (let index = nextItems.length - 1; index >= 0; index -= 1) {
+    queue.unshift(nextItems[index]);
+  }
+}
+
+function recordRepartitionEvent(
+  events: RepartitionEvent[],
+  depth: number,
+  workItem: GroupBuildWorkItem,
+  reason: RepartitionEvent["reason"],
+  inputNodeIds: string[],
+  outputGroups: string[][],
+  violationCodes: string[],
+): void {
+  events.push({
+    depth,
+    originalGroupIndex: workItem.originalGroupIndex,
+    repartitionRound: workItem.repartitionRound + 1,
+    reason,
+    inputNodeIds: inputNodeIds.slice(),
+    outputGroups: outputGroups.map((group) => group.slice()),
+    violationCodes: violationCodes.slice().sort((a, b) => a.localeCompare(b)),
+  });
+}
+
+function computeGroupComplexitySpread(groupNodeIds: string[], nodes: Record<string, ExplanationTreeNode>, fallback: number): number {
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+  for (const nodeId of groupNodeIds) {
+    const node = nodes[nodeId];
+    const value = typeof node?.complexityScore === "number" ? node.complexityScore : fallback;
+    min = Math.min(min, value);
+    max = Math.max(max, value);
+  }
+
+  if (!Number.isFinite(min) || !Number.isFinite(max)) {
+    return 0;
+  }
+  return max - min;
 }
 
 export function validateExplanationTree(tree: ExplanationTree, maxChildrenPerParent: number): TreeValidationResult {

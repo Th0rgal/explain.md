@@ -33,6 +33,12 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 - Leaf detail uses persisted verification jobs from the ledger, so panel metadata is queryable and stable across reloads.
 - Verification requests emit deterministic hashes (`requestHash`, `queuedJobHash`, `finalJobHash`) and deterministic sequential job IDs (`job-000001`, ...).
 
+## Implemented in issues #46 and #47 (design + whole-tree mode)
+- Canonical semantic design-token layer in `apps/web/app/globals.css` with shared panel/focus/legend contracts.
+- Proof explorer supports `List | 3D Tree` modes with shared node-selection state.
+- 3D mode uses deterministic tree->scene transformation (`apps/web/lib/tree-scene.ts`) and a browser renderer (`apps/web/components/proof-tree-3d.tsx`).
+- Whole-tree mode hydrates reachable parent pages deterministically before scene rendering and exposes completeness via `isWholeTreeLoaded(...)`.
+
 ## Determinism and provenance
 - Two deterministic datasets are exposed through one contract:
   - `seed-verity` (seed tree)

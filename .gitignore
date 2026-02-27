@@ -5,3 +5,4 @@ coverage/
 *.tsbuildinfo
 tests/*.js
 tests/*.d.ts
+.explain-md/
