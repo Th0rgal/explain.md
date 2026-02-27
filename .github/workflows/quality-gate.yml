@@ -48,6 +48,9 @@ jobs:
       - name: Run deterministic tree accessibility benchmark baseline check
         run: npm run web:eval:tree-a11y:ci
 
+      - name: Run deterministic tree scale benchmark baseline check
+        run: npm run web:eval:tree-scale:ci
+
       - name: Run deterministic verification replay benchmark baseline check
         run: npm run web:eval:verification-replay:ci
 
@@ -66,6 +69,7 @@ jobs:
             .explain-md/quality-gate-report-*.json
             .explain-md/quality-gate-baseline-check.json
             .explain-md/tree-a11y-evaluation-report.json
+            .explain-md/tree-scale-evaluation-report.json
             .explain-md/verification-replay-evaluation-report.json
             .explain-md/observability-slo-benchmark-report.json
             .explain-md/research-dossier-report.json

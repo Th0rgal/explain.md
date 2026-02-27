@@ -87,6 +87,8 @@ The tree panel uses incremental root/children/path queries:
 - Run deterministic cache benchmark evidence generation with `npm run benchmark:cache` (writes `docs/benchmarks/proof-cache-benchmark.json` from repo root).
 - Run deterministic assistive-tech interaction benchmark evidence with `npm run benchmark:tree-a11y` (writes `docs/benchmarks/tree-a11y-evaluation.json` from repo root).
 - CI enforces assistive-tech benchmark determinism with `npm run benchmark:tree-a11y:ci` (compares against `docs/benchmarks/tree-a11y-evaluation.json` and writes `.explain-md/tree-a11y-evaluation-report.json`).
+- Run deterministic large-tree rendering benchmark evidence with `npm run benchmark:tree-scale` (writes `docs/benchmarks/tree-scale-evaluation.json` from repo root).
+- CI enforces large-tree rendering benchmark determinism with `npm run benchmark:tree-scale:ci` (compares against `docs/benchmarks/tree-scale-evaluation.json` and writes `.explain-md/tree-scale-evaluation-report.json`).
 - Run deterministic verification replay artifact benchmark evidence with `npm run benchmark:verification-replay` (writes `docs/benchmarks/verification-replay-evaluation.json` from repo root).
 - CI enforces verification replay benchmark determinism with `npm run benchmark:verification-replay:ci` (compares against `docs/benchmarks/verification-replay-evaluation.json` and writes `.explain-md/verification-replay-evaluation-report.json`).
 - Run deterministic observability SLO benchmark evidence with `npm run benchmark:observability-slo` (writes `docs/benchmarks/observability-slo-benchmark.json` from repo root).
@@ -180,6 +182,11 @@ The tree panel uses incremental root/children/path queries:
   - per-step keyboard intent (`set-active-index`/`expand`/`collapse`/`noop`)
   - active-row ARIA metadata (`aria-activedescendant`, `aria-level`, `aria-posinset`, `aria-setsize`)
   - render-mode diagnostics (`full`/`windowed`/`virtualized`) with hidden row counts
+  - canonical `requestHash` and `outcomeHash` for reproducible CI evidence
+- Tree scale benchmark replays deterministic active-row sequences across three fixed profiles (`full-small-tree`, `windowed-medium-tree`, `virtualized-large-tree`) and records:
+  - effective render mode (`full`/`windowed`/`virtualized`) per sample
+  - rendered/hidden row counts and virtual-scroll bounds
+  - bounded-row-count pass/fail evidence for each sample
   - canonical `requestHash` and `outcomeHash` for reproducible CI evidence
 - Job IDs are deterministic and monotonic (`job-000001`, `job-000002`, ...).
 - Reproducibility contract values can be configured with:

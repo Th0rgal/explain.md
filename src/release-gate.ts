@@ -17,6 +17,21 @@ export interface TreeA11yBenchmarkArtifact {
   };
 }
 
+export interface TreeScaleBenchmarkArtifact {
+  schemaVersion: string;
+  requestHash: string;
+  outcomeHash: string;
+  summary: {
+    profileCount: number;
+    totalSamples: number;
+    fullModeSampleCount: number;
+    windowedModeSampleCount: number;
+    virtualizedModeSampleCount: number;
+    maxRenderedRowCount: number;
+    boundedSampleCount: number;
+  };
+}
+
 export interface ProofCacheBenchmarkArtifact {
   schemaVersion: string;
   requestHash: string;
@@ -83,6 +98,7 @@ export interface ReleaseGateInput {
   qualityBaseline: QualityGateBaseline;
   qualityBaselineCheck: BaselineCheckArtifact;
   treeA11yBenchmark: TreeA11yBenchmarkArtifact;
+  treeScaleBenchmark: TreeScaleBenchmarkArtifact;
   verificationReplayBenchmark: VerificationReplayBenchmarkArtifact;
   proofCacheBenchmark: ProofCacheBenchmarkArtifact;
   observabilitySloBaseline: ObservabilitySloBenchmarkArtifact;
@@ -96,6 +112,7 @@ export interface ReleaseGateCheck {
     | "quality_thresholds_pass"
     | "strict_entailment_presets_present"
     | "tree_a11y_transcript_complete"
+    | "tree_scale_profiles_cover_modes"
     | "verification_replay_contract_complete"
     | "cache_warm_speedup"
     | "cache_recovery_hits"
@@ -118,6 +135,7 @@ export interface ReleaseGateReport {
     parentCount: number;
     qualityOutcomeHash: string;
     treeA11yOutcomeHash: string;
+    treeScaleOutcomeHash: string;
     verificationReplayOutcomeHash: string;
     proofCacheOutcomeHash: string;
     observabilityOutcomeHash: string;
@@ -151,6 +169,7 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
   const qualityBaseline = assertQualityGateBaseline(input.qualityBaseline);
   const qualityBaselineCheck = assertBaselineCheckArtifact(input.qualityBaselineCheck, "qualityBaselineCheck");
   const treeA11yBenchmark = assertTreeA11yBenchmarkArtifact(input.treeA11yBenchmark);
+  const treeScaleBenchmark = assertTreeScaleBenchmarkArtifact(input.treeScaleBenchmark);
   const verificationReplayBenchmark = assertVerificationReplayBenchmarkArtifact(input.verificationReplayBenchmark);
   const proofCacheBenchmark = assertProofCacheBenchmarkArtifact(input.proofCacheBenchmark);
   const observabilitySloBaseline = assertObservabilitySloBenchmarkArtifact(input.observabilitySloBaseline);
@@ -188,6 +207,17 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
         treeA11yBenchmark.summary.collapseActionCount > 0 &&
         treeA11yBenchmark.summary.virtualizedStepCount === treeA11yBenchmark.summary.totalSteps,
       details: `steps=${treeA11yBenchmark.summary.totalSteps} announcements=${treeA11yBenchmark.summary.activeAnnouncementCount} expand=${treeA11yBenchmark.summary.expandActionCount} collapse=${treeA11yBenchmark.summary.collapseActionCount}`,
+    },
+    {
+      code: "tree_scale_profiles_cover_modes",
+      pass:
+        treeScaleBenchmark.summary.profileCount >= 3 &&
+        treeScaleBenchmark.summary.totalSamples > 0 &&
+        treeScaleBenchmark.summary.fullModeSampleCount > 0 &&
+        treeScaleBenchmark.summary.windowedModeSampleCount > 0 &&
+        treeScaleBenchmark.summary.virtualizedModeSampleCount > 0 &&
+        treeScaleBenchmark.summary.boundedSampleCount === treeScaleBenchmark.summary.totalSamples,
+      details: `profiles=${treeScaleBenchmark.summary.profileCount} total_samples=${treeScaleBenchmark.summary.totalSamples} modes=full:${treeScaleBenchmark.summary.fullModeSampleCount},windowed:${treeScaleBenchmark.summary.windowedModeSampleCount},virtualized:${treeScaleBenchmark.summary.virtualizedModeSampleCount} bounded=${treeScaleBenchmark.summary.boundedSampleCount}`,
     },
     {
       code: "verification_replay_contract_complete",
@@ -242,6 +272,7 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
     schemaVersion: RELEASE_GATE_SCHEMA_VERSION,
     qualityOutcomeHash: qualityBaseline.outcomeHash,
     treeA11yRequestHash: treeA11yBenchmark.requestHash,
+    treeScaleRequestHash: treeScaleBenchmark.requestHash,
     verificationReplayRequestHash: verificationReplayBenchmark.requestHash,
     proofCacheRequestHash: proofCacheBenchmark.requestHash,
     observabilityRequestHash: observabilitySloActual.requestHash,
@@ -260,6 +291,7 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
     evidence: {
       qualityOutcomeHash: qualityBaseline.outcomeHash,
       treeA11yOutcomeHash: treeA11yBenchmark.outcomeHash,
+      treeScaleOutcomeHash: treeScaleBenchmark.outcomeHash,
       verificationReplayOutcomeHash: verificationReplayBenchmark.outcomeHash,
       proofCacheOutcomeHash: proofCacheBenchmark.outcomeHash,
       observabilityOutcomeHash: observabilitySloActual.outcomeHash,
@@ -279,6 +311,7 @@ export function evaluateReleaseGate(input: ReleaseGateInput): ReleaseGateReport 
       parentCount: qualityBaseline.entries.reduce((sum, entry) => sum + entry.parentCount, 0),
       qualityOutcomeHash: qualityBaseline.outcomeHash,
       treeA11yOutcomeHash: treeA11yBenchmark.outcomeHash,
+      treeScaleOutcomeHash: treeScaleBenchmark.outcomeHash,
       verificationReplayOutcomeHash: verificationReplayBenchmark.outcomeHash,
       proofCacheOutcomeHash: proofCacheBenchmark.outcomeHash,
       observabilityOutcomeHash: observabilitySloActual.outcomeHash,
@@ -429,6 +462,38 @@ export function assertVerificationReplayBenchmarkArtifact(input: unknown): Verif
   };
 }
 
+export function assertTreeScaleBenchmarkArtifact(input: unknown): TreeScaleBenchmarkArtifact {
+  if (!isObject(input)) {
+    throw new Error("tree scale benchmark artifact must be an object");
+  }
+  if (expectString(input.schemaVersion, "treeScale.schemaVersion") !== "1.0.0") {
+    throw new Error("tree scale benchmark schemaVersion must be 1.0.0");
+  }
+  if (!isObject(input.summary)) {
+    throw new Error("treeScale.summary must be an object");
+  }
+  return {
+    schemaVersion: "1.0.0",
+    requestHash: expectString(input.requestHash, "treeScale.requestHash"),
+    outcomeHash: expectString(input.outcomeHash, "treeScale.outcomeHash"),
+    summary: {
+      profileCount: expectFiniteNumber(input.summary.profileCount, "treeScale.summary.profileCount"),
+      totalSamples: expectFiniteNumber(input.summary.totalSamples, "treeScale.summary.totalSamples"),
+      fullModeSampleCount: expectFiniteNumber(input.summary.fullModeSampleCount, "treeScale.summary.fullModeSampleCount"),
+      windowedModeSampleCount: expectFiniteNumber(
+        input.summary.windowedModeSampleCount,
+        "treeScale.summary.windowedModeSampleCount",
+      ),
+      virtualizedModeSampleCount: expectFiniteNumber(
+        input.summary.virtualizedModeSampleCount,
+        "treeScale.summary.virtualizedModeSampleCount",
+      ),
+      maxRenderedRowCount: expectFiniteNumber(input.summary.maxRenderedRowCount, "treeScale.summary.maxRenderedRowCount"),
+      boundedSampleCount: expectFiniteNumber(input.summary.boundedSampleCount, "treeScale.summary.boundedSampleCount"),
+    },
+  };
+}
+
 export function assertProofCacheBenchmarkArtifact(input: unknown): ProofCacheBenchmarkArtifact {
   if (!isObject(input)) {
     throw new Error("proof cache benchmark artifact must be an object");
@@ -550,6 +615,7 @@ function isKnownCheckCode(value: string): value is ReleaseGateCheck["code"] {
     value === "quality_thresholds_pass" ||
     value === "strict_entailment_presets_present" ||
     value === "tree_a11y_transcript_complete" ||
+    value === "tree_scale_profiles_cover_modes" ||
     value === "verification_replay_contract_complete" ||
     value === "cache_warm_speedup" ||
     value === "cache_recovery_hits" ||

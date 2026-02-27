@@ -14,6 +14,7 @@ function parseArgs(argv) {
   let qualityBaselinePath = path.resolve(cwd, "docs/benchmarks/quality-gate-baseline.json");
   let qualityBaselineCheckPath = path.resolve(cwd, ".explain-md/quality-gate-baseline-check.json");
   let treeA11yPath = path.resolve(cwd, "docs/benchmarks/tree-a11y-evaluation.json");
+  let treeScalePath = path.resolve(cwd, "docs/benchmarks/tree-scale-evaluation.json");
   let verificationReplayPath = path.resolve(cwd, "docs/benchmarks/verification-replay-evaluation.json");
   let proofCachePath = path.resolve(cwd, "docs/benchmarks/proof-cache-benchmark.json");
   let observabilityBaselinePath = path.resolve(cwd, "docs/benchmarks/observability-slo-benchmark.json");
@@ -37,6 +38,10 @@ function parseArgs(argv) {
     }
     if (arg.startsWith("--tree-a11y=")) {
       treeA11yPath = path.resolve(cwd, arg.slice("--tree-a11y=".length));
+      continue;
+    }
+    if (arg.startsWith("--tree-scale=")) {
+      treeScalePath = path.resolve(cwd, arg.slice("--tree-scale=".length));
       continue;
     }
     if (arg.startsWith("--verification-replay=")) {
@@ -69,6 +74,7 @@ function parseArgs(argv) {
     qualityBaselinePath,
     qualityBaselineCheckPath,
     treeA11yPath,
+    treeScalePath,
     verificationReplayPath,
     proofCachePath,
     observabilityBaselinePath,
@@ -90,6 +96,7 @@ async function main() {
   const qualityBaseline = assertQualityGateBaseline(await readJson(args.qualityBaselinePath));
   const qualityBaselineCheck = await readJson(args.qualityBaselineCheckPath);
   const treeA11yBenchmark = await readJson(args.treeA11yPath);
+  const treeScaleBenchmark = await readJson(args.treeScalePath);
   const verificationReplayBenchmark = await readJson(args.verificationReplayPath);
   const proofCacheBenchmark = await readJson(args.proofCachePath);
   const observabilitySloBaseline = await readJson(args.observabilityBaselinePath);
@@ -99,6 +106,7 @@ async function main() {
     qualityBaseline,
     qualityBaselineCheck,
     treeA11yBenchmark,
+    treeScaleBenchmark,
     verificationReplayBenchmark,
     proofCacheBenchmark,
     observabilitySloBaseline,

@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0.0",
-  "requestHash": "b24d4ee7d5ba62fb6c5bbc0d97eee7570210e9e4f7afb0054d0985b15332263e",
-  "outcomeHash": "f1f550541e8445a4e1771b182cb237162ecaee8709b3849b19793c73843389cc",
+  "requestHash": "c5ab2f56f8956f4002231cd85e644e31d8a7961748ad6325d5d539101170aab0",
+  "outcomeHash": "9fb06a1d61f9c0d2f0b261e5059abb1137a81da45876d8dcdab8c32b0b07513a",
   "thresholdPass": true,
   "checkStatus": [
     {
@@ -34,6 +34,10 @@
     },
     {
       "code": "tree_a11y_transcript_complete",
+      "pass": true
+    },
+    {
+      "code": "tree_scale_profiles_cover_modes",
       "pass": true
     },
     {

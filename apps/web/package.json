@@ -13,6 +13,8 @@
     "benchmark:cache": "tsx scripts/proof-cache-benchmark.ts --out ../../docs/benchmarks/proof-cache-benchmark.json",
     "benchmark:tree-a11y": "tsx scripts/tree-a11y-evaluation.ts --out ../../docs/benchmarks/tree-a11y-evaluation.json",
     "benchmark:tree-a11y:ci": "tsx scripts/tree-a11y-evaluation.ts --baseline ../../docs/benchmarks/tree-a11y-evaluation.json --out ../../.explain-md/tree-a11y-evaluation-report.json",
+    "benchmark:tree-scale": "tsx scripts/tree-scale-evaluation.ts --out ../../docs/benchmarks/tree-scale-evaluation.json",
+    "benchmark:tree-scale:ci": "tsx scripts/tree-scale-evaluation.ts --baseline ../../docs/benchmarks/tree-scale-evaluation.json --out ../../.explain-md/tree-scale-evaluation-report.json",
     "benchmark:verification-replay": "tsx scripts/verification-replay-evaluation.ts --out ../../docs/benchmarks/verification-replay-evaluation.json",
     "benchmark:verification-replay:ci": "tsx scripts/verification-replay-evaluation.ts --baseline ../../docs/benchmarks/verification-replay-evaluation.json --out ../../.explain-md/verification-replay-evaluation-report.json",
     "benchmark:observability-slo": "tsx scripts/observability-slo-benchmark.ts --out ../../docs/benchmarks/observability-slo-benchmark.json",

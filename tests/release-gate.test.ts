@@ -15,6 +15,7 @@ describe("release gate", () => {
   test("evaluates deterministic cross-benchmark release checks", () => {
     const qualityBaseline = assertQualityGateBaseline(readJson("docs/benchmarks/quality-gate-baseline.json"));
     const treeA11yBenchmark = readJson("docs/benchmarks/tree-a11y-evaluation.json");
+    const treeScaleBenchmark = readJson("docs/benchmarks/tree-scale-evaluation.json");
     const verificationReplayBenchmark = readJson("docs/benchmarks/verification-replay-evaluation.json");
     const proofCacheBenchmark = readJson("docs/benchmarks/proof-cache-benchmark.json");
     const observabilitySloBaseline = readJson("docs/benchmarks/observability-slo-benchmark.json");
@@ -30,6 +31,7 @@ describe("release gate", () => {
       qualityBaseline,
       qualityBaselineCheck,
       treeA11yBenchmark,
+      treeScaleBenchmark,
       verificationReplayBenchmark,
       proofCacheBenchmark,
       observabilitySloBaseline,
@@ -41,6 +43,7 @@ describe("release gate", () => {
       qualityBaseline,
       qualityBaselineCheck,
       treeA11yBenchmark,
+      treeScaleBenchmark,
       verificationReplayBenchmark,
       proofCacheBenchmark,
       observabilitySloBaseline,
@@ -79,12 +82,14 @@ describe("release gate", () => {
         parentCount: 1,
         qualityOutcomeHash: "q",
         treeA11yOutcomeHash: "a",
+        treeScaleOutcomeHash: "s",
         verificationReplayOutcomeHash: "v",
         proofCacheOutcomeHash: "c",
         observabilityOutcomeHash: "o",
       },
       checks: [
         { code: "quality_baseline_consistent", pass: true, details: "ok" },
+        { code: "tree_scale_profiles_cover_modes", pass: true, details: "ok" },
         { code: "observability_slo_gate", pass: false, details: "bad" },
       ],
     });
