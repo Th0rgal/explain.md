@@ -94,6 +94,7 @@ export interface ProofDatasetCacheDiagnostic {
     | "cache_hit"
     | "cache_topology_recovery_hit"
     | "cache_blocked_subtree_rebuild_hit"
+    | "cache_topology_regeneration_rebuild_hit"
     | "cache_blocked_subtree_full_rebuild"
     | "cache_miss"
     | "cache_write_failed"
@@ -1049,6 +1050,66 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
       };
     }
 
+    const topologyRegenerationRecovery = await attemptTopologyRegenerationRecovery({
+      proofId,
+      config,
+      configHash,
+      sourceFingerprint,
+      ingestionHash,
+      dependencyGraphHash,
+      cachedTree: cachedTreeForTopologyRecovery,
+      currentLeaves: theoremLeaves,
+    });
+
+    if (topologyRegenerationRecovery) {
+      const cacheWriteError = await writeProofDatasetCacheEntry(cachePath, topologyRegenerationRecovery.cacheEntry);
+      if (cacheWriteError) {
+        cacheDiagnostics.push({
+          code: "cache_write_failed",
+          message: "Failed writing topology-regeneration recovery cache entry; continuing with recovered dataset.",
+          details: { cachePath, error: cacheWriteError },
+        });
+      }
+
+      cacheDiagnostics.push({
+        code: "cache_topology_regeneration_rebuild_hit",
+        message: "Recovered cached dataset by deterministic topology regeneration with reusable parent summaries.",
+        details: {
+          cachePath,
+          planHash: blockedSubtreePlan.planHash,
+          reusableParentSummaryCount: topologyRegenerationRecovery.reusableParentSummaryCount,
+          reusedParentSummaryCount: topologyRegenerationRecovery.reusedParentSummaryCount,
+          generatedParentSummaryCount: topologyRegenerationRecovery.generatedParentSummaryCount,
+          regenerationHash: topologyRegenerationRecovery.regenerationHash,
+        },
+      });
+
+      return {
+        dataset: {
+          proofId,
+          title: `Lean Verity fixture (${theoremLeaves.length} declarations, ingestion=${ingestionHash.slice(0, 8)}, depgraph=${dependencyGraphHash.slice(0, 8)})`,
+          config,
+          configHash,
+          tree: topologyRegenerationRecovery.tree,
+          leaves: theoremLeaves,
+          dependencyGraph,
+          dependencyGraphHash,
+        },
+        queryApi: createTreeQueryApi(topologyRegenerationRecovery.cacheEntry.snapshot),
+        cache: {
+          layer: "persistent",
+          status: "hit",
+          cacheKey,
+          sourceFingerprint,
+          cachePath,
+          snapshotHash: topologyRegenerationRecovery.cacheEntry.snapshotHash,
+          cacheEntryHash: computeProofDatasetCacheEntryHash(topologyRegenerationRecovery.cacheEntry),
+          diagnostics: cacheDiagnostics,
+          blockedSubtreePlan,
+        },
+      };
+    }
+
     if (blockedSubtreePlan.fullRebuildRequired) {
       cacheDiagnostics.push({
         code: "cache_blocked_subtree_full_rebuild",
@@ -1392,6 +1453,39 @@ interface BlockedSubtreeRecoveryResult {
   recomputeHash: string;
 }
 
+interface TopologyRegenerationRecoveryResult {
+  tree: ExplanationTree;
+  cacheEntry: ProofDatasetCacheEntry;
+  reusableParentSummaryCount: number;
+  reusedParentSummaryCount: number;
+  generatedParentSummaryCount: number;
+  regenerationHash: string;
+}
+
+interface TopologyRegenerationRecoveryRequest {
+  proofId: string;
+  config: ExplanationConfig;
+  configHash: string;
+  sourceFingerprint: string;
+  ingestionHash: string;
+  dependencyGraphHash: string;
+  cachedTree: ExplanationTree;
+  currentLeaves: TheoremLeafRecord[];
+}
+
+interface ReusableParentSummary {
+  parentId: string;
+  summary: {
+    parent_statement: string;
+    why_true_from_children: string;
+    new_terms_introduced: string[];
+    complexity_score: number;
+    abstraction_score: number;
+    evidence_refs: string[];
+    confidence: number;
+  };
+}
+
 async function attemptBlockedSubtreeRecovery(
   request: BlockedSubtreeRecoveryRequest,
 ): Promise<BlockedSubtreeRecoveryResult | undefined> {
@@ -1639,6 +1733,159 @@ async function attemptBlockedSubtreeRecovery(
       dependencyGraphHash: request.dependencyGraphHash,
     }),
   };
+}
+
+async function attemptTopologyRegenerationRecovery(
+  request: TopologyRegenerationRecoveryRequest,
+): Promise<TopologyRegenerationRecoveryResult | undefined> {
+  const reusableSummaryByKey = buildReusableParentSummaryByKey(request.cachedTree);
+  if (reusableSummaryByKey.size === 0) {
+    return undefined;
+  }
+
+  const baseProvider = createDeterministicSummaryProvider();
+  let generatedParentSummaryCount = 0;
+  const reusedParentIds: string[] = [];
+  const provider: ProviderClient = {
+    generate: async (generateRequest) => {
+      const key = buildParentReuseKeyFromGenerateRequest(generateRequest);
+      if (key) {
+        const reusable = reusableSummaryByKey.get(key);
+        if (reusable) {
+          reusedParentIds.push(reusable.parentId);
+          return {
+            text: JSON.stringify(reusable.summary),
+            model: "mock-deterministic-reuse",
+            finishReason: "stop",
+            raw: {
+              source: "cache_parent_summary_reuse",
+              parentId: reusable.parentId,
+            },
+          };
+        }
+      }
+      generatedParentSummaryCount += 1;
+      return baseProvider.generate(generateRequest);
+    },
+    stream: baseProvider.stream,
+  };
+
+  let tree: ExplanationTree;
+  try {
+    tree = await buildRecursiveExplanationTree(provider, {
+      leaves: mapTheoremLeavesToTreeLeaves(request.currentLeaves),
+      config: request.config,
+    });
+  } catch {
+    return undefined;
+  }
+
+  const validation = validateExplanationTree(tree, request.config.maxChildrenPerParent);
+  if (!validation.ok) {
+    return undefined;
+  }
+
+  const snapshot = exportTreeStorageSnapshot(tree, {
+    proofId: request.proofId,
+    leaves: request.currentLeaves,
+    config: request.config,
+  });
+  const snapshotHash = computeTreeStorageSnapshotHash(snapshot);
+  const cacheEntry: ProofDatasetCacheEntry = {
+    schemaVersion: PROOF_DATASET_CACHE_SCHEMA_VERSION,
+    proofId: request.proofId,
+    configHash: request.configHash,
+    sourceFingerprint: request.sourceFingerprint,
+    ingestionHash: request.ingestionHash,
+    dependencyGraphHash: request.dependencyGraphHash,
+    snapshotHash,
+    snapshot,
+  };
+
+  const reusedParentSummaryCount = new Set(reusedParentIds).size;
+
+  return {
+    tree,
+    cacheEntry,
+    reusableParentSummaryCount: reusableSummaryByKey.size,
+    reusedParentSummaryCount,
+    generatedParentSummaryCount,
+    regenerationHash: computeCanonicalRequestHash({
+      reusableParentSummaryCount: reusableSummaryByKey.size,
+      reusedParentIds: [...new Set(reusedParentIds)].sort((left, right) => left.localeCompare(right)),
+      generatedParentSummaryCount,
+      dependencyGraphHash: request.dependencyGraphHash,
+      configHash: request.configHash,
+    }),
+  };
+}
+
+function buildReusableParentSummaryByKey(tree: ExplanationTree): Map<string, ReusableParentSummary> {
+  const reusable = new Map<string, ReusableParentSummary>();
+  const parentNodes = Object.values(tree.nodes)
+    .filter((node) => node.kind === "parent")
+    .sort((left, right) => left.id.localeCompare(right.id));
+
+  for (const parentNode of parentNodes) {
+    const children = parentNode.childIds
+      .map((childId) => tree.nodes[childId])
+      .filter((node): node is ExplanationTreeNode => node !== undefined)
+      .map((node) => ({ id: node.id, statement: node.statement }));
+    if (children.length !== parentNode.childIds.length) {
+      continue;
+    }
+
+    if (
+      typeof parentNode.statement !== "string" ||
+      parentNode.statement.length === 0 ||
+      typeof parentNode.whyTrueFromChildren !== "string" ||
+      parentNode.whyTrueFromChildren.length === 0 ||
+      !Array.isArray(parentNode.evidenceRefs) ||
+      parentNode.evidenceRefs.length === 0
+    ) {
+      continue;
+    }
+
+    const key = buildParentReuseKey(children);
+    const nextValue: ReusableParentSummary = {
+      parentId: parentNode.id,
+      summary: {
+        parent_statement: parentNode.statement,
+        why_true_from_children: parentNode.whyTrueFromChildren,
+        new_terms_introduced: parentNode.newTermsIntroduced ? parentNode.newTermsIntroduced.slice() : [],
+        complexity_score: parentNode.complexityScore ?? 3,
+        abstraction_score: parentNode.abstractionScore ?? 3,
+        evidence_refs: parentNode.evidenceRefs.slice(),
+        confidence: parentNode.confidence ?? 1,
+      },
+    };
+    const existing = reusable.get(key);
+    if (!existing || nextValue.parentId.localeCompare(existing.parentId) < 0) {
+      reusable.set(key, nextValue);
+    }
+  }
+
+  return reusable;
+}
+
+function buildParentReuseKeyFromGenerateRequest(request: { messages: Array<{ content: string }> }): string | undefined {
+  const prompt = request.messages[1]?.content;
+  if (!prompt) {
+    return undefined;
+  }
+  const children = parseChildrenFromPrompt(prompt);
+  if (children.length === 0) {
+    return undefined;
+  }
+  return buildParentReuseKey(children);
+}
+
+function buildParentReuseKey(children: Array<{ id: string; statement: string }>): string {
+  return computeCanonicalRequestHash({
+    children: children
+      .map((child) => ({ id: child.id, statement: child.statement }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+  });
 }
 
 function buildParentsByChildId(nodes: Record<string, ExplanationTreeNode>): Map<string, string[]> {

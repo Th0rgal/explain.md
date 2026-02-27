@@ -1,18 +1,18 @@
 {
   "schemaVersion": "1.0.0",
-  "generatedAt": "2026-02-27T14:57:16.074Z",
+  "generatedAt": "2026-02-27T15:02:40.487Z",
   "proofId": "lean-verity-fixture",
   "configHash": "a75632c3c71bea58a13445a49951b87763ebd9e868fb4f51ac128e6c783e8af7",
   "requestHash": "3f46810b2ac7310b0662c6e01ba36ed7e2f53d0d01cd2f7653b72ffecf20dc0e",
-  "outcomeHash": "5b329a9cc2b7264575c6596e433805dfa5f848368eec4bc99885a9f79371d5a1",
+  "outcomeHash": "40881ee35aba078a459393f55f59862610de31bf3f8794e82cf2f00063126ccd",
   "parameters": {
     "coldIterations": 3,
     "warmIterations": 3,
     "mutationTargetPath": "Verity/Core.lean"
   },
   "paths": {
-    "fixtureProjectRootHash": "cb74c6d7d55ed31fcb2677c9800808311881703e3366a9331efee1286282e79a",
-    "cacheDirHash": "d0926416250db7bc05f7b45820eb2326ffb64d4e7ab65893c894ca8420dc449f"
+    "fixtureProjectRootHash": "39898decc00a7fb3f48f1062cfbaa8121b7bb9a1d83c468c35dcb14e216c093a",
+    "cacheDirHash": "76bf0c9efc49ddf82c365d3aafda428dad576864f0c3146eb40ba7496b7a61d8"
   },
   "scenarios": {
     "coldNoPersistentCache": {
@@ -22,10 +22,10 @@
         "miss",
         "miss"
       ],
-      "meanMs": 15.614,
-      "medianMs": 12.071,
-      "minMs": 3.486,
-      "maxMs": 31.284
+      "meanMs": 11.415,
+      "medianMs": 5.353,
+      "minMs": 5.292,
+      "maxMs": 23.601
     },
     "warmPersistentCache": {
       "iterations": 3,
@@ -34,10 +34,10 @@
         "hit",
         "hit"
       ],
-      "meanMs": 1.532,
-      "medianMs": 1.519,
-      "minMs": 1.412,
-      "maxMs": 1.664
+      "meanMs": 1.307,
+      "medianMs": 1.178,
+      "minMs": 1.023,
+      "maxMs": 1.721
     },
     "invalidation": {
       "beforeChangeStatus": "hit",
@@ -57,10 +57,10 @@
     },
     "topologyShapeInvalidation": {
       "beforeChangeStatus": "hit",
-      "afterChangeStatus": "miss",
+      "afterChangeStatus": "hit",
       "afterChangeDiagnostics": [
-        "cache_blocked_subtree_full_rebuild",
-        "cache_miss"
+        "cache_miss",
+        "cache_topology_regeneration_rebuild_hit"
       ],
       "afterChangeTopologyPlan": {
         "fullRebuildRequired": true,

@@ -461,7 +461,7 @@ describe("proof service", () => {
     }
   });
 
-  it("emits deterministic full-rebuild diagnostic for topology-shape-changing mutations", async () => {
+  it("recovers topology-shape-changing mutations via deterministic topology regeneration reuse", async () => {
     const previousCacheDir = process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR;
     const previousFixtureRoot = process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT;
     const tempCacheDir = await fs.mkdtemp(path.join(os.tmpdir(), "explain-md-proof-cache-"));
@@ -493,15 +493,19 @@ describe("proof service", () => {
         proofId: LEAN_FIXTURE_PROOF_ID,
       });
 
-      expect(rebuilt.cache.status).toBe("miss");
+      expect(rebuilt.cache.status).toBe("hit");
       expect(rebuilt.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_miss")).toBe(true);
+      expect(
+        rebuilt.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_topology_regeneration_rebuild_hit"),
+      ).toBe(true);
       expect(rebuilt.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_blocked_subtree_full_rebuild")).toBe(
-        true,
+        false,
       );
-      const fullRebuildDiagnostic = rebuilt.cache.diagnostics.find(
-        (diagnostic) => diagnostic.code === "cache_blocked_subtree_full_rebuild",
+      const regenerationDiagnostic = rebuilt.cache.diagnostics.find(
+        (diagnostic) => diagnostic.code === "cache_topology_regeneration_rebuild_hit",
       );
-      expect(fullRebuildDiagnostic?.details?.reason).toBe("topology_shape_changed");
+      expect((regenerationDiagnostic?.details?.reusableParentSummaryCount as number) > 0).toBe(true);
+      expect((regenerationDiagnostic?.details?.generatedParentSummaryCount as number) > 0).toBe(true);
       expect(rebuilt.cache.blockedSubtreePlan?.fullRebuildRequired).toBe(true);
       expect(rebuilt.cache.blockedSubtreePlan?.topologyShapeChanged).toBe(true);
       expect((rebuilt.cache.blockedSubtreePlan?.addedDeclarationIds.length ?? 0) > 0).toBe(true);

@@ -24,9 +24,11 @@ describe("proof cache benchmark", () => {
     expect(report.scenarios.invalidation.recoveryStatus).toBe("hit");
 
     expect(report.scenarios.topologyShapeInvalidation.beforeChangeStatus).toBe("hit");
-    expect(report.scenarios.topologyShapeInvalidation.afterChangeStatus).toBe("miss");
+    expect(report.scenarios.topologyShapeInvalidation.afterChangeStatus).toBe("hit");
     expect(report.scenarios.topologyShapeInvalidation.afterChangeDiagnostics).toContain("cache_miss");
-    expect(report.scenarios.topologyShapeInvalidation.afterChangeDiagnostics).toContain("cache_blocked_subtree_full_rebuild");
+    expect(report.scenarios.topologyShapeInvalidation.afterChangeDiagnostics).toContain(
+      "cache_topology_regeneration_rebuild_hit",
+    );
     expect(report.scenarios.topologyShapeInvalidation.afterChangeTopologyPlan?.fullRebuildRequired).toBe(true);
     expect(report.scenarios.topologyShapeInvalidation.afterChangeTopologyPlan?.topologyShapeChanged).toBe(true);
     expect((report.scenarios.topologyShapeInvalidation.afterChangeTopologyPlan?.addedDeclarationCount ?? 0) > 0).toBe(true);

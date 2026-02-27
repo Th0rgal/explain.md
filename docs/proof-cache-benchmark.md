@@ -17,8 +17,8 @@ By default this writes:
   - benchmark mutation rewrites one declaration statement (topology-stable semantic delta), so `afterChangeTopologyPlan.fullRebuildRequired=true` while recovery can still return `cache_blocked_subtree_rebuild_hit`.
   - expected status flow is `beforeChangeStatus=hit`, `afterChangeStatus=hit`, `recoveryStatus=hit`.
 - Topology-shape invalidation path (`topologyShapeInvalidation`): appends a declaration in `Verity/Core.lean` to force declaration-set shape change.
-  - expected diagnostics include `cache_blocked_subtree_full_rebuild`, and `afterChangeTopologyPlan.topologyShapeChanged=true`.
-  - expected status flow is `beforeChangeStatus=hit`, `afterChangeStatus=miss`, `recoveryStatus=hit`.
+  - expected diagnostics include `cache_topology_regeneration_rebuild_hit`, and `afterChangeTopologyPlan.topologyShapeChanged=true`.
+  - expected status flow is `beforeChangeStatus=hit`, `afterChangeStatus=hit`, `recoveryStatus=hit`.
 
 ## Determinism and Auditability
 - Report includes:

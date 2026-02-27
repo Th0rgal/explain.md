@@ -63,7 +63,8 @@ Deterministic cache-reuse diagnostics for proof dataset generation.
   - if no declarations are blocked and dependency topology is unchanged, cache reuse is recovered with diagnostic `cache_topology_recovery_hit`.
   - this recovery path rebases snapshot leaves to current ingestion output so source spans/source URLs stay provenance-accurate.
   - if declarations are blocked but topology and cached leaf IDs are still reusable, ancestor parents are recomputed deterministically on cached topology with diagnostic `cache_blocked_subtree_rebuild_hit`.
-  - otherwise `blockedSubtreePlan.fullRebuildRequired=true`; cache diagnostics include `cache_blocked_subtree_full_rebuild` with deterministic fallback reason, and dataset rebuild continues deterministically.
+  - if declaration shape changes (added/removed IDs), deterministic topology regeneration runs with reusable cached parent summaries and emits `cache_topology_regeneration_rebuild_hit` (including reusable/reused/generated summary counts and `regenerationHash`).
+  - if recovery preconditions fail, `blockedSubtreePlan.fullRebuildRequired=true`; cache diagnostics include `cache_blocked_subtree_full_rebuild` with deterministic fallback reason, and dataset rebuild continues deterministically.
 - `blockedSubtreePlan.changedDeclarationIds` is computed from a semantic declaration fingerprint (statement + dependencies + declaration identity), so pure source-span/source-url shifts do not force full rebuild.
 - `blockedSubtreePlan.addedDeclarationIds`, `removedDeclarationIds`, and `topologyShapeChanged` make topology-shape deltas explicit and machine-checkable.
 - On invalid entry or topology mismatch, the dataset is rebuilt deterministically and cache is overwritten.
