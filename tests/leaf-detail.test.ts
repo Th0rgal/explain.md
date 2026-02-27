@@ -23,6 +23,7 @@ describe("leaf detail", () => {
     expect(view.provenancePath.map((node) => node.id)).toEqual(["p-root", "p-mid", "leaf-a"]);
     expect(view.shareReference.compact).toContain("Verity.Core.theoremA@");
     expect(view.shareReference.markdown).toContain("https://github.com/example/verity");
+    expect(view.shareReference.sourceUrlOrigin).toBe("leaf");
     expect(view.verification.summary.totalJobs).toBe(2);
     expect(view.verification.summary.latestStatus).toBe("success");
     expect(view.verification.jobs[0].jobHash).toHaveLength(64);
@@ -37,6 +38,23 @@ describe("leaf detail", () => {
     expect(result.ok).toBe(true);
     expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain("missing_source_url");
     expect(result.diagnostics.map((diagnostic) => diagnostic.severity)).toContain("warning");
+    expect(result.view?.shareReference.sourceUrlOrigin).toBe("missing");
+  });
+
+  test("deterministically resolves source URL from source span when base URL is configured", () => {
+    const leaves = sampleLeaves();
+    leaves[0] = { ...leaves[0], sourceUrl: undefined };
+
+    const result = buildLeafDetailView(sampleTree(), leaves, "leaf-a", {
+      sourceBaseUrl: "https://github.com/example/verity/blob/main",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain("missing_source_url");
+    expect(result.view?.leaf.sourceUrl).toBe(
+      "https://github.com/example/verity/blob/main/Verity/Core.lean#L10C1-L12C10",
+    );
+    expect(result.view?.shareReference.sourceUrlOrigin).toBe("source_span");
   });
 
   test("returns error for unknown leaf", () => {

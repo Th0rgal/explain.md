@@ -55,6 +55,7 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 - Config profiles are persisted/queryable through deterministic API contracts with canonical storage keys, profile `configHash`, and response-level `requestHash` + `ledgerHash`.
 - Lean fixture datasets are persisted under `.explain-md/web-proof-cache` (override with `EXPLAIN_MD_WEB_PROOF_CACHE_DIR`) and invalidated by source fingerprint + config hash.
 - Lean fixture root lookup can be overridden with `EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT` for deterministic benchmark/invalidation runs against temporary fixture copies.
+- Lean fixture source-link base can be overridden with `EXPLAIN_MD_LEAN_FIXTURE_SOURCE_BASE_URL`; leaf-detail falls back to deterministic span-based URLs when leaf records omit `sourceUrl`.
 - Deterministic benchmark artifact generation is available via `npm run web:bench:cache` (writes `docs/benchmarks/proof-cache-benchmark.json`).
 - The Lean fixture uses a deterministic summary provider (`temperature=0` behavior with fixed evidence-only synthesis), so parent statements remain child-entailed and reproducible.
 - Reproducibility contract for each queued job is derived from the selected theorem leaf:

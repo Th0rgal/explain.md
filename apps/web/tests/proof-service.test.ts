@@ -133,6 +133,7 @@ describe("proof service", () => {
     expect(detail.detailHash).toHaveLength(64);
     expect(detail.view?.verification.summary.totalJobs).toBe(1);
     expect(detail.view?.shareReference.compact).toContain("init_sound");
+    expect(detail.view?.shareReference.sourceUrlOrigin).toBe("leaf");
   });
 
   it("fails clearly for unsupported proof id", () => {

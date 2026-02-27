@@ -59,6 +59,8 @@ The tree panel uses incremental root/children/path queries:
 - Verification history is persisted to `.explain-md/web-verification-ledger.json`.
 - Lean fixture proof datasets are persisted to `.explain-md/web-proof-cache` (override with `EXPLAIN_MD_WEB_PROOF_CACHE_DIR`).
 - Lean fixture project root can be overridden with `EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT` (used by benchmark/invalidation harness).
+- Lean fixture source deep-link base can be overridden with `EXPLAIN_MD_LEAN_FIXTURE_SOURCE_BASE_URL`.
+- Leaf detail responses include `view.shareReference.sourceUrlOrigin` (`leaf` | `source_span` | `missing`) for auditable source-link provenance.
 - Config profiles are persisted to `.explain-md/web-config-profiles.json` (override with `EXPLAIN_MD_WEB_CONFIG_PROFILE_LEDGER`).
 - Job IDs are deterministic and monotonic (`job-000001`, `job-000002`, ...).
 - Reproducibility contract values can be configured with:

@@ -21,6 +21,8 @@ Returns:
 
 `options`:
 - `verificationJobs`: optional persisted verification jobs used to bind job history to the target leaf.
+- `sourceBaseUrl`: optional deterministic source-link resolver base. When a leaf omits `sourceUrl`, the contract derives
+  `sourceUrl = buildSourceUrl(sourceBaseUrl, sourceSpan)`.
 
 ### `renderLeafDetailCanonical(view)`
 Canonical plain-text rendering with stable ordering for audits.
@@ -34,6 +36,10 @@ Canonical plain-text rendering with stable ordering for audits.
 - Verification jobs are filtered by `target.leafId` and sorted by `(queueSequence, jobId)`.
 - Every attached verification job includes canonical `jobHash` from verification flow.
 - Missing source URL is represented as an explicit warning diagnostic, not silent omission.
+- `shareReference.sourceUrlOrigin` is machine-checkable:
+  - `leaf`: original leaf already carried a URL.
+  - `source_span`: URL resolved deterministically from `sourceBaseUrl` + `sourceSpan`.
+  - `missing`: no source URL could be produced.
 
 ## Diagnostics
 - `leaf_not_found` (`error`)

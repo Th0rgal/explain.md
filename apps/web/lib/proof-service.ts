@@ -54,6 +54,7 @@ export const LEAN_FIXTURE_PROOF_ID = "lean-verity-fixture";
 const LEAN_FIXTURE_PROJECT_ROOT = path.resolve(process.cwd(), "tests", "fixtures", "lean-project");
 const LEAN_FIXTURE_PATHS = ["Verity/Core.lean", "Verity/Loop.lean"];
 const LEAN_FIXTURE_SOURCE_BASE_URL =
+  process.env.EXPLAIN_MD_LEAN_FIXTURE_SOURCE_BASE_URL?.trim() ||
   "https://github.com/Th0rgal/explain.md/blob/main/tests/fixtures/lean-project";
 const PROOF_DATASET_CACHE_SCHEMA_VERSION = "1.0.0";
 const DEFAULT_PROOF_DATASET_CACHE_DIR = path.resolve(process.cwd(), ".explain-md", "web-proof-cache");
@@ -401,6 +402,7 @@ export async function buildProofLeafDetail(request: LeafDetailRequest) {
   const jobs = request.verificationJobs ?? sampleVerificationJobs(request.proofId, request.leafId);
   const result = buildLeafDetailView(dataset.tree as never, dataset.leaves, request.leafId, {
     verificationJobs: jobs,
+    sourceBaseUrl: resolveProofSourceBaseUrl(request.proofId),
   });
 
   if (!result.view) {
@@ -436,6 +438,7 @@ export function buildSeedLeafDetail(request: LeafDetailRequest) {
   const jobs = request.verificationJobs ?? sampleVerificationJobs(request.proofId, request.leafId);
   const result = buildLeafDetailView(dataset.tree as never, dataset.leaves, request.leafId, {
     verificationJobs: jobs,
+    sourceBaseUrl: resolveProofSourceBaseUrl(request.proofId),
   });
 
   if (!result.view) {
@@ -464,6 +467,13 @@ export function buildSeedLeafDetail(request: LeafDetailRequest) {
     view: result.view,
     detailHash,
   };
+}
+
+function resolveProofSourceBaseUrl(proofId: string): string | undefined {
+  if (proofId === LEAN_FIXTURE_PROOF_ID) {
+    return LEAN_FIXTURE_SOURCE_BASE_URL;
+  }
+  return undefined;
 }
 
 export async function buildProofRootView(proofId: string, configInput: ExplanationConfigInput = {}) {

@@ -5,6 +5,7 @@ import {
   type VerificationStatus,
 } from "./verification-flow.js";
 import {
+  buildSourceUrl,
   canonicalizeTheoremLeafRecord,
   renderTheoremLeafCanonical,
   type TheoremLeafRecord,
@@ -37,6 +38,7 @@ export interface LeafShareReference {
   compact: string;
   markdown: string;
   sourceUrl?: string;
+  sourceUrlOrigin: "leaf" | "source_span" | "missing";
 }
 
 export interface LeafVerificationJobSummary {
@@ -77,6 +79,7 @@ export interface LeafDetailResult {
 
 export interface BuildLeafDetailOptions {
   verificationJobs?: VerificationJob[];
+  sourceBaseUrl?: string;
 }
 
 export function buildLeafDetailView(
@@ -118,7 +121,10 @@ export function buildLeafDetailView(
     return { ok: false, diagnostics };
   }
 
-  if (!leaf.sourceUrl) {
+  const resolvedSource = resolveLeafSource(leaf, options.sourceBaseUrl);
+  const leafForView = resolvedSource.sourceUrl ? { ...leaf, sourceUrl: resolvedSource.sourceUrl } : leaf;
+
+  if (!resolvedSource.sourceUrl) {
     diagnostics.push({
       code: "missing_source_url",
       severity: "warning",
@@ -133,7 +139,7 @@ export function buildLeafDetailView(
 
   const verificationJobs = summarizeVerificationJobs(options.verificationJobs ?? [], normalizedLeafId);
   const view: LeafDetailView = {
-    leaf,
+    leaf: leafForView,
     rootId: tree.rootId,
     provenancePath: provenanceSearch.pathNodeIds
       .map((nodeId) => tree.nodes[nodeId])
@@ -146,7 +152,7 @@ export function buildLeafDetailView(
         evidenceRefs: node.evidenceRefs.slice(),
         childIds: node.childIds.slice(),
       })),
-    shareReference: buildShareReference(leaf),
+    shareReference: buildShareReference(leafForView, resolvedSource.origin),
     verification: verificationJobs,
     diagnostics: diagnostics.slice(),
   };
@@ -180,6 +186,7 @@ export function renderLeafDetailCanonical(view: LeafDetailView): string {
     `share.compact=${view.shareReference.compact}`,
     `share.markdown=${JSON.stringify(view.shareReference.markdown)}`,
     `share.source_url=${view.shareReference.sourceUrl ?? "none"}`,
+    `share.source_url_origin=${view.shareReference.sourceUrlOrigin}`,
     `verification.total_jobs=${view.verification.summary.totalJobs}`,
     `verification.latest_status=${view.verification.summary.latestStatus ?? "none"}`,
     `verification.latest_job_id=${view.verification.summary.latestJobId ?? "none"}`,
@@ -268,7 +275,10 @@ function summarizeVerificationJobs(
   };
 }
 
-function buildShareReference(leaf: TheoremLeafRecord): LeafShareReference {
+function buildShareReference(
+  leaf: TheoremLeafRecord,
+  sourceUrlOrigin: LeafShareReference["sourceUrlOrigin"],
+): LeafShareReference {
   const span = `${leaf.sourceSpan.startLine}:${leaf.sourceSpan.startColumn}-${leaf.sourceSpan.endLine}:${leaf.sourceSpan.endColumn}`;
   const declaration = `${leaf.modulePath}.${leaf.declarationName}`;
   const compact = `${declaration}@${span}`;
@@ -277,7 +287,24 @@ function buildShareReference(leaf: TheoremLeafRecord): LeafShareReference {
     compact,
     markdown: leaf.sourceUrl ? `[${declaration}](${leaf.sourceUrl})` : `\`${compact}\``,
     sourceUrl: leaf.sourceUrl,
+    sourceUrlOrigin,
   };
+}
+
+function resolveLeafSource(
+  leaf: TheoremLeafRecord,
+  sourceBaseUrl: string | undefined,
+): {
+  sourceUrl?: string;
+  origin: LeafShareReference["sourceUrlOrigin"];
+} {
+  if (leaf.sourceUrl) {
+    return { sourceUrl: leaf.sourceUrl, origin: "leaf" };
+  }
+  if (!sourceBaseUrl) {
+    return { sourceUrl: undefined, origin: "missing" };
+  }
+  return { sourceUrl: buildSourceUrl(sourceBaseUrl, leaf.sourceSpan), origin: "source_span" };
 }
 
 function findProvenancePath(
