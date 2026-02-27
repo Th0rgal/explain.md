@@ -133,6 +133,25 @@ Each report includes:
 - `qualityReportHash` (canonical report hash)
 - `preset.name` + `preset.hash`
 - threshold pass/failure and metrics summary
+- a deterministic baseline check artifact at `.explain-md/quality-gate-baseline-check.json`
+
+CI also runs a deterministic baseline drift gate against committed benchmark expectations:
+
+```bash
+npm run eval:quality:baseline
+```
+
+The baseline source of truth is:
+- `docs/benchmarks/quality-gate-baseline.json`
+
+To intentionally refresh baseline expectations after a reviewed benchmark change:
+
+```bash
+node scripts/eval-quality-baseline.mjs \
+  --reports=.explain-md/quality-gate-report-pressure.json,.explain-md/quality-gate-report-broad.json \
+  --baseline=docs/benchmarks/quality-gate-baseline.json \
+  --write-baseline
+```
 
 ## Verity benchmark examples
 - Loop/arithmetic/conditional-heavy subset:

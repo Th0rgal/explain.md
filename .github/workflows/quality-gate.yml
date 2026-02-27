@@ -41,4 +41,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: quality-gate-reports
-          path: .explain-md/quality-gate-report-*.json
+          path: |
+            .explain-md/quality-gate-report-*.json
+            .explain-md/quality-gate-baseline-check.json

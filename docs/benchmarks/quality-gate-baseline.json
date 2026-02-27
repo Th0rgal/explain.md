@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "1.0.0",
+  "entries": [
+    {
+      "presetName": "fixture-verity-broad",
+      "presetHash": "6ddee2e1c8a4e96630ded749e609925f54bf1d6bddfebaedf78d5793f607eb18",
+      "qualityReportHash": "f2bf3ca5caa80f41bfbcbf538d3ab149dff7355f36c35235a65932e4b6b6c0fa",
+      "thresholdPass": true,
+      "leafCount": 13,
+      "parentCount": 5,
+      "repartitionEventCount": 1,
+      "repartitionMaxRound": 0
+    },
+    {
+      "presetName": "fixture-verity-pressure",
+      "presetHash": "5251da16b02169e49c30cb4aed8f05b07caab119bbde8d7f98fca170d825705a",
+      "qualityReportHash": "34efa2a67254563a5b78fd6c541847ceabc971be078eb03ceacf58f92b486d8d",
+      "thresholdPass": true,
+      "leafCount": 4,
+      "parentCount": 3,
+      "repartitionEventCount": 1,
+      "repartitionMaxRound": 0
+    }
+  ],
+  "outcomeHash": "daed53899fa0324a0a8f86c84211d2826df17546f6c06bd90469789fab64f194"
+}
