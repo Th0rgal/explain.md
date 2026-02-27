@@ -20,8 +20,13 @@ By default this writes:
   - expected diagnostics include `cache_topology_addition_subtree_insertion_rebuild_hit`, and `afterChangeTopologyPlan.topologyShapeChanged=true`.
   - `afterChangeAdditionRecovery` records deterministic addition-only recovery telemetry:
     - `recoveryMode`
+    - `insertionFrontierCount`
+    - `insertionMergeParentCount`
     - `addedLeafCount`
     - `insertedParentCount`
+    - `insertionScheduledAttachmentCount`
+    - `insertionRecomputedAncestorCount`
+    - `insertionStrategy`
     - `reusableParentSummaryCount`
     - `reusedParentSummaryCount`
     - `reusedParentSummaryByGroundingCount`

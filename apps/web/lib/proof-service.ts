@@ -1155,7 +1155,12 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
           planHash: blockedSubtreePlan.planHash,
           recoveryMode: topologyAdditionRecovery.recoveryMode,
           addedLeafCount: topologyAdditionRecovery.addedLeafIds.length,
+          insertionFrontierCount: topologyAdditionRecovery.insertionFrontierCount,
+          insertionMergeParentCount: topologyAdditionRecovery.insertionMergeParentCount,
           insertedParentCount: topologyAdditionRecovery.insertedParentCount,
+          insertionScheduledAttachmentCount: topologyAdditionRecovery.insertionScheduledAttachmentCount,
+          insertionRecomputedAncestorCount: topologyAdditionRecovery.insertionRecomputedAncestorCount,
+          insertionStrategy: topologyAdditionRecovery.insertionStrategy,
           reusableParentSummaryCount: topologyAdditionRecovery.reusableParentSummaryCount,
           reusedParentSummaryCount: topologyAdditionRecovery.reusedParentSummaryCount,
           reusedParentSummaryByGroundingCount: topologyAdditionRecovery.reusedParentSummaryByGroundingCount,
@@ -1774,7 +1779,12 @@ interface TopologyAdditionRecoveryResult {
   cacheEntry: ProofDatasetCacheEntry;
   recoveryMode: "insertion" | "regeneration";
   addedLeafIds: string[];
+  insertionFrontierCount: number;
+  insertionMergeParentCount: number;
   insertedParentCount: number;
+  insertionScheduledAttachmentCount: number;
+  insertionRecomputedAncestorCount: number;
+  insertionStrategy: "edge_connector_ancestor_recompute" | "regeneration";
   reusableParentSummaryCount: number;
   reusedParentSummaryCount: number;
   reusedParentSummaryByGroundingCount: number;
@@ -2541,7 +2551,12 @@ async function attemptTopologyAdditionRecovery(
     cacheEntry: regenerationRecovery.cacheEntry,
     recoveryMode: "regeneration",
     addedLeafIds,
+    insertionFrontierCount: 0,
+    insertionMergeParentCount: 0,
     insertedParentCount: 0,
+    insertionScheduledAttachmentCount: 0,
+    insertionRecomputedAncestorCount: 0,
+    insertionStrategy: "regeneration",
     reusableParentSummaryCount: regenerationRecovery.reusableParentSummaryCount,
     reusedParentSummaryCount: regenerationRecovery.reusedParentSummaryCount,
     reusedParentSummaryByGroundingCount: regenerationRecovery.reusedParentSummaryByGroundingCount,
@@ -2580,6 +2595,76 @@ async function attemptTopologyAdditionSubtreeInsertionRecovery(
     if (unchangedLeafIds[index] !== cachedLeafIds[index]) {
       return undefined;
     }
+  }
+
+  const unchangedLeafIdSet = new Set(unchangedLeafIds);
+  const addedLeafById = new Map(addedLeaves.map((leaf) => [leaf.id, leaf]));
+  const addedLeafIds = addedLeaves.map((leaf) => leaf.id).sort((left, right) => left.localeCompare(right));
+  const addedAdjacency = new Map<string, Set<string>>();
+  for (const leafId of addedLeafIds) {
+    addedAdjacency.set(leafId, new Set());
+  }
+  for (const leaf of addedLeaves) {
+    const neighbors = addedAdjacency.get(leaf.id);
+    if (!neighbors) {
+      return undefined;
+    }
+    for (const dependencyId of leaf.dependencyIds) {
+      if (!addedLeafById.has(dependencyId)) {
+        continue;
+      }
+      neighbors.add(dependencyId);
+      addedAdjacency.get(dependencyId)?.add(leaf.id);
+    }
+  }
+  const insertionFrontiers: Array<{ frontierKey: string; frontierLeafIds: string[]; leaves: TheoremLeafRecord[] }> = [];
+  const visitedAddedLeafIds = new Set<string>();
+  for (const leafId of addedLeafIds) {
+    if (visitedAddedLeafIds.has(leafId)) {
+      continue;
+    }
+    const componentLeafIds: string[] = [];
+    const queue: string[] = [leafId];
+    while (queue.length > 0) {
+      const currentLeafId = queue.shift() as string;
+      if (visitedAddedLeafIds.has(currentLeafId)) {
+        continue;
+      }
+      visitedAddedLeafIds.add(currentLeafId);
+      componentLeafIds.push(currentLeafId);
+      const neighbors = [...(addedAdjacency.get(currentLeafId) ?? [])].sort((left, right) => left.localeCompare(right));
+      for (const neighbor of neighbors) {
+        if (!visitedAddedLeafIds.has(neighbor)) {
+          queue.push(neighbor);
+        }
+      }
+    }
+    componentLeafIds.sort((left, right) => left.localeCompare(right));
+    const componentLeaves = componentLeafIds
+      .map((componentLeafId) => addedLeafById.get(componentLeafId))
+      .filter((leaf): leaf is TheoremLeafRecord => Boolean(leaf));
+    if (componentLeaves.length !== componentLeafIds.length) {
+      return undefined;
+    }
+    const frontierLeafIds = dedupeOrdered(
+      componentLeaves
+        .flatMap((leaf) => leaf.dependencyIds)
+        .filter((dependencyId) => unchangedLeafIdSet.has(dependencyId))
+        .sort((left, right) => left.localeCompare(right)),
+    );
+    const frontierKey =
+      frontierLeafIds.length > 0
+        ? `deps:${frontierLeafIds.join("|")}::component:${componentLeafIds.join("|")}`
+        : `component:${componentLeafIds.join("|")}`;
+    insertionFrontiers.push({
+      frontierKey,
+      frontierLeafIds,
+      leaves: componentLeaves,
+    });
+  }
+  insertionFrontiers.sort((left, right) => left.frontierKey.localeCompare(right.frontierKey));
+  if (insertionFrontiers.length === 0) {
+    return undefined;
   }
 
   const currentLeafById = new Map(request.currentLeaves.map((leaf) => [leaf.id, leaf]));
@@ -2630,60 +2715,103 @@ async function attemptTopologyAdditionSubtreeInsertionRecovery(
   }
 
   const insertionProvider = createDeterministicSummaryProvider();
-  let addedSubtree: ExplanationTree;
-  try {
-    addedSubtree = await buildRecursiveExplanationTree(insertionProvider, {
-      leaves: mapTheoremLeavesToTreeLeaves(addedLeaves),
-      config: request.config,
-    });
-  } catch {
-    return undefined;
-  }
-
-  for (const [nodeId, node] of Object.entries(addedSubtree.nodes)) {
-    if (nodeId in mergedNodes) {
+  const frontierSubtreeRootIds: string[] = [];
+  const addedGroupPlanEntries: ExplanationTree["groupPlan"] = [];
+  const addedGroupingDiagnosticEntries: ExplanationTree["groupingDiagnostics"] = [];
+  let addedSubtreeParentCount = 0;
+  for (const frontier of insertionFrontiers) {
+    let addedSubtree: ExplanationTree;
+    try {
+      addedSubtree = await buildRecursiveExplanationTree(insertionProvider, {
+        leaves: mapTheoremLeavesToTreeLeaves(frontier.leaves),
+        config: request.config,
+      });
+    } catch {
       return undefined;
     }
-    mergedNodes[nodeId] = {
-      ...node,
-      childIds: node.childIds.slice(),
-      evidenceRefs: node.evidenceRefs.slice(),
-      newTermsIntroduced: node.newTermsIntroduced ? node.newTermsIntroduced.slice() : undefined,
-      policyDiagnostics: node.policyDiagnostics
-        ? {
-            depth: node.policyDiagnostics.depth,
-            groupIndex: node.policyDiagnostics.groupIndex,
-            retriesUsed: node.policyDiagnostics.retriesUsed,
-            preSummary: {
-              ok: node.policyDiagnostics.preSummary.ok,
-              violations: node.policyDiagnostics.preSummary.violations.map((violation) => ({ ...violation })),
-              metrics: { ...node.policyDiagnostics.preSummary.metrics },
-            },
-            postSummary: {
-              ok: node.policyDiagnostics.postSummary.ok,
-              violations: node.policyDiagnostics.postSummary.violations.map((violation) => ({ ...violation })),
-              metrics: { ...node.policyDiagnostics.postSummary.metrics },
-            },
-          }
-        : undefined,
-    };
-    if (node.kind === "parent" && node.policyDiagnostics) {
-      policyDiagnosticsByParent[node.id] = {
-        depth: node.policyDiagnostics.depth,
-        groupIndex: node.policyDiagnostics.groupIndex,
-        retriesUsed: node.policyDiagnostics.retriesUsed,
-        preSummary: {
-          ok: node.policyDiagnostics.preSummary.ok,
-          violations: node.policyDiagnostics.preSummary.violations.map((violation) => ({ ...violation })),
-          metrics: { ...node.policyDiagnostics.preSummary.metrics },
-        },
-        postSummary: {
-          ok: node.policyDiagnostics.postSummary.ok,
-          violations: node.policyDiagnostics.postSummary.violations.map((violation) => ({ ...violation })),
-          metrics: { ...node.policyDiagnostics.postSummary.metrics },
-        },
+    frontierSubtreeRootIds.push(addedSubtree.rootId);
+    addedSubtreeParentCount += Object.values(addedSubtree.nodes).filter((node) => node.kind === "parent").length;
+
+    for (const [nodeId, node] of Object.entries(addedSubtree.nodes)) {
+      if (nodeId in mergedNodes) {
+        return undefined;
+      }
+      mergedNodes[nodeId] = {
+        ...node,
+        childIds: node.childIds.slice(),
+        evidenceRefs: node.evidenceRefs.slice(),
+        newTermsIntroduced: node.newTermsIntroduced ? node.newTermsIntroduced.slice() : undefined,
+        policyDiagnostics: node.policyDiagnostics
+          ? {
+              depth: node.policyDiagnostics.depth,
+              groupIndex: node.policyDiagnostics.groupIndex,
+              retriesUsed: node.policyDiagnostics.retriesUsed,
+              preSummary: {
+                ok: node.policyDiagnostics.preSummary.ok,
+                violations: node.policyDiagnostics.preSummary.violations.map((violation) => ({ ...violation })),
+                metrics: { ...node.policyDiagnostics.preSummary.metrics },
+              },
+              postSummary: {
+                ok: node.policyDiagnostics.postSummary.ok,
+                violations: node.policyDiagnostics.postSummary.violations.map((violation) => ({ ...violation })),
+                metrics: { ...node.policyDiagnostics.postSummary.metrics },
+              },
+            }
+          : undefined,
       };
+      if (node.kind === "parent" && node.policyDiagnostics) {
+        policyDiagnosticsByParent[node.id] = {
+          depth: node.policyDiagnostics.depth,
+          groupIndex: node.policyDiagnostics.groupIndex,
+          retriesUsed: node.policyDiagnostics.retriesUsed,
+          preSummary: {
+            ok: node.policyDiagnostics.preSummary.ok,
+            violations: node.policyDiagnostics.preSummary.violations.map((violation) => ({ ...violation })),
+            metrics: { ...node.policyDiagnostics.preSummary.metrics },
+          },
+          postSummary: {
+            ok: node.policyDiagnostics.postSummary.ok,
+            violations: node.policyDiagnostics.postSummary.violations.map((violation) => ({ ...violation })),
+            metrics: { ...node.policyDiagnostics.postSummary.metrics },
+          },
+        };
+      }
     }
+    addedGroupPlanEntries.push(
+      ...addedSubtree.groupPlan
+        .filter(
+          (entry) =>
+            entry.outputNodeId in addedSubtree.nodes &&
+            entry.inputNodeIds.every((nodeId) => nodeId in addedSubtree.nodes) &&
+            addedSubtree.nodes[entry.outputNodeId]?.kind === "parent",
+        )
+        .map((entry) => ({
+          depth: entry.depth,
+          index: entry.index,
+          inputNodeIds: entry.inputNodeIds.slice(),
+          outputNodeId: entry.outputNodeId,
+          complexitySpread: entry.complexitySpread,
+        })),
+    );
+    addedGroupingDiagnosticEntries.push(
+      ...addedSubtree.groupingDiagnostics
+        .map((entry) => ({
+          depth: entry.depth,
+          orderedNodeIds: entry.orderedNodeIds.slice(),
+          complexitySpreadByGroup: entry.complexitySpreadByGroup.slice(),
+          warnings: entry.warnings.map((warning) => ({ ...warning })),
+          repartitionEvents: entry.repartitionEvents?.map((event) => ({
+            depth: event.depth,
+            groupIndex: event.groupIndex,
+            round: event.round,
+            reason: event.reason,
+            inputNodeIds: event.inputNodeIds.slice(),
+            outputGroups: event.outputGroups.map((group) => group.slice()),
+            violationCodes: event.violationCodes.slice(),
+          })),
+        }))
+        .filter((entry) => entry.orderedNodeIds.length > 0),
+    );
   }
 
   for (const leaf of request.currentLeaves) {
@@ -2698,76 +2826,219 @@ async function attemptTopologyAdditionSubtreeInsertionRecovery(
     };
   }
 
-  const mergedRootChildIds = dedupeOrdered([request.cachedTree.rootId, addedSubtree.rootId]);
-  if (mergedRootChildIds.length < 2) {
-    return undefined;
-  }
-  const rootChildren = mergedRootChildIds.map((childId) => {
-    const childNode = mergedNodes[childId];
-    if (!childNode) {
+  let mergedRootId = request.cachedTree.rootId;
+  const insertionParentIds: string[] = [];
+  const insertionPlanEntries: Array<{ outputNodeId: string; index: number; inputNodeIds: string[]; complexitySpread: number }> =
+    [];
+  const insertionGroupingEntries: Array<{ outputNodeId: string; orderedNodeIds: string[]; complexitySpread: number }> = [];
+  const pendingRecomputeParentIds = new Set<string>();
+  const recomputedAncestorIds = new Set<string>();
+  for (let frontierIndex = 0; frontierIndex < insertionFrontiers.length; frontierIndex += 1) {
+    const frontier = insertionFrontiers[frontierIndex];
+    const frontierRootId = frontierSubtreeRootIds[frontierIndex];
+    if (!frontierRootId || !(frontierRootId in mergedNodes)) {
       return undefined;
     }
-    return {
-      id: childNode.id,
-      statement: childNode.statement,
-      complexity: childNode.complexityScore,
-      prerequisiteIds: childNode.kind === "leaf" ? currentLeafById.get(childNode.id)?.dependencyIds : undefined,
+
+    const parentsByChildId = buildParentsByChildId(mergedNodes);
+    const anchorNodeId = resolveInsertionAnchorNodeId({
+      rootId: mergedRootId,
+      frontierLeafIds: frontier.frontierLeafIds,
+      parentsByChildId,
+    });
+    if (!anchorNodeId || !(anchorNodeId in mergedNodes)) {
+      return undefined;
+    }
+    const insertionChildIds = dedupeOrdered([anchorNodeId, frontierRootId]);
+    if (insertionChildIds.length < 2) {
+      return undefined;
+    }
+    const insertionChildren = insertionChildIds.map((childId) => {
+      const childNode = mergedNodes[childId];
+      if (!childNode) {
+        return undefined;
+      }
+      return {
+        id: childNode.id,
+        statement: childNode.statement,
+        complexity: childNode.complexityScore,
+        prerequisiteIds: childNode.kind === "leaf" ? currentLeafById.get(childNode.id)?.dependencyIds : undefined,
+      };
+    });
+    if (insertionChildren.some((child) => child === undefined)) {
+      return undefined;
+    }
+    const resolvedInsertionChildren = insertionChildren as Array<{
+      id: string;
+      statement: string;
+      complexity?: number;
+      prerequisiteIds?: string[];
+    }>;
+    const preSummaryDecision = evaluatePreSummaryPolicy(resolvedInsertionChildren, request.config);
+    if (!preSummaryDecision.ok) {
+      return undefined;
+    }
+    const insertionSummary = await generateParentSummary(insertionProvider, {
+      children: resolvedInsertionChildren,
+      config: request.config,
+    });
+    const postSummaryDecision = evaluatePostSummaryPolicy(
+      resolvedInsertionChildren,
+      insertionSummary.summary,
+      request.config,
+    );
+    if (!postSummaryDecision.ok) {
+      return undefined;
+    }
+    const insertionParentId = `p_addition_${computeCanonicalRequestHash({
+      planHash: request.blockedSubtreePlan.planHash,
+      frontierKey: frontier.frontierKey,
+      frontierIndex,
+      anchorNodeId,
+      frontierRootId,
+    }).slice(0, 16)}`;
+    if (insertionParentId in mergedNodes) {
+      return undefined;
+    }
+    const insertionPolicyDiagnostics: ParentPolicyDiagnostics = {
+      depth: 0,
+      groupIndex: frontierIndex,
+      retriesUsed: 0,
+      preSummary: preSummaryDecision,
+      postSummary: postSummaryDecision,
     };
-  });
-  if (rootChildren.some((child) => child === undefined)) {
-    return undefined;
-  }
-  const resolvedRootChildren = rootChildren as Array<{
-    id: string;
-    statement: string;
-    complexity?: number;
-    prerequisiteIds?: string[];
-  }>;
-  const preSummaryDecision = evaluatePreSummaryPolicy(resolvedRootChildren, request.config);
-  if (!preSummaryDecision.ok) {
-    return undefined;
+    mergedNodes[insertionParentId] = {
+      id: insertionParentId,
+      kind: "parent",
+      statement: insertionSummary.summary.parent_statement,
+      childIds: insertionChildIds.slice(),
+      depth: 0,
+      complexityScore: insertionSummary.summary.complexity_score,
+      abstractionScore: insertionSummary.summary.abstraction_score,
+      confidence: insertionSummary.summary.confidence,
+      whyTrueFromChildren: insertionSummary.summary.why_true_from_children,
+      newTermsIntroduced: insertionSummary.summary.new_terms_introduced,
+      evidenceRefs: insertionSummary.summary.evidence_refs,
+      policyDiagnostics: insertionPolicyDiagnostics,
+    };
+    policyDiagnosticsByParent[insertionParentId] = insertionPolicyDiagnostics;
+    insertionParentIds.push(insertionParentId);
+    insertionPlanEntries.push({
+      outputNodeId: insertionParentId,
+      index: frontierIndex,
+      inputNodeIds: insertionChildIds.slice(),
+      complexitySpread: preSummaryDecision.metrics.complexitySpread,
+    });
+    insertionGroupingEntries.push({
+      outputNodeId: insertionParentId,
+      orderedNodeIds: insertionChildIds.slice(),
+      complexitySpread: preSummaryDecision.metrics.complexitySpread,
+    });
+
+    const anchorParentIds = (parentsByChildId.get(anchorNodeId) ?? []).slice().sort((left, right) => left.localeCompare(right));
+    if (anchorParentIds.length === 0) {
+      mergedRootId = insertionParentId;
+      continue;
+    }
+    for (const parentId of anchorParentIds) {
+      const parentNode = mergedNodes[parentId];
+      if (!parentNode || parentNode.kind !== "parent") {
+        continue;
+      }
+      parentNode.childIds = dedupeOrdered(
+        parentNode.childIds.flatMap((childId) => (childId === anchorNodeId ? [insertionParentId] : [childId])),
+      );
+      pendingRecomputeParentIds.add(parentId);
+    }
   }
 
-  const rootSummary = await generateParentSummary(insertionProvider, {
-    children: resolvedRootChildren,
-    config: request.config,
-  });
-  const postSummaryDecision = evaluatePostSummaryPolicy(resolvedRootChildren, rootSummary.summary, request.config);
-  if (!postSummaryDecision.ok) {
-    return undefined;
+  while (pendingRecomputeParentIds.size > 0) {
+    const parentId = [...pendingRecomputeParentIds].sort((left, right) => {
+      const depthDelta = (mergedNodes[right]?.depth ?? 0) - (mergedNodes[left]?.depth ?? 0);
+      if (depthDelta !== 0) {
+        return depthDelta;
+      }
+      return left.localeCompare(right);
+    })[0];
+    pendingRecomputeParentIds.delete(parentId);
+    const parentNode = mergedNodes[parentId];
+    if (!parentNode || parentNode.kind !== "parent") {
+      continue;
+    }
+    const filteredChildIds = dedupeOrdered(parentNode.childIds.filter((childId) => childId in mergedNodes));
+    if (filteredChildIds.length < 2) {
+      return undefined;
+    }
+    const children = filteredChildIds.map((childId) => {
+      const childNode = mergedNodes[childId];
+      if (!childNode) {
+        return undefined;
+      }
+      return {
+        id: childNode.id,
+        statement: childNode.statement,
+        complexity: childNode.complexityScore,
+        prerequisiteIds: childNode.kind === "leaf" ? currentLeafById.get(childNode.id)?.dependencyIds : undefined,
+      };
+    });
+    if (children.some((child) => child === undefined)) {
+      return undefined;
+    }
+    const resolvedChildren = children as Array<{
+      id: string;
+      statement: string;
+      complexity?: number;
+      prerequisiteIds?: string[];
+    }>;
+    const preSummaryDecision = evaluatePreSummaryPolicy(resolvedChildren, request.config);
+    if (!preSummaryDecision.ok) {
+      return undefined;
+    }
+    const summaryResult = await generateParentSummary(insertionProvider, {
+      children: resolvedChildren,
+      config: request.config,
+    });
+    const postSummaryDecision = evaluatePostSummaryPolicy(resolvedChildren, summaryResult.summary, request.config);
+    if (!postSummaryDecision.ok) {
+      return undefined;
+    }
+    const nextPolicyDiagnostics: ParentPolicyDiagnostics = {
+      depth: parentNode.depth,
+      groupIndex: parentNode.policyDiagnostics?.groupIndex ?? 0,
+      retriesUsed: 0,
+      preSummary: preSummaryDecision,
+      postSummary: postSummaryDecision,
+    };
+    policyDiagnosticsByParent[parentId] = nextPolicyDiagnostics;
+    mergedNodes[parentId] = {
+      ...parentNode,
+      childIds: filteredChildIds,
+      statement: summaryResult.summary.parent_statement,
+      complexityScore: summaryResult.summary.complexity_score,
+      abstractionScore: summaryResult.summary.abstraction_score,
+      confidence: summaryResult.summary.confidence,
+      whyTrueFromChildren: summaryResult.summary.why_true_from_children,
+      newTermsIntroduced: summaryResult.summary.new_terms_introduced,
+      evidenceRefs: summaryResult.summary.evidence_refs,
+      policyDiagnostics: nextPolicyDiagnostics,
+    };
+    recomputedAncestorIds.add(parentId);
+    const parentsByChildId = buildParentsByChildId(mergedNodes);
+    for (const grandParentId of parentsByChildId.get(parentId) ?? []) {
+      pendingRecomputeParentIds.add(grandParentId);
+    }
   }
-
-  const mergedRootId = `p_addition_${computeCanonicalRequestHash({
-    planHash: request.blockedSubtreePlan.planHash,
-    childIds: mergedRootChildIds.slice(),
-  }).slice(0, 16)}`;
-  if (mergedRootId in mergedNodes) {
-    return undefined;
-  }
-  const rootPolicyDiagnostics: ParentPolicyDiagnostics = {
-    depth: 0,
-    groupIndex: 0,
-    retriesUsed: 0,
-    preSummary: preSummaryDecision,
-    postSummary: postSummaryDecision,
-  };
-  mergedNodes[mergedRootId] = {
-    id: mergedRootId,
-    kind: "parent",
-    statement: rootSummary.summary.parent_statement,
-    childIds: mergedRootChildIds,
-    depth: 0,
-    complexityScore: rootSummary.summary.complexity_score,
-    abstractionScore: rootSummary.summary.abstraction_score,
-    confidence: rootSummary.summary.confidence,
-    whyTrueFromChildren: rootSummary.summary.why_true_from_children,
-    newTermsIntroduced: rootSummary.summary.new_terms_introduced,
-    evidenceRefs: rootSummary.summary.evidence_refs,
-    policyDiagnostics: rootPolicyDiagnostics,
-  };
-  policyDiagnosticsByParent[mergedRootId] = rootPolicyDiagnostics;
 
   recomputeNodeDepths(mergedRootId, mergedNodes);
+  const computeComplexitySpread = (childIds: string[]): number => {
+    const complexities = childIds
+      .map((childId) => mergedNodes[childId]?.complexityScore)
+      .filter((value): value is number => typeof value === "number");
+    if (complexities.length === 0) {
+      return 0;
+    }
+    return Math.max(...complexities) - Math.min(...complexities);
+  };
 
   const mergedGroupPlan = [
     ...request.cachedTree.groupPlan
@@ -2780,31 +3051,37 @@ async function attemptTopologyAdditionSubtreeInsertionRecovery(
       .map((entry) => ({
         depth: mergedNodes[entry.outputNodeId]?.depth ?? entry.depth,
         index: entry.index,
-        inputNodeIds: entry.inputNodeIds.slice(),
+        inputNodeIds: mergedNodes[entry.outputNodeId]?.kind === "parent" ? mergedNodes[entry.outputNodeId].childIds.slice() : [],
         outputNodeId: entry.outputNodeId,
-        complexitySpread: entry.complexitySpread,
+        complexitySpread:
+          mergedNodes[entry.outputNodeId]?.kind === "parent"
+            ? computeComplexitySpread(mergedNodes[entry.outputNodeId].childIds)
+            : entry.complexitySpread,
       })),
-    ...addedSubtree.groupPlan
+    ...addedGroupPlanEntries
       .filter(
         (entry) =>
           entry.outputNodeId in mergedNodes &&
-          entry.inputNodeIds.every((nodeId) => nodeId in mergedNodes) &&
+          mergedNodes[entry.outputNodeId]?.kind === "parent" &&
           mergedNodes[entry.outputNodeId]?.kind === "parent",
       )
       .map((entry) => ({
         depth: mergedNodes[entry.outputNodeId]?.depth ?? entry.depth,
         index: entry.index,
-        inputNodeIds: entry.inputNodeIds.slice(),
+        inputNodeIds: mergedNodes[entry.outputNodeId]?.kind === "parent" ? mergedNodes[entry.outputNodeId].childIds.slice() : [],
         outputNodeId: entry.outputNodeId,
-        complexitySpread: entry.complexitySpread,
+        complexitySpread:
+          mergedNodes[entry.outputNodeId]?.kind === "parent"
+            ? computeComplexitySpread(mergedNodes[entry.outputNodeId].childIds)
+            : entry.complexitySpread,
       })),
-    {
-      depth: mergedNodes[mergedRootId].depth,
-      index: 0,
-      inputNodeIds: mergedRootChildIds.slice(),
-      outputNodeId: mergedRootId,
-      complexitySpread: preSummaryDecision.metrics.complexitySpread,
-    },
+    ...insertionPlanEntries.map((entry) => ({
+      depth: mergedNodes[entry.outputNodeId]?.depth ?? 0,
+      index: entry.index,
+      inputNodeIds: entry.inputNodeIds.slice(),
+      outputNodeId: entry.outputNodeId,
+      complexitySpread: entry.complexitySpread,
+    })),
   ];
 
   const mergedGroupingDiagnostics = [
@@ -2831,7 +3108,7 @@ async function attemptTopologyAdditionSubtreeInsertionRecovery(
           ),
       }))
       .filter((entry) => entry.orderedNodeIds.length > 0),
-    ...addedSubtree.groupingDiagnostics
+    ...addedGroupingDiagnosticEntries
       .map((entry) => ({
         depth: entry.depth,
         orderedNodeIds: entry.orderedNodeIds.filter((nodeId) => nodeId in mergedNodes),
@@ -2854,13 +3131,13 @@ async function attemptTopologyAdditionSubtreeInsertionRecovery(
           ),
       }))
       .filter((entry) => entry.orderedNodeIds.length > 0),
-    {
-      depth: mergedNodes[mergedRootId].depth,
-      orderedNodeIds: mergedRootChildIds.slice(),
-      complexitySpreadByGroup: [preSummaryDecision.metrics.complexitySpread],
+    ...insertionGroupingEntries.map((entry) => ({
+      depth: mergedNodes[entry.outputNodeId]?.depth ?? 0,
+      orderedNodeIds: entry.orderedNodeIds.slice(),
+      complexitySpreadByGroup: [entry.complexitySpread],
       warnings: [],
       repartitionEvents: [],
-    },
+    })),
   ];
 
   const recoveredTree: ExplanationTree = {
@@ -2895,14 +3172,25 @@ async function attemptTopologyAdditionSubtreeInsertionRecovery(
     snapshot: recoveredSnapshot,
   };
 
-  const addedSubtreeParentCount = Object.values(addedSubtree.nodes).filter((node) => node.kind === "parent").length;
-  const insertedParentCount = addedSubtreeParentCount + 1;
+  const insertionMergeParentCount = insertionParentIds.length;
+  const insertedParentCount = addedSubtreeParentCount + insertionMergeParentCount;
+  const insertionRecomputedAncestorCount = recomputedAncestorIds.size;
+  const insertionStrategy = "edge_connector_ancestor_recompute" as const;
+  const generatedParentSummaryCount = insertedParentCount + insertionRecomputedAncestorCount;
   const insertionHash = computeCanonicalRequestHash({
     planHash: request.blockedSubtreePlan.planHash,
     addedLeafIds: request.addedLeafIds.slice(),
-    addedSubtreeRootId: addedSubtree.rootId,
+    insertionFrontierCount: insertionFrontiers.length,
+    insertionFrontierKeys: insertionFrontiers.map((frontier) => frontier.frontierKey),
+    insertionFrontierLeafIds: insertionFrontiers.map((frontier) => frontier.frontierLeafIds),
+    frontierSubtreeRootIds: frontierSubtreeRootIds.slice(),
+    insertionParentIds: insertionParentIds.slice(),
+    insertionRecomputedAncestorIds: [...recomputedAncestorIds].sort((left, right) => left.localeCompare(right)),
     mergedRootId,
+    insertionStrategy,
     insertedParentCount,
+    insertionRecomputedAncestorCount,
+    generatedParentSummaryCount,
     dependencyGraphHash: request.dependencyGraphHash,
     configHash: request.configHash,
   });
@@ -2912,24 +3200,99 @@ async function attemptTopologyAdditionSubtreeInsertionRecovery(
     cacheEntry,
     recoveryMode: "insertion",
     addedLeafIds: request.addedLeafIds.slice(),
+    insertionFrontierCount: insertionFrontiers.length,
+    insertionMergeParentCount,
     insertedParentCount,
+    insertionScheduledAttachmentCount: insertionParentIds.length,
+    insertionRecomputedAncestorCount,
+    insertionStrategy,
     reusableParentSummaryCount: 0,
     reusedParentSummaryCount: 0,
     reusedParentSummaryByGroundingCount: 0,
     reusedParentSummaryByStatementSignatureCount: 0,
-    generatedParentSummaryCount: insertedParentCount,
+    generatedParentSummaryCount,
     skippedAmbiguousStatementSignatureReuseCount: 0,
     skippedUnrebasableStatementSignatureReuseCount: 0,
     regenerationHash: insertionHash,
     additionRecoveryHash: computeCanonicalRequestHash({
       planHash: request.blockedSubtreePlan.planHash,
       addedLeafIds: request.addedLeafIds.slice(),
+      insertionFrontierCount: insertionFrontiers.length,
+      insertionMergeParentCount,
       insertedParentCount,
+      insertionScheduledAttachmentCount: insertionParentIds.length,
+      insertionRecomputedAncestorCount,
+      insertionStrategy,
+      generatedParentSummaryCount,
       insertionHash,
       dependencyGraphHash: request.dependencyGraphHash,
       configHash: request.configHash,
     }),
   };
+}
+
+function resolveInsertionAnchorNodeId(request: {
+  rootId: string;
+  frontierLeafIds: string[];
+  parentsByChildId: Map<string, string[]>;
+}): string | undefined {
+  if (request.frontierLeafIds.length === 0) {
+    return request.rootId;
+  }
+  const sortedLeafIds = request.frontierLeafIds.slice().sort((left, right) => left.localeCompare(right));
+  const ancestorPathByLeafId = new Map<string, string[]>();
+  for (const leafId of sortedLeafIds) {
+    const ancestorPath = collectPrimaryAncestorPathToRoot({
+      nodeId: leafId,
+      rootId: request.rootId,
+      parentsByChildId: request.parentsByChildId,
+    });
+    if (!ancestorPath) {
+      return undefined;
+    }
+    ancestorPathByLeafId.set(leafId, ancestorPath);
+  }
+  const firstPath = ancestorPathByLeafId.get(sortedLeafIds[0]);
+  if (!firstPath) {
+    return undefined;
+  }
+  const ancestorSets = new Map<string, Set<string>>();
+  for (const leafId of sortedLeafIds) {
+    ancestorSets.set(leafId, new Set(ancestorPathByLeafId.get(leafId) ?? []));
+  }
+  for (const candidateId of firstPath) {
+    const supportedByAllLeaves = sortedLeafIds.every((leafId) => ancestorSets.get(leafId)?.has(candidateId));
+    if (supportedByAllLeaves) {
+      return candidateId;
+    }
+  }
+  return request.rootId;
+}
+
+function collectPrimaryAncestorPathToRoot(request: {
+  nodeId: string;
+  rootId: string;
+  parentsByChildId: Map<string, string[]>;
+}): string[] | undefined {
+  const path: string[] = [request.nodeId];
+  const visited = new Set<string>([request.nodeId]);
+  let currentId = request.nodeId;
+  while (currentId !== request.rootId) {
+    const sortedParents = (request.parentsByChildId.get(currentId) ?? [])
+      .slice()
+      .sort((left, right) => left.localeCompare(right));
+    if (sortedParents.length === 0) {
+      return undefined;
+    }
+    const parentId = sortedParents[0];
+    if (visited.has(parentId)) {
+      return undefined;
+    }
+    path.push(parentId);
+    visited.add(parentId);
+    currentId = parentId;
+  }
+  return path;
 }
 
 async function attemptTopologyRegenerationRecovery(

@@ -64,8 +64,13 @@ export interface ProofCacheBenchmarkReport {
       afterChangeDiagnostics: string[];
       afterChangeAdditionRecovery?: {
         recoveryMode: "insertion" | "regeneration";
+        insertionFrontierCount: number;
+        insertionMergeParentCount: number;
         addedLeafCount: number;
         insertedParentCount: number;
+        insertionScheduledAttachmentCount: number;
+        insertionRecomputedAncestorCount: number;
+        insertionStrategy: "edge_connector_ancestor_recompute" | "regeneration";
         reusableParentSummaryCount: number;
         reusedParentSummaryCount: number;
         reusedParentSummaryByGroundingCount: number;
@@ -477,8 +482,16 @@ function extractTopologyAdditionRecoveryDiagnostics(
     recoveryMode: (additionRecovery.details.recoveryMode === "insertion" ? "insertion" : "regeneration") as
       | "insertion"
       | "regeneration",
+    insertionFrontierCount: Number(additionRecovery.details.insertionFrontierCount ?? 0),
+    insertionMergeParentCount: Number(additionRecovery.details.insertionMergeParentCount ?? 0),
     addedLeafCount: Number(additionRecovery.details.addedLeafCount ?? 0),
     insertedParentCount: Number(additionRecovery.details.insertedParentCount ?? 0),
+    insertionScheduledAttachmentCount: Number(additionRecovery.details.insertionScheduledAttachmentCount ?? 0),
+    insertionRecomputedAncestorCount: Number(additionRecovery.details.insertionRecomputedAncestorCount ?? 0),
+    insertionStrategy:
+      additionRecovery.details.insertionStrategy === "edge_connector_ancestor_recompute"
+        ? "edge_connector_ancestor_recompute"
+        : "regeneration",
     reusableParentSummaryCount: Number(additionRecovery.details.reusableParentSummaryCount ?? 0),
     reusedParentSummaryCount: Number(additionRecovery.details.reusedParentSummaryCount ?? 0),
     reusedParentSummaryByGroundingCount: Number(additionRecovery.details.reusedParentSummaryByGroundingCount ?? 0),
