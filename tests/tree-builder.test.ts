@@ -415,6 +415,54 @@ describe("tree builder", () => {
     expect(reusedByChildHashGroups).toHaveLength(0);
   });
 
+  test("resolves ambiguous child-hash reuse deterministically by frontier hash", async () => {
+    const config = normalizeConfig({ maxChildrenPerParent: 2, complexityBandWidth: 2 });
+    const baselineProvider = countedDeterministicSummaryProvider();
+    const leaves = [
+      { id: "l1", statement: "Leaf one." },
+      { id: "l2", statement: "Leaf two." },
+      { id: "l3", statement: "Leaf three." },
+      { id: "l4", statement: "Leaf four." },
+      { id: "l5", statement: "Leaf five." },
+      { id: "l6", statement: "Leaf six." },
+    ];
+
+    const previousTree = await buildRecursiveExplanationTree(baselineProvider.provider, {
+      config,
+      leaves,
+    });
+    const duplicated = Object.fromEntries(
+      Object.entries(buildReusableParentSummaries(previousTree)).flatMap(([parentId, summary]) => [
+        [
+          `shifted_a_${parentId}`,
+          {
+            ...summary,
+            frontierLeafIdHash: `mismatch:${summary.frontierLeafIdHash}`,
+            frontierLeafStatementHash: `mismatch:${summary.frontierLeafStatementHash}`,
+          },
+        ],
+        [`shifted_b_${parentId}`, summary],
+      ]),
+    );
+
+    const withAmbiguousReuseProvider = countedDeterministicSummaryProvider();
+    const rebuilt = await buildRecursiveExplanationTree(withAmbiguousReuseProvider.provider, {
+      config,
+      leaves,
+      reusableParentSummaries: duplicated,
+    });
+
+    expect(withAmbiguousReuseProvider.counter.count).toBe(0);
+    const reusedByFrontierGroups = rebuilt.groupingDiagnostics.flatMap(
+      (layer) => layer.summaryReuse?.reusedByFrontierChildHashGroupIndexes ?? [],
+    );
+    const skippedAmbiguousGroups = rebuilt.groupingDiagnostics.flatMap(
+      (layer) => layer.summaryReuse?.skippedAmbiguousChildHashGroupIndexes ?? [],
+    );
+    expect(reusedByFrontierGroups.length).toBeGreaterThan(0);
+    expect(skippedAmbiguousGroups).toHaveLength(0);
+  });
+
   test("skips child-statement-hash reuse when reusable candidates are ambiguous", async () => {
     const config = normalizeConfig({ maxChildrenPerParent: 2, complexityBandWidth: 2 });
     const baselineProvider = countedDeterministicSummaryProvider();
@@ -466,6 +514,61 @@ describe("tree builder", () => {
     );
     expect(skippedAmbiguousGroups.length).toBeGreaterThan(0);
     expect(reusedByChildStatementHashGroups).toHaveLength(0);
+  });
+
+  test("resolves ambiguous child-statement-hash reuse deterministically by frontier hash", async () => {
+    const config = normalizeConfig({ maxChildrenPerParent: 2, complexityBandWidth: 2 });
+    const baselineProvider = countedDeterministicSummaryProvider();
+    const leaves = [
+      { id: "l1", statement: "Leaf one." },
+      { id: "l2", statement: "Leaf two." },
+      { id: "l3", statement: "Leaf three." },
+      { id: "l4", statement: "Leaf four." },
+      { id: "l5", statement: "Leaf five." },
+      { id: "l6", statement: "Leaf six." },
+    ];
+
+    const previousTree = await buildRecursiveExplanationTree(baselineProvider.provider, {
+      config,
+      leaves,
+    });
+    const duplicated = Object.fromEntries(
+      Object.entries(buildReusableParentSummaries(previousTree)).flatMap(([parentId, summary]) => [
+        [
+          `shifted_a_${parentId}`,
+          {
+            ...summary,
+            childStatementHash: `mismatch:a:${summary.childStatementHash}`,
+            frontierLeafIdHash: `mismatch:${summary.frontierLeafIdHash}`,
+            frontierLeafStatementHash: `mismatch:${summary.frontierLeafStatementHash}`,
+          },
+        ],
+        [
+          `shifted_b_${parentId}`,
+          {
+            ...summary,
+            childStatementHash: `mismatch:b:${summary.childStatementHash}`,
+          },
+        ],
+      ]),
+    );
+
+    const withAmbiguousReuseProvider = countedDeterministicSummaryProvider();
+    const rebuilt = await buildRecursiveExplanationTree(withAmbiguousReuseProvider.provider, {
+      config,
+      leaves,
+      reusableParentSummaries: duplicated,
+    });
+
+    expect(withAmbiguousReuseProvider.counter.count).toBe(0);
+    const reusedByFrontierGroups = rebuilt.groupingDiagnostics.flatMap(
+      (layer) => layer.summaryReuse?.reusedByFrontierChildStatementHashGroupIndexes ?? [],
+    );
+    const skippedAmbiguousGroups = rebuilt.groupingDiagnostics.flatMap(
+      (layer) => layer.summaryReuse?.skippedAmbiguousChildStatementHashGroupIndexes ?? [],
+    );
+    expect(reusedByFrontierGroups.length).toBeGreaterThan(0);
+    expect(skippedAmbiguousGroups).toHaveLength(0);
   });
 });
 
@@ -557,6 +660,8 @@ function buildReusableParentSummaries(tree: ExplanationTree): Record<string, Reu
     summaries[node.id] = {
       childStatementHash: computeChildStatementHash(children),
       childStatementTextHash: computeChildStatementTextHash(children),
+      frontierLeafIdHash: computeFrontierLeafIdHash(node.id, tree.nodes),
+      frontierLeafStatementHash: computeFrontierLeafStatementHash(node.id, tree.nodes),
       summary: {
         parent_statement: node.statement,
         why_true_from_children: node.whyTrueFromChildren,
@@ -582,6 +687,35 @@ function computeChildStatementTextHash(children: Array<{ statement: string }>): 
   return createHash("sha256")
     .update(children.map((child, index) => `${index}:${child.statement}`).join("\n"))
     .digest("hex");
+}
+
+function computeFrontierLeafIdHash(nodeId: string, nodes: ExplanationTree["nodes"]): string {
+  const frontier = collectFrontierLeaves(nodeId, nodes);
+  return createHash("sha256")
+    .update(frontier.map((leaf, index) => `${index}:${leaf.id}`).join("\n"))
+    .digest("hex");
+}
+
+function computeFrontierLeafStatementHash(nodeId: string, nodes: ExplanationTree["nodes"]): string {
+  const frontier = collectFrontierLeaves(nodeId, nodes);
+  return createHash("sha256")
+    .update(frontier.map((leaf, index) => `${index}:${leaf.statement}`).join("\n"))
+    .digest("hex");
+}
+
+function collectFrontierLeaves(nodeId: string, nodes: ExplanationTree["nodes"]): Array<{ id: string; statement: string }> {
+  const node = nodes[nodeId];
+  if (!node) {
+    throw new Error(`Missing node '${nodeId}' while collecting frontier leaves.`);
+  }
+  if (node.kind === "leaf") {
+    return [{ id: node.id, statement: node.statement }];
+  }
+  const leaves: Array<{ id: string; statement: string }> = [];
+  for (const childId of node.childIds) {
+    leaves.push(...collectFrontierLeaves(childId, nodes));
+  }
+  return leaves;
 }
 
 function extractChildIds(request: GenerateRequest): string[] {

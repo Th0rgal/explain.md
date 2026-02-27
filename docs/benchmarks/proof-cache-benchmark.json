@@ -1,18 +1,18 @@
 {
   "schemaVersion": "1.0.0",
-  "generatedAt": "2026-02-27T11:08:54.641Z",
+  "generatedAt": "2026-02-27T11:16:32.796Z",
   "proofId": "lean-verity-fixture",
   "configHash": "1b1e2b9ff73897b141a9f88c8d23a3b884495340813865fd955fa8fc3eaa4da2",
   "requestHash": "e6f53e14545f9579927084e1924992e7294f331551f9b89f4e93dc25669d6696",
-  "outcomeHash": "745d2e9c3827d9aaaf5df59e28fcaf6efe4d8335caf71f0987e432002694560a",
+  "outcomeHash": "964111c5968cd9ae86259a21ed5bda6e8b9fdc065f05db9edca844efbbd91368",
   "parameters": {
     "coldIterations": 3,
     "warmIterations": 3,
     "mutationTargetPath": "Verity/Core.lean"
   },
   "paths": {
-    "fixtureProjectRootHash": "96dcd41758105b9a85d4135244e81c1746b7b0eca18dd2de782f89be9892b6fd",
-    "cacheDirHash": "44a700740008de43764b0ce40292cd4ea116f36d1a0ec0351582c50ed1881641"
+    "fixtureProjectRootHash": "8f5e117f7515f6a2e3ab19dd83315ed6c73045fdd4bd7ae0ac2f56400e9969e5",
+    "cacheDirHash": "7b9f3b3930d05f24c021a7030b444174ffd3fdb7b6885d794883a4f7fd99a2b9"
   },
   "scenarios": {
     "coldNoPersistentCache": {
@@ -22,10 +22,10 @@
         "miss",
         "miss"
       ],
-      "meanMs": 20.233,
-      "medianMs": 13.079,
-      "minMs": 6.472,
-      "maxMs": 41.147
+      "meanMs": 12.348,
+      "medianMs": 7.427,
+      "minMs": 4.628,
+      "maxMs": 24.989
     },
     "warmPersistentCache": {
       "iterations": 3,
@@ -34,10 +34,10 @@
         "hit",
         "hit"
       ],
-      "meanMs": 2.248,
-      "medianMs": 2.301,
-      "minMs": 1.937,
-      "maxMs": 2.508
+      "meanMs": 1.434,
+      "medianMs": 1.34,
+      "minMs": 1.301,
+      "maxMs": 1.661
     },
     "semanticNoop": {
       "beforeChangeStatus": "hit",
@@ -70,6 +70,8 @@
       "reusedParentByStableIdCount": 0,
       "reusedParentByChildHashCount": 0,
       "reusedParentByChildStatementHashCount": 0,
+      "reusedParentByFrontierChildHashCount": 0,
+      "reusedParentByFrontierChildStatementHashCount": 0,
       "skippedAmbiguousChildHashReuseCount": 0,
       "skippedAmbiguousChildStatementHashReuseCount": 0,
       "recoveryStatus": "hit",

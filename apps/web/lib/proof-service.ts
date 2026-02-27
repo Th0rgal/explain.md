@@ -1038,6 +1038,8 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
             reusedParentByStableIdCount: topologyRebuild.reusedParentByStableIdCount,
             reusedParentByChildHashCount: topologyRebuild.reusedParentByChildHashCount,
             reusedParentByChildStatementHashCount: topologyRebuild.reusedParentByChildStatementHashCount,
+            reusedParentByFrontierChildHashCount: topologyRebuild.reusedParentByFrontierChildHashCount,
+            reusedParentByFrontierChildStatementHashCount: topologyRebuild.reusedParentByFrontierChildStatementHashCount,
             skippedAmbiguousChildHashReuseCount: topologyRebuild.skippedAmbiguousChildHashReuseCount,
             skippedAmbiguousChildStatementHashReuseCount: topologyRebuild.skippedAmbiguousChildStatementHashReuseCount,
             previousParentCount: topologyRebuild.previousParentCount,
@@ -1587,6 +1589,8 @@ async function rebuildSnapshotForChangedLeaves(input: {
 interface ParentSummaryRecord {
   childStatementHash: string;
   childStatementTextHash: string;
+  frontierLeafIdHash: string;
+  frontierLeafStatementHash: string;
   summary: {
     parent_statement: string;
     why_true_from_children: string;
@@ -1616,6 +1620,8 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
       reusedParentByStableIdCount: number;
       reusedParentByChildHashCount: number;
       reusedParentByChildStatementHashCount: number;
+      reusedParentByFrontierChildHashCount: number;
+      reusedParentByFrontierChildStatementHashCount: number;
       skippedAmbiguousChildHashReuseCount: number;
       skippedAmbiguousChildStatementHashReuseCount: number;
       previousParentCount: number;
@@ -1659,6 +1665,8 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
     reusedParentByStableIdCount: reuseStats.reusedByParentIdGroupCount,
     reusedParentByChildHashCount: reuseStats.reusedByChildHashGroupCount,
     reusedParentByChildStatementHashCount: reuseStats.reusedByChildStatementHashGroupCount,
+    reusedParentByFrontierChildHashCount: reuseStats.reusedByFrontierChildHashGroupCount,
+    reusedParentByFrontierChildStatementHashCount: reuseStats.reusedByFrontierChildStatementHashGroupCount,
     skippedAmbiguousChildHashReuseCount: reuseStats.skippedAmbiguousChildHashGroupCount,
     skippedAmbiguousChildStatementHashReuseCount: reuseStats.skippedAmbiguousChildStatementHashGroupCount,
     previousParentCount: Object.values(imported.tree.nodes).filter((node) => node.kind === "parent").length,
@@ -1696,6 +1704,8 @@ function buildReusableParentSummaryMap(tree: ExplanationTree): Record<string, Pa
     const summary: ParentSummaryRecord = {
       childStatementHash: computeChildStatementHash(children),
       childStatementTextHash: computeChildStatementTextHash(children),
+      frontierLeafIdHash: computeFrontierLeafIdHash(parent.id, tree.nodes),
+      frontierLeafStatementHash: computeFrontierLeafStatementHash(parent.id, tree.nodes),
       summary: {
         parent_statement: parent.statement,
         why_true_from_children: parent.whyTrueFromChildren,
@@ -1726,6 +1736,8 @@ function summarizeTreeSummaryReuse(groupingDiagnostics: ExplanationTree["groupin
   reusedByParentIdGroupCount: number;
   reusedByChildHashGroupCount: number;
   reusedByChildStatementHashGroupCount: number;
+  reusedByFrontierChildHashGroupCount: number;
+  reusedByFrontierChildStatementHashGroupCount: number;
   skippedAmbiguousChildHashGroupCount: number;
   skippedAmbiguousChildStatementHashGroupCount: number;
 } {
@@ -1734,6 +1746,8 @@ function summarizeTreeSummaryReuse(groupingDiagnostics: ExplanationTree["groupin
   let reusedByParentIdGroupCount = 0;
   let reusedByChildHashGroupCount = 0;
   let reusedByChildStatementHashGroupCount = 0;
+  let reusedByFrontierChildHashGroupCount = 0;
+  let reusedByFrontierChildStatementHashGroupCount = 0;
   let skippedAmbiguousChildHashGroupCount = 0;
   let skippedAmbiguousChildStatementHashGroupCount = 0;
   for (const layer of groupingDiagnostics) {
@@ -1742,6 +1756,9 @@ function summarizeTreeSummaryReuse(groupingDiagnostics: ExplanationTree["groupin
     reusedByParentIdGroupCount += layer.summaryReuse?.reusedByParentIdGroupIndexes?.length ?? 0;
     reusedByChildHashGroupCount += layer.summaryReuse?.reusedByChildHashGroupIndexes?.length ?? 0;
     reusedByChildStatementHashGroupCount += layer.summaryReuse?.reusedByChildStatementHashGroupIndexes?.length ?? 0;
+    reusedByFrontierChildHashGroupCount += layer.summaryReuse?.reusedByFrontierChildHashGroupIndexes?.length ?? 0;
+    reusedByFrontierChildStatementHashGroupCount +=
+      layer.summaryReuse?.reusedByFrontierChildStatementHashGroupIndexes?.length ?? 0;
     skippedAmbiguousChildHashGroupCount += layer.summaryReuse?.skippedAmbiguousChildHashGroupIndexes?.length ?? 0;
     skippedAmbiguousChildStatementHashGroupCount +=
       layer.summaryReuse?.skippedAmbiguousChildStatementHashGroupIndexes?.length ?? 0;
@@ -1752,6 +1769,8 @@ function summarizeTreeSummaryReuse(groupingDiagnostics: ExplanationTree["groupin
     reusedByParentIdGroupCount,
     reusedByChildHashGroupCount,
     reusedByChildStatementHashGroupCount,
+    reusedByFrontierChildHashGroupCount,
+    reusedByFrontierChildStatementHashGroupCount,
     skippedAmbiguousChildHashGroupCount,
     skippedAmbiguousChildStatementHashGroupCount,
   };
@@ -1761,6 +1780,44 @@ function computeChildStatementTextHash(children: Array<{ statement: string }>): 
   return createHash("sha256")
     .update(children.map((child, index) => `${index}:${child.statement}`).join("\n"))
     .digest("hex");
+}
+
+function computeFrontierLeafIdHash(
+  nodeId: string,
+  nodes: Record<string, ExplanationTree["nodes"][string]>,
+): string {
+  const leaves = collectFrontierLeaves(nodeId, nodes).map((leaf) => leaf.id);
+  return createHash("sha256")
+    .update(leaves.map((leafId, index) => `${index}:${leafId}`).join("\n"))
+    .digest("hex");
+}
+
+function computeFrontierLeafStatementHash(
+  nodeId: string,
+  nodes: Record<string, ExplanationTree["nodes"][string]>,
+): string {
+  const statements = collectFrontierLeaves(nodeId, nodes).map((leaf) => leaf.statement);
+  return createHash("sha256")
+    .update(statements.map((statement, index) => `${index}:${statement}`).join("\n"))
+    .digest("hex");
+}
+
+function collectFrontierLeaves(
+  nodeId: string,
+  nodes: Record<string, ExplanationTree["nodes"][string]>,
+): Array<{ id: string; statement: string }> {
+  const node = nodes[nodeId];
+  if (!node) {
+    throw new Error(`Missing node '${nodeId}' while collecting frontier leaves.`);
+  }
+  if (node.kind === "leaf") {
+    return [{ id: node.id, statement: node.statement }];
+  }
+  const leaves: Array<{ id: string; statement: string }> = [];
+  for (const childId of node.childIds) {
+    leaves.push(...collectFrontierLeaves(childId, nodes));
+  }
+  return leaves;
 }
 
 function parseParentGroupIndex(parentId: string): number {

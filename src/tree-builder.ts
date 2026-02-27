@@ -63,6 +63,8 @@ export interface SummaryReuseDiagnostics {
   reusedByParentIdGroupIndexes?: number[];
   reusedByChildHashGroupIndexes?: number[];
   reusedByChildStatementHashGroupIndexes?: number[];
+  reusedByFrontierChildHashGroupIndexes?: number[];
+  reusedByFrontierChildStatementHashGroupIndexes?: number[];
   skippedAmbiguousChildHashGroupIndexes?: number[];
   skippedAmbiguousChildStatementHashGroupIndexes?: number[];
 }
@@ -89,6 +91,8 @@ export interface TreeBuildRequest {
 export interface ReusableParentSummary {
   childStatementHash: string;
   childStatementTextHash?: string;
+  frontierLeafIdHash?: string;
+  frontierLeafStatementHash?: string;
   summary: {
     parent_statement: string;
     why_true_from_children: string;
@@ -146,6 +150,7 @@ interface ReusableSummaryCandidate {
 interface ReusableSummarySelection {
   candidate?: ReusableSummaryCandidate;
   ambiguous: boolean;
+  resolvedByFrontier: boolean;
 }
 
 export async function buildRecursiveExplanationTree(
@@ -201,6 +206,7 @@ export async function buildRecursiveExplanationTree(
   const reusableParentSummaries = request.reusableParentSummaries ?? {};
   const reusableSummaryPools = buildReusableSummaryPools(reusableParentSummaries);
   const consumedReusableSummaryKeys = new Set<string>();
+  const frontierSignatureMemo = new Map<string, { leafIds: string[]; leafStatements: string[] }>();
 
   let depth = 0;
   let activeNodeIds = leafIds.slice();
@@ -233,6 +239,8 @@ export async function buildRecursiveExplanationTree(
     const reusedByParentIdGroupIndexes: number[] = [];
     const reusedByChildHashGroupIndexes: number[] = [];
     const reusedByChildStatementHashGroupIndexes: number[] = [];
+    const reusedByFrontierChildHashGroupIndexes: number[] = [];
+    const reusedByFrontierChildStatementHashGroupIndexes: number[] = [];
     const skippedAmbiguousChildHashGroupIndexes: number[] = [];
     const skippedAmbiguousChildStatementHashGroupIndexes: number[] = [];
 
@@ -281,9 +289,11 @@ export async function buildRecursiveExplanationTree(
 
       const childStatementHash = computeChildStatementHash(children);
       const childStatementTextHash = computeChildStatementTextHash(children);
+      const frontierHashes = computeFrontierHashesForGroup(orderedGroupNodeIds, nodes, frontierSignatureMemo);
       let reusableParent = reusableParentSummaries[parentId];
       let reusableParentKey = parentId;
       let reuseMatchKind: "parent_id" | "child_hash" | "child_statement_hash" = "parent_id";
+      let reusedByFrontier = false;
       if (
         !reusableParent || reusableParent.childStatementHash !== childStatementHash
       ) {
@@ -292,11 +302,13 @@ export async function buildRecursiveExplanationTree(
           const selection = selectReusableSummaryCandidate(
             reusableSummaryPools.byDepthAndChildHash.get(poolKey) as ReusableSummaryCandidate[],
             consumedReusableSummaryKeys,
+            frontierHashes,
           );
           if (selection.candidate) {
             reusableParent = selection.candidate.summary;
             reusableParentKey = selection.candidate.key;
             reuseMatchKind = "child_hash";
+            reusedByFrontier = selection.resolvedByFrontier;
           } else if (selection.ambiguous) {
             skippedAmbiguousChildHashGroupIndexes.push(index);
           }
@@ -311,11 +323,13 @@ export async function buildRecursiveExplanationTree(
           const selection = selectReusableSummaryCandidate(
             reusableSummaryPools.byDepthAndChildStatementHash.get(statementPoolKey) as ReusableSummaryCandidate[],
             consumedReusableSummaryKeys,
+            frontierHashes,
           );
           if (selection.candidate) {
             reusableParent = selection.candidate.summary;
             reusableParentKey = selection.candidate.key;
             reuseMatchKind = "child_statement_hash";
+            reusedByFrontier = selection.resolvedByFrontier;
           } else if (selection.ambiguous) {
             skippedAmbiguousChildStatementHashGroupIndexes.push(index);
           }
@@ -375,8 +389,14 @@ export async function buildRecursiveExplanationTree(
             reusedByParentIdGroupIndexes.push(index);
           } else if (reuseMatchKind === "child_hash") {
             reusedByChildHashGroupIndexes.push(index);
+            if (reusedByFrontier) {
+              reusedByFrontierChildHashGroupIndexes.push(index);
+            }
           } else {
             reusedByChildStatementHashGroupIndexes.push(index);
+            if (reusedByFrontier) {
+              reusedByFrontierChildStatementHashGroupIndexes.push(index);
+            }
           }
           continue;
         }
@@ -463,6 +483,8 @@ export async function buildRecursiveExplanationTree(
               reusedByParentIdGroupIndexes,
               reusedByChildHashGroupIndexes,
               reusedByChildStatementHashGroupIndexes,
+              reusedByFrontierChildHashGroupIndexes,
+              reusedByFrontierChildStatementHashGroupIndexes,
               skippedAmbiguousChildHashGroupIndexes,
               skippedAmbiguousChildStatementHashGroupIndexes,
             }
@@ -540,6 +562,7 @@ function buildReusableSummaryPools(
 function selectReusableSummaryCandidate(
   candidates: ReusableSummaryCandidate[],
   consumedKeys: Set<string>,
+  frontierHashes?: { leafIdHash: string; leafStatementHash: string },
 ): ReusableSummarySelection {
   const available: ReusableSummaryCandidate[] = [];
   for (const candidate of candidates) {
@@ -548,9 +571,33 @@ function selectReusableSummaryCandidate(
     }
   }
   if (available.length === 1) {
-    return { candidate: available[0], ambiguous: false };
+    return { candidate: available[0], ambiguous: false, resolvedByFrontier: false };
   }
-  return { ambiguous: available.length > 1 };
+  if (available.length <= 1 || !frontierHashes) {
+    return { ambiguous: available.length > 1, resolvedByFrontier: false };
+  }
+
+  const byLeafIdHash = available.filter((candidate) => candidate.summary.frontierLeafIdHash === frontierHashes.leafIdHash);
+  if (byLeafIdHash.length === 1) {
+    return { candidate: byLeafIdHash[0], ambiguous: false, resolvedByFrontier: true };
+  }
+  if (byLeafIdHash.length > 1) {
+    const byLeafStatementHash = byLeafIdHash.filter(
+      (candidate) => candidate.summary.frontierLeafStatementHash === frontierHashes.leafStatementHash,
+    );
+    if (byLeafStatementHash.length === 1) {
+      return { candidate: byLeafStatementHash[0], ambiguous: false, resolvedByFrontier: true };
+    }
+    return { ambiguous: true, resolvedByFrontier: false };
+  }
+
+  const byLeafStatementHash = available.filter(
+    (candidate) => candidate.summary.frontierLeafStatementHash === frontierHashes.leafStatementHash,
+  );
+  if (byLeafStatementHash.length === 1) {
+    return { candidate: byLeafStatementHash[0], ambiguous: false, resolvedByFrontier: true };
+  }
+  return { ambiguous: available.length > 1, resolvedByFrontier: false };
 }
 
 function resolveReusableSummaryDepth(parentId: string, summary: ReusableParentSummary): number | undefined {
@@ -571,6 +618,62 @@ function resolveReusableSummaryDepth(parentId: string, summary: ReusableParentSu
 
 function buildReusableSummaryPoolKey(depth: number, childStatementHash: string): string {
   return `${depth}:${childStatementHash}`;
+}
+
+function computeFrontierHashesForGroup(
+  orderedGroupNodeIds: string[],
+  nodes: Record<string, ExplanationTreeNode>,
+  memo: Map<string, { leafIds: string[]; leafStatements: string[] }>,
+): { leafIdHash: string; leafStatementHash: string } {
+  const leafIds: string[] = [];
+  const leafStatements: string[] = [];
+  for (const nodeId of orderedGroupNodeIds) {
+    const frontier = collectLeafFrontier(nodeId, nodes, memo);
+    leafIds.push(...frontier.leafIds);
+    leafStatements.push(...frontier.leafStatements);
+  }
+
+  return {
+    leafIdHash: createHash("sha256")
+      .update(leafIds.map((leafId, index) => `${index}:${leafId}`).join("\n"))
+      .digest("hex"),
+    leafStatementHash: createHash("sha256")
+      .update(leafStatements.map((statement, index) => `${index}:${statement}`).join("\n"))
+      .digest("hex"),
+  };
+}
+
+function collectLeafFrontier(
+  nodeId: string,
+  nodes: Record<string, ExplanationTreeNode>,
+  memo: Map<string, { leafIds: string[]; leafStatements: string[] }>,
+): { leafIds: string[]; leafStatements: string[] } {
+  const existing = memo.get(nodeId);
+  if (existing) {
+    return existing;
+  }
+
+  const node = nodes[nodeId];
+  if (!node) {
+    throw new Error(`Missing node '${nodeId}' while collecting frontier leaves.`);
+  }
+  if (node.kind === "leaf") {
+    const signature = { leafIds: [node.id], leafStatements: [node.statement] };
+    memo.set(nodeId, signature);
+    return signature;
+  }
+
+  const leafIds: string[] = [];
+  const leafStatements: string[] = [];
+  for (const childId of node.childIds) {
+    const childSignature = collectLeafFrontier(childId, nodes, memo);
+    leafIds.push(...childSignature.leafIds);
+    leafStatements.push(...childSignature.leafStatements);
+  }
+
+  const signature = { leafIds, leafStatements };
+  memo.set(nodeId, signature);
+  return signature;
 }
 
 export function validateExplanationTree(tree: ExplanationTree, maxChildrenPerParent: number): TreeValidationResult {

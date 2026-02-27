@@ -70,6 +70,8 @@ export interface ProofCacheBenchmarkReport {
       reusedParentByStableIdCount: number;
       reusedParentByChildHashCount: number;
       reusedParentByChildStatementHashCount: number;
+      reusedParentByFrontierChildHashCount: number;
+      reusedParentByFrontierChildStatementHashCount: number;
       skippedAmbiguousChildHashReuseCount: number;
       skippedAmbiguousChildStatementHashReuseCount: number;
       recoveryStatus: "hit" | "miss";
@@ -195,6 +197,14 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
         afterTopologyChange.cache.diagnostics,
         "reusedParentByChildStatementHashCount",
       ),
+      reusedParentByFrontierChildHashCount: readNumericTopologyDetail(
+        afterTopologyChange.cache.diagnostics,
+        "reusedParentByFrontierChildHashCount",
+      ),
+      reusedParentByFrontierChildStatementHashCount: readNumericTopologyDetail(
+        afterTopologyChange.cache.diagnostics,
+        "reusedParentByFrontierChildStatementHashCount",
+      ),
       skippedAmbiguousChildHashReuseCount: readNumericTopologyDetail(
         afterTopologyChange.cache.diagnostics,
         "skippedAmbiguousChildHashReuseCount",
@@ -235,6 +245,8 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
         reusedParentByStableIdCount: topologyChange.reusedParentByStableIdCount,
         reusedParentByChildHashCount: topologyChange.reusedParentByChildHashCount,
         reusedParentByChildStatementHashCount: topologyChange.reusedParentByChildStatementHashCount,
+        reusedParentByFrontierChildHashCount: topologyChange.reusedParentByFrontierChildHashCount,
+        reusedParentByFrontierChildStatementHashCount: topologyChange.reusedParentByFrontierChildStatementHashCount,
         skippedAmbiguousChildHashReuseCount: topologyChange.skippedAmbiguousChildHashReuseCount,
         skippedAmbiguousChildStatementHashReuseCount: topologyChange.skippedAmbiguousChildStatementHashReuseCount,
         recoveryStatus: topologyChange.recoveryStatus,
@@ -296,6 +308,8 @@ function readNumericTopologyDetail(
     | "reusedParentByStableIdCount"
     | "reusedParentByChildHashCount"
     | "reusedParentByChildStatementHashCount"
+    | "reusedParentByFrontierChildHashCount"
+    | "reusedParentByFrontierChildStatementHashCount"
     | "skippedAmbiguousChildHashReuseCount"
     | "skippedAmbiguousChildStatementHashReuseCount",
 ): number {

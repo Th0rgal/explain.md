@@ -47,10 +47,11 @@ Deterministic cache-reuse diagnostics for proof dataset generation.
   - empty delta: cached snapshot is reused (`cache_semantic_hit`) and cache entry is rebased to the new fingerprint;
   - non-empty delta + stable theorem topology (same IDs/dependencies): deterministic affected-ancestor subtree recompute runs with `cache_incremental_subtree_rebuild` diagnostics;
   - non-empty delta + topology/structure change: deterministic topology-aware rebuild runs with `cache_incremental_topology_rebuild`, reusing parent nodes first by stable parent ID, then by child-grounding hash, and finally by same-depth child-statement hash when deterministic reindexing shifts parent IDs;
+    - when hash-based fallback candidates are ambiguous, reuse is allowed only if ordered descendant-leaf frontier hashes uniquely disambiguate a candidate;
   - final fallback remains deterministic full rebuild (`cache_incremental_rebuild`) when topology-aware reuse cannot be applied.
 - Cache entry integrity is checked by snapshot/dependency hash validation before reuse.
 - On mismatch or invalid entry, the dataset is rebuilt deterministically and cache is overwritten.
-- Topology-rebuild diagnostics include machine-checkable reuse counters (`reusedParentSummaryCount`, `generatedParentSummaryCount`, `reusedParentNodeCount`, `generatedParentNodeCount`, `reusedParentByStableIdCount`, `reusedParentByChildHashCount`, `reusedParentByChildStatementHashCount`, `skippedAmbiguousChildHashReuseCount`, `skippedAmbiguousChildStatementHashReuseCount`).
+- Topology-rebuild diagnostics include machine-checkable reuse counters (`reusedParentSummaryCount`, `generatedParentSummaryCount`, `reusedParentNodeCount`, `generatedParentNodeCount`, `reusedParentByStableIdCount`, `reusedParentByChildHashCount`, `reusedParentByChildStatementHashCount`, `reusedParentByFrontierChildHashCount`, `reusedParentByFrontierChildStatementHashCount`, `skippedAmbiguousChildHashReuseCount`, `skippedAmbiguousChildStatementHashReuseCount`).
 
 ## Environment
 - `EXPLAIN_MD_WEB_PROOF_CACHE_DIR`
