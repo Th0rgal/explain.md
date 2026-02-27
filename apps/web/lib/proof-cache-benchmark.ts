@@ -58,6 +58,22 @@ export interface ProofCacheBenchmarkReport {
       recoveryStatus: "hit" | "miss";
       recoverySnapshotHash: string;
     };
+    topologyShapeInvalidation: {
+      beforeChangeStatus: "hit" | "miss";
+      afterChangeStatus: "hit" | "miss";
+      afterChangeDiagnostics: string[];
+      afterChangeTopologyPlan?: {
+        fullRebuildRequired: boolean;
+        topologyShapeChanged: boolean;
+        addedDeclarationCount: number;
+        removedDeclarationCount: number;
+        blockedDeclarationCount: number;
+        planHash: string;
+      };
+      afterChangeSnapshotHash: string;
+      recoveryStatus: "hit" | "miss";
+      recoverySnapshotHash: string;
+    };
   };
 }
 
@@ -154,6 +170,40 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
       recoveryStatus: recovery.cache.status,
       recoverySnapshotHash: recovery.cache.snapshotHash,
     };
+    clearProofDatasetCacheForTests();
+    const beforeShapeChange = await buildProofCacheReportView({ proofId, config: normalizedConfig });
+    const topologyShapeMutationPath = path.join(fixtureProjectRoot, MUTATION_TARGET_RELATIVE_PATH);
+    const topologyShapeBefore = await fs.readFile(topologyShapeMutationPath, "utf8");
+    const topologyShapeAddition = "\n\ntheorem cache_shape_added : True := by\n  trivial\n";
+    let afterShapeChange: Awaited<ReturnType<typeof buildProofCacheReportView>>;
+    let afterShapeRecovery: Awaited<ReturnType<typeof buildProofCacheReportView>>;
+    try {
+      await fs.writeFile(topologyShapeMutationPath, `${topologyShapeBefore.trimEnd()}${topologyShapeAddition}`, "utf8");
+      clearProofDatasetCacheForTests();
+      afterShapeChange = await buildProofCacheReportView({ proofId, config: normalizedConfig });
+      clearProofDatasetCacheForTests();
+      afterShapeRecovery = await buildProofCacheReportView({ proofId, config: normalizedConfig });
+    } finally {
+      await fs.writeFile(topologyShapeMutationPath, topologyShapeBefore, "utf8");
+    }
+    const topologyShapeInvalidation = {
+      beforeChangeStatus: beforeShapeChange.cache.status,
+      afterChangeStatus: afterShapeChange.cache.status,
+      afterChangeDiagnostics: afterShapeChange.cache.diagnostics.map((diagnostic) => diagnostic.code).sort(),
+      afterChangeTopologyPlan: afterShapeChange.cache.blockedSubtreePlan
+        ? {
+            fullRebuildRequired: afterShapeChange.cache.blockedSubtreePlan.fullRebuildRequired,
+            topologyShapeChanged: afterShapeChange.cache.blockedSubtreePlan.topologyShapeChanged,
+            addedDeclarationCount: afterShapeChange.cache.blockedSubtreePlan.addedDeclarationIds.length,
+            removedDeclarationCount: afterShapeChange.cache.blockedSubtreePlan.removedDeclarationIds.length,
+            blockedDeclarationCount: afterShapeChange.cache.blockedSubtreePlan.blockedDeclarationIds.length,
+            planHash: afterShapeChange.cache.blockedSubtreePlan.planHash,
+          }
+        : undefined,
+      afterChangeSnapshotHash: afterShapeChange.cache.snapshotHash,
+      recoveryStatus: afterShapeRecovery.cache.status,
+      recoverySnapshotHash: afterShapeRecovery.cache.snapshotHash,
+    };
 
     const requestHash = computeStableHash({
       schemaVersion: BENCHMARK_SCHEMA_VERSION,
@@ -174,6 +224,15 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
         afterChangeTopologyPlan: invalidation.afterChangeTopologyPlan,
         recoveryStatus: invalidation.recoveryStatus,
         snapshotChangedOnMutation: invalidation.afterChangeSnapshotHash !== beforeChange.cache.snapshotHash,
+      },
+      topologyShapeInvalidation: {
+        beforeChangeStatus: topologyShapeInvalidation.beforeChangeStatus,
+        afterChangeStatus: topologyShapeInvalidation.afterChangeStatus,
+        afterChangeDiagnostics: topologyShapeInvalidation.afterChangeDiagnostics,
+        afterChangeTopologyPlan: topologyShapeInvalidation.afterChangeTopologyPlan,
+        recoveryStatus: topologyShapeInvalidation.recoveryStatus,
+        snapshotChangedOnMutation:
+          topologyShapeInvalidation.afterChangeSnapshotHash !== beforeShapeChange.cache.snapshotHash,
       },
     });
 
@@ -197,6 +256,7 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
         coldNoPersistentCache: coldSummary,
         warmPersistentCache: warmSummary,
         invalidation,
+        topologyShapeInvalidation,
       },
     };
   } finally {

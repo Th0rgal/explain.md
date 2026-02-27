@@ -94,6 +94,7 @@ export interface ProofDatasetCacheDiagnostic {
     | "cache_hit"
     | "cache_topology_recovery_hit"
     | "cache_blocked_subtree_rebuild_hit"
+    | "cache_blocked_subtree_full_rebuild"
     | "cache_miss"
     | "cache_write_failed"
     | "cache_read_failed"
@@ -108,6 +109,9 @@ export interface ProofDatasetBlockedSubtreePlan {
   schemaVersion: "1.0.0";
   reason: "source_fingerprint_mismatch";
   changedDeclarationIds: string[];
+  addedDeclarationIds: string[];
+  removedDeclarationIds: string[];
+  topologyShapeChanged: boolean;
   blockedDeclarationIds: string[];
   blockedLeafIds: string[];
   unaffectedLeafIds: string[];
@@ -1044,6 +1048,26 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
         },
       };
     }
+
+    if (blockedSubtreePlan.fullRebuildRequired) {
+      cacheDiagnostics.push({
+        code: "cache_blocked_subtree_full_rebuild",
+        message: "Blocked-subtree recovery unavailable; rebuilding full dataset deterministically.",
+        details: {
+          cachePath,
+          planHash: blockedSubtreePlan.planHash,
+          reason: classifyBlockedSubtreeFullRebuildReason(blockedSubtreePlan, {
+            cachedDependencyGraphHash: cached.entry.dependencyGraphHash,
+            currentDependencyGraphHash: dependencyGraphHash,
+          }),
+          topologyShapeChanged: blockedSubtreePlan.topologyShapeChanged,
+          blockedDeclarationCount: blockedSubtreePlan.blockedDeclarationIds.length,
+          addedDeclarationCount: blockedSubtreePlan.addedDeclarationIds.length,
+          removedDeclarationCount: blockedSubtreePlan.removedDeclarationIds.length,
+          cyclicBatchCount: blockedSubtreePlan.cyclicBatchCount,
+        },
+      });
+    }
   }
 
   const tree = await buildRecursiveExplanationTree(createDeterministicSummaryProvider(), {
@@ -1246,6 +1270,13 @@ function buildBlockedSubtreePlan(
   const declarationIds = [...new Set([...cachedByDeclarationId.keys(), ...currentByDeclarationId.keys()])].sort((a, b) =>
     a.localeCompare(b),
   );
+  const addedDeclarationIds = declarationIds
+    .filter((declarationId) => !cachedByDeclarationId.has(declarationId) && currentByDeclarationId.has(declarationId))
+    .sort((a, b) => a.localeCompare(b));
+  const removedDeclarationIds = declarationIds
+    .filter((declarationId) => cachedByDeclarationId.has(declarationId) && !currentByDeclarationId.has(declarationId))
+    .sort((a, b) => a.localeCompare(b));
+  const topologyShapeChanged = addedDeclarationIds.length > 0 || removedDeclarationIds.length > 0;
 
   const changedDeclarationIds = declarationIds.filter((declarationId) => {
     const cached = cachedByDeclarationId.get(declarationId);
@@ -1288,6 +1319,9 @@ function buildBlockedSubtreePlan(
     schemaVersion: "1.0.0" as const,
     reason: "source_fingerprint_mismatch" as const,
     changedDeclarationIds,
+    addedDeclarationIds,
+    removedDeclarationIds,
+    topologyShapeChanged,
     blockedDeclarationIds,
     blockedLeafIds,
     unaffectedLeafIds,
@@ -1301,6 +1335,25 @@ function buildBlockedSubtreePlan(
     ...planWithoutHash,
     planHash: computeCanonicalRequestHash(planWithoutHash),
   };
+}
+
+function classifyBlockedSubtreeFullRebuildReason(
+  plan: ProofDatasetBlockedSubtreePlan,
+  options: {
+    cachedDependencyGraphHash: string;
+    currentDependencyGraphHash: string;
+  },
+): "topology_shape_changed" | "cyclic_blocked_subtree" | "dependency_graph_changed" | "recovery_preconditions_failed" {
+  if (plan.topologyShapeChanged) {
+    return "topology_shape_changed";
+  }
+  if (plan.cyclicBatchCount > 0) {
+    return "cyclic_blocked_subtree";
+  }
+  if (options.cachedDependencyGraphHash !== options.currentDependencyGraphHash) {
+    return "dependency_graph_changed";
+  }
+  return "recovery_preconditions_failed";
 }
 
 function computeLeafSemanticFingerprint(leaf: TheoremLeafRecord): string {

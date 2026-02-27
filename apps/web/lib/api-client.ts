@@ -314,6 +314,7 @@ export interface CacheReportResponse {
         | "cache_hit"
         | "cache_topology_recovery_hit"
         | "cache_blocked_subtree_rebuild_hit"
+        | "cache_blocked_subtree_full_rebuild"
         | "cache_miss"
         | "cache_write_failed"
         | "cache_read_failed"
@@ -327,6 +328,9 @@ export interface CacheReportResponse {
       schemaVersion: "1.0.0";
       reason: "source_fingerprint_mismatch";
       changedDeclarationIds: string[];
+      addedDeclarationIds: string[];
+      removedDeclarationIds: string[];
+      topologyShapeChanged: boolean;
       blockedDeclarationIds: string[];
       blockedLeafIds: string[];
       unaffectedLeafIds: string[];

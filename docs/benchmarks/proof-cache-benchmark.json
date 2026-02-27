@@ -1,18 +1,18 @@
 {
   "schemaVersion": "1.0.0",
-  "generatedAt": "2026-02-27T14:51:07.874Z",
+  "generatedAt": "2026-02-27T14:57:16.074Z",
   "proofId": "lean-verity-fixture",
   "configHash": "a75632c3c71bea58a13445a49951b87763ebd9e868fb4f51ac128e6c783e8af7",
   "requestHash": "3f46810b2ac7310b0662c6e01ba36ed7e2f53d0d01cd2f7653b72ffecf20dc0e",
-  "outcomeHash": "e00b0573eef063b8d7df333daf69089eef11fa736eb32a71717b1e011f9e084e",
+  "outcomeHash": "5b329a9cc2b7264575c6596e433805dfa5f848368eec4bc99885a9f79371d5a1",
   "parameters": {
     "coldIterations": 3,
     "warmIterations": 3,
     "mutationTargetPath": "Verity/Core.lean"
   },
   "paths": {
-    "fixtureProjectRootHash": "3eab3bcda6674007d4ef35a4c637cf229e44de229e6da75d14e2cb5763d8225f",
-    "cacheDirHash": "4fdf600813adb01a13a4c69175b61528fac3c5c6628181b77c3c9c26dd0f5a59"
+    "fixtureProjectRootHash": "cb74c6d7d55ed31fcb2677c9800808311881703e3366a9331efee1286282e79a",
+    "cacheDirHash": "d0926416250db7bc05f7b45820eb2326ffb64d4e7ab65893c894ca8420dc449f"
   },
   "scenarios": {
     "coldNoPersistentCache": {
@@ -22,10 +22,10 @@
         "miss",
         "miss"
       ],
-      "meanMs": 10.645,
-      "medianMs": 5.161,
-      "minMs": 4.583,
-      "maxMs": 22.19
+      "meanMs": 15.614,
+      "medianMs": 12.071,
+      "minMs": 3.486,
+      "maxMs": 31.284
     },
     "warmPersistentCache": {
       "iterations": 3,
@@ -34,10 +34,10 @@
         "hit",
         "hit"
       ],
-      "meanMs": 1.806,
-      "medianMs": 1.801,
-      "minMs": 1.699,
-      "maxMs": 1.917
+      "meanMs": 1.532,
+      "medianMs": 1.519,
+      "minMs": 1.412,
+      "maxMs": 1.664
     },
     "invalidation": {
       "beforeChangeStatus": "hit",
@@ -49,11 +49,30 @@
       "afterChangeTopologyPlan": {
         "fullRebuildRequired": true,
         "blockedDeclarationCount": 1,
-        "planHash": "3ebdcaa87c2e49bd92d213278adc6eba21f82a63e1d512e7e8ccf5bb52bbf925"
+        "planHash": "438189737ec984a2eaa3240c7e43cdd24d899d3728dfa1d2598ac784262b916b"
       },
       "afterChangeSnapshotHash": "56fb158b538cf875d314fd69d9c36dfd62325a618b86e12937477c844cdc4bdc",
       "recoveryStatus": "hit",
       "recoverySnapshotHash": "56fb158b538cf875d314fd69d9c36dfd62325a618b86e12937477c844cdc4bdc"
+    },
+    "topologyShapeInvalidation": {
+      "beforeChangeStatus": "hit",
+      "afterChangeStatus": "miss",
+      "afterChangeDiagnostics": [
+        "cache_blocked_subtree_full_rebuild",
+        "cache_miss"
+      ],
+      "afterChangeTopologyPlan": {
+        "fullRebuildRequired": true,
+        "topologyShapeChanged": true,
+        "addedDeclarationCount": 1,
+        "removedDeclarationCount": 0,
+        "blockedDeclarationCount": 1,
+        "planHash": "bf473238a71fde44ce12e50d3ed61ac949a2c27bf8d1037cc7d980b941c67c2f"
+      },
+      "afterChangeSnapshotHash": "a351d056466e3117be44234aa76eae88f9a95204797a7072f7b4ad30a979de74",
+      "recoveryStatus": "hit",
+      "recoverySnapshotHash": "a351d056466e3117be44234aa76eae88f9a95204797a7072f7b4ad30a979de74"
     }
   }
 }

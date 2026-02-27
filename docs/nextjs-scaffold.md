@@ -46,7 +46,7 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 - Dependency graph route exposes deterministic SCC/reachability data and per-declaration support closures for browser-side provenance checks.
 - Parent nodes include policy diagnostics in tree query payloads so browser views can audit complexity/prerequisite/term-budget compliance.
 - Policy report route exposes deterministic quality metrics/threshold outcomes using the evaluation harness, with optional threshold overrides for pedagogy calibration.
-- Cache report route exposes deterministic cache-reuse diagnostics (`status`, `cacheKey`, `sourceFingerprint`, `snapshotHash`, `cacheEntryHash`) and optional `blockedSubtreePlan` evidence for reproducible incremental recompute auditing (`cache_topology_recovery_hit`, `cache_blocked_subtree_rebuild_hit`).
+- Cache report route exposes deterministic cache-reuse diagnostics (`status`, `cacheKey`, `sourceFingerprint`, `snapshotHash`, `cacheEntryHash`) and optional `blockedSubtreePlan` evidence for reproducible incremental recompute auditing (`cache_topology_recovery_hit`, `cache_blocked_subtree_rebuild_hit`, `cache_blocked_subtree_full_rebuild`).
 - Shared config parsing is centralized in `apps/web/lib/config-input.ts` for route consistency across both query and POST contracts.
 - Shared config query parsing now covers the full pedagogy knob surface used by generation and hashing:
   - `abstractionLevel`, `complexityLevel`, `maxChildrenPerParent`
