@@ -49,6 +49,18 @@ Failures raise `SummaryValidationError` with machine-readable `diagnostics`.
 - Critic diagnostics enumerate exact failure codes and details.
 - JSON can be parsed from plain output or fenced code blocks.
 
+## Prompt Security Boundary
+- Child IDs are validated against a safe deterministic pattern (`[A-Za-z0-9._:/-]+`, max length `128`) before prompt construction.
+- Child statement text is treated as untrusted data:
+  - control characters are stripped
+  - secret-like tokens are deterministically redacted to `[REDACTED_SECRET]`
+- Prompt includes explicit boundary rules and untrusted payload markers:
+  - `UNTRUSTED_CHILDREN_JSON_BEGIN`
+  - `UNTRUSTED_CHILDREN_JSON_END`
+- Prompt diagnostics include sanitization counters:
+  - `sanitization_stripped_control_chars`
+  - `sanitization_redacted_secrets`
+
 ## Live Smoke Check
 ```bash
 EXPLAIN_MD_LIVE_RPC_API_KEY=... npm run test:live:summary

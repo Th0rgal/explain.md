@@ -1,0 +1,27 @@
+# Prompt Security Model
+
+Issue #19 hardening for summary generation focuses on deterministic prompt-boundary safety.
+
+## Threat Model
+- Untrusted theorem/source text can contain instruction-like payloads.
+- Untrusted text can contain copied secrets (API keys/tokens/private keys).
+- Untrusted child IDs can attempt prompt-shape injection via delimiters/control chars.
+
+## Deterministic Defenses
+- Child ID gate:
+  - regex: `^[A-Za-z0-9._:/-]+$`
+  - max length: `128`
+  - invalid IDs fail fast before provider calls.
+- Untrusted text sanitizer:
+  - normalizes line endings
+  - strips ASCII control chars except newline/tab
+  - redacts secret-like patterns to `[REDACTED_SECRET]`
+- Prompt boundary isolation:
+  - explicit rules that child payload is data, not instructions
+  - explicit `UNTRUSTED_CHILDREN_JSON_BEGIN/END` markers
+  - deterministic sanitization counters emitted into prompt metadata
+
+## Test Coverage
+- Adversarial child content with instruction-like text and secret-like tokens is redacted in prompt payload.
+- Unsafe child IDs are rejected with deterministic errors.
+- Prompt contract includes untrusted boundary markers for auditability.

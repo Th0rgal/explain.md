@@ -35,6 +35,7 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #12: Lean fixture web proof datasets now support deterministic persistent cache reuse/invalidation (source-fingerprint + config-hash keyed) with auditable cache telemetry via `GET /api/proofs/cache-report`.
 - Issue #12 follow-up: deterministic cache benchmark harness now records cold/warm latency profiles plus source-fingerprint invalidation recovery with machine-checkable `requestHash`/`outcomeHash`.
 - Issue #13: deterministic tree storage/query contract with versioned snapshot schema, root/children/ancestry/leaf-provenance reads, and canonical import/export hashing.
+- Issue #19 follow-up: deterministic prompt-boundary hardening for parent-summary generation with child-ID safety validation, untrusted-text sanitization, secret redaction, and auditable boundary markers.
 
 ## Local checks
 ```bash
@@ -73,6 +74,7 @@ EXPLAIN_MD_LIVE_RPC_API_KEY=... npm run test:live:summary
 - [Provider layer](docs/openai-provider.md)
 - [Inductive child grouping](docs/child-grouping.md)
 - [Parent summary pipeline](docs/summary-pipeline.md)
+- [Prompt security model](docs/security-prompt-safety.md)
 - [Recursive tree builder](docs/tree-builder.md)
 - [Evaluation harness](docs/evaluation-harness.md)
 - [Pedagogical policy engine](docs/pedagogical-policy.md)
