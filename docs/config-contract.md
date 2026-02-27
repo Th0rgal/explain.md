@@ -43,6 +43,7 @@ Unknown-field diffs default to `full` for safety.
 - `maxChildrenPerParent`: integer 2..12.
 - `complexityBandWidth`: integer 0..3.
 - `termIntroductionBudget`: integer 0..8.
+- `entailmentMode`: `calibrated` or `strict`.
 - `language`: ISO-like tag (`en`, `en-us`).
 - Audience/readability compatibility gate is enforced.
 - `modelProvider.timeoutMs`: integer `1000..120000`.

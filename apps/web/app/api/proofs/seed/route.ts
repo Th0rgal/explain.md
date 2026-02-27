@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import type { ExplanationConfigInput } from "../../../../../../src/config-contract";
-import { jsonError, jsonSuccess, normalizeInteger, normalizeOptionalInteger, normalizeString } from "../../../../lib/http-contract";
+import { jsonError, jsonSuccess, normalizeEnum, normalizeInteger, normalizeOptionalInteger, normalizeString } from "../../../../lib/http-contract";
 import { listProofs } from "../../../../lib/proof-service";
 
 function readConfigFromSearch(request: NextRequest): ExplanationConfigInput {
@@ -12,6 +12,7 @@ function readConfigFromSearch(request: NextRequest): ExplanationConfigInput {
     audienceLevel: normalizeString(search.get("audienceLevel"), "intermediate") as "novice" | "intermediate" | "expert",
     language: normalizeString(search.get("language"), "en"),
     termIntroductionBudget: normalizeOptionalInteger(search.get("termIntroductionBudget"), 0, 8),
+    entailmentMode: normalizeEnum(search.get("entailmentMode"), "calibrated", ["calibrated", "strict"] as const, "entailmentMode"),
   };
 }
 

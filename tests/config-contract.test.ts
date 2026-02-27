@@ -50,6 +50,7 @@ describe("config contract", () => {
       modelProvider: { temperature: 2, timeoutMs: 100, maxRetries: 99 },
       audienceLevel: "expert",
       readingLevelTarget: "elementary",
+      entailmentMode: "invalid" as "calibrated",
     });
 
     const result = validateConfig(config);
@@ -60,6 +61,7 @@ describe("config contract", () => {
     expect(result.errors.map((e) => e.path)).toContain("modelProvider.timeoutMs");
     expect(result.errors.map((e) => e.path)).toContain("modelProvider.maxRetries");
     expect(result.errors.map((e) => e.path)).toContain("readingLevelTarget");
+    expect(result.errors.map((e) => e.path)).toContain("entailmentMode");
   });
 
   test("rejects non-finite model provider temperature", () => {
@@ -79,6 +81,15 @@ describe("config contract", () => {
     const plan = planRegeneration(prev, next);
     expect(plan.scope).toBe("full");
     expect(plan.changedFields).toContain("maxChildrenPerParent");
+  });
+
+  test("entailment mode change requires full regeneration", () => {
+    const prev = normalizeConfig({ entailmentMode: "calibrated" });
+    const next = normalizeConfig({ entailmentMode: "strict" });
+
+    const plan = planRegeneration(prev, next);
+    expect(plan.scope).toBe("full");
+    expect(plan.changedFields).toContain("entailmentMode");
   });
 
   test("partial regeneration when only token budget changes", () => {

@@ -1,18 +1,18 @@
 {
   "schemaVersion": "1.0.0",
-  "generatedAt": "2026-02-27T11:56:31.137Z",
+  "generatedAt": "2026-02-27T15:11:14.847Z",
   "proofId": "lean-verity-fixture",
-  "configHash": "1b1e2b9ff73897b141a9f88c8d23a3b884495340813865fd955fa8fc3eaa4da2",
-  "requestHash": "e6f53e14545f9579927084e1924992e7294f331551f9b89f4e93dc25669d6696",
-  "outcomeHash": "8c21571832c4ac08244f38c32b7b0dd128f4c6fc77cb944eae0297cfe7cfebde",
+  "configHash": "a75632c3c71bea58a13445a49951b87763ebd9e868fb4f51ac128e6c783e8af7",
+  "requestHash": "3f46810b2ac7310b0662c6e01ba36ed7e2f53d0d01cd2f7653b72ffecf20dc0e",
+  "outcomeHash": "eedb44db55985743ff6bc3b5b3f31cc8e26a0c070c288087b2059d7d866c94de",
   "parameters": {
     "coldIterations": 3,
     "warmIterations": 3,
     "mutationTargetPath": "Verity/Core.lean"
   },
   "paths": {
-    "fixtureProjectRootHash": "9dac218e184db37c6f837b6491ec4e075dc791d5ac166254c6b13e57a115aaa5",
-    "cacheDirHash": "35f37f19488ccbbaef0b5a10726ae337f296fdb596a9117b45cf0df10d27b50b"
+    "fixtureProjectRootHash": "2455fc0eabfeda25fc4132000f6e5e9f93d5e183c2b55e2394a108b9c5f273b9",
+    "cacheDirHash": "914676278e23237185135b49b9f3e1798fb9a2b7b28e36104f1db4437fbc7347"
   },
   "scenarios": {
     "coldNoPersistentCache": {
@@ -22,10 +22,10 @@
         "miss",
         "miss"
       ],
-      "meanMs": 10.788,
-      "medianMs": 4.599,
-      "minMs": 3.458,
-      "maxMs": 24.308
+      "meanMs": 10.672,
+      "medianMs": 4.7,
+      "minMs": 4.435,
+      "maxMs": 22.881
     },
     "warmPersistentCache": {
       "iterations": 3,
@@ -34,56 +34,55 @@
         "hit",
         "hit"
       ],
-      "meanMs": 2.201,
-      "medianMs": 2.655,
-      "minMs": 1.036,
-      "maxMs": 2.911
-    },
-    "semanticNoop": {
-      "beforeChangeStatus": "hit",
-      "afterChangeStatus": "hit",
-      "afterChangeDiagnostics": [
-        "cache_miss",
-        "cache_semantic_hit"
-      ],
-      "afterChangeSnapshotHash": "7a452c77177ec47e9c602b9068cb0f5223386278de9ba674d2822bdb132b4ec4"
+      "meanMs": 1.61,
+      "medianMs": 1.59,
+      "minMs": 1.53,
+      "maxMs": 1.71
     },
     "invalidation": {
       "beforeChangeStatus": "hit",
       "afterChangeStatus": "hit",
       "afterChangeDiagnostics": [
-        "cache_incremental_subtree_rebuild",
+        "cache_blocked_subtree_rebuild_hit",
         "cache_miss"
       ],
-      "afterChangeSnapshotHash": "6d82a245190ac7ac68063a9f778311c7ef4b62480843fc31410a5328efdff595",
+      "afterChangeTopologyPlan": {
+        "fullRebuildRequired": true,
+        "blockedDeclarationCount": 1,
+        "planHash": "438189737ec984a2eaa3240c7e43cdd24d899d3728dfa1d2598ac784262b916b"
+      },
+      "afterChangeSnapshotHash": "56fb158b538cf875d314fd69d9c36dfd62325a618b86e12937477c844cdc4bdc",
       "recoveryStatus": "hit",
-      "recoverySnapshotHash": "6d82a245190ac7ac68063a9f778311c7ef4b62480843fc31410a5328efdff595"
+      "recoverySnapshotHash": "56fb158b538cf875d314fd69d9c36dfd62325a618b86e12937477c844cdc4bdc"
     },
-    "topologyChange": {
+    "topologyShapeInvalidation": {
       "beforeChangeStatus": "hit",
       "afterChangeStatus": "hit",
       "afterChangeDiagnostics": [
-        "cache_incremental_topology_rebuild",
-        "cache_miss"
+        "cache_miss",
+        "cache_topology_regeneration_rebuild_hit"
       ],
-      "afterChangeSnapshotHash": "40996c1ce2f9bdae613d9c4e1b905a1a654a9732ec5e0e8afa6dadaf9050f454",
-      "reusedParentByStableIdCount": 0,
-      "reusedParentByChildHashCount": 0,
-      "reusedParentByChildStatementHashCount": 0,
-      "reusedParentByFrontierChildHashCount": 0,
-      "reusedParentByFrontierChildStatementHashCount": 0,
-      "skippedAmbiguousChildHashReuseCount": 0,
-      "skippedAmbiguousChildStatementHashReuseCount": 0,
-      "frontierPartitionLeafCount": 1,
-      "frontierPartitionBlockedGroupCount": 0,
-      "frontierPartitionRecoveredLeafCount": 0,
-      "frontierPartitionRecoveredSummaryCount": 0,
-      "frontierPartitionRecoveryPassCount": 0,
-      "frontierPartitionRecoveryScheduledGroupCount": 0,
-      "frontierPartitionRecoveryStrategy": "minimal_hitting_set_greedy",
-      "frontierPartitionFallbackUsed": false,
+      "afterChangeRegenerationRecovery": {
+        "reusableParentSummaryCount": 1,
+        "reusedParentSummaryCount": 0,
+        "reusedParentSummaryByGroundingCount": 0,
+        "reusedParentSummaryByStatementSignatureCount": 0,
+        "generatedParentSummaryCount": 2,
+        "skippedAmbiguousStatementSignatureReuseCount": 0,
+        "skippedUnrebasableStatementSignatureReuseCount": 0,
+        "regenerationHash": "f168506143513650c9a59ce7455e44322439b33f2d001c45ff8dc37ab43cae8e"
+      },
+      "afterChangeTopologyPlan": {
+        "fullRebuildRequired": true,
+        "topologyShapeChanged": true,
+        "addedDeclarationCount": 1,
+        "removedDeclarationCount": 0,
+        "blockedDeclarationCount": 1,
+        "planHash": "bf473238a71fde44ce12e50d3ed61ac949a2c27bf8d1037cc7d980b941c67c2f"
+      },
+      "afterChangeSnapshotHash": "a351d056466e3117be44234aa76eae88f9a95204797a7072f7b4ad30a979de74",
       "recoveryStatus": "hit",
-      "recoverySnapshotHash": "40996c1ce2f9bdae613d9c4e1b905a1a654a9732ec5e0e8afa6dadaf9050f454"
+      "recoverySnapshotHash": "a351d056466e3117be44234aa76eae88f9a95204797a7072f7b4ad30a979de74"
     }
   }
 }

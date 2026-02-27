@@ -45,6 +45,9 @@ export interface TreeQualityThresholds {
   maxComplexitySpreadMean: number;
   minEvidenceCoverageMean: number;
   minVocabularyContinuityMean: number;
+  minRepartitionEventRate: number;
+  maxRepartitionEventRate: number;
+  maxRepartitionMaxRound: number;
 }
 
 export interface TreeQualityThresholdFailure {
@@ -55,7 +58,10 @@ export interface TreeQualityThresholdFailure {
     | "term_jump_rate"
     | "complexity_spread_mean"
     | "evidence_coverage_mean"
-    | "vocabulary_continuity_mean";
+    | "vocabulary_continuity_mean"
+    | "min_repartition_event_rate"
+    | "repartition_event_rate"
+    | "repartition_max_round";
   message: string;
   details: {
     actual: number;
@@ -107,6 +113,22 @@ export interface TreeQualityMetrics {
   supportCoverageFloor: number;
 }
 
+export interface RepartitionDepthMetrics {
+  depth: number;
+  eventCount: number;
+  preSummaryEventCount: number;
+  postSummaryEventCount: number;
+  maxRound: number;
+}
+
+export interface RepartitionMetrics {
+  eventCount: number;
+  preSummaryEventCount: number;
+  postSummaryEventCount: number;
+  maxRound: number;
+  depthMetrics: RepartitionDepthMetrics[];
+}
+
 export interface EvaluateTreeQualityOptions {
   thresholds?: Partial<TreeQualityThresholds>;
 }
@@ -121,6 +143,7 @@ export interface TreeQualityReport {
   thresholdFailures: TreeQualityThresholdFailure[];
   parentSamples: ParentQualitySample[];
   depthMetrics: DepthQualityMetrics[];
+  repartitionMetrics: RepartitionMetrics;
 }
 
 export function evaluateExplanationTreeQuality(
@@ -133,7 +156,8 @@ export function evaluateExplanationTreeQuality(
   const parentSamples = collectParentSamples(tree, config, supportCoverageFloor);
   const depthMetrics = buildDepthMetrics(parentSamples, supportCoverageFloor);
   const metrics = aggregateMetrics(parentSamples, supportCoverageFloor);
-  const thresholdFailures = evaluateThresholds(metrics, thresholds);
+  const repartitionMetrics = collectRepartitionMetrics(tree);
+  const thresholdFailures = evaluateThresholds(metrics, repartitionMetrics, thresholds);
 
   return {
     rootId: tree.rootId,
@@ -145,6 +169,7 @@ export function evaluateExplanationTreeQuality(
     thresholdFailures,
     parentSamples,
     depthMetrics,
+    repartitionMetrics,
   };
 }
 
@@ -170,6 +195,55 @@ function canonicalizeReport(report: TreeQualityReport): TreeQualityReport {
     thresholdFailures: report.thresholdFailures
       .slice()
       .sort((left, right) => left.code.localeCompare(right.code) || left.message.localeCompare(right.message)),
+    repartitionMetrics: {
+      ...report.repartitionMetrics,
+      depthMetrics: report.repartitionMetrics.depthMetrics.slice().sort((left, right) => left.depth - right.depth),
+    },
+  };
+}
+
+function collectRepartitionMetrics(tree: ExplanationTree): RepartitionMetrics {
+  const byDepth = new Map<number, RepartitionDepthMetrics>();
+  let eventCount = 0;
+  let preSummaryEventCount = 0;
+  let postSummaryEventCount = 0;
+  let maxRound = 0;
+
+  for (const layer of tree.groupingDiagnostics) {
+    const events = layer.repartitionEvents ?? [];
+    for (const event of events) {
+      eventCount += 1;
+      if (event.reason === "pre_summary_policy") {
+        preSummaryEventCount += 1;
+      } else {
+        postSummaryEventCount += 1;
+      }
+      maxRound = Math.max(maxRound, event.round);
+
+      const current = byDepth.get(event.depth) ?? {
+        depth: event.depth,
+        eventCount: 0,
+        preSummaryEventCount: 0,
+        postSummaryEventCount: 0,
+        maxRound: 0,
+      };
+      current.eventCount += 1;
+      if (event.reason === "pre_summary_policy") {
+        current.preSummaryEventCount += 1;
+      } else {
+        current.postSummaryEventCount += 1;
+      }
+      current.maxRound = Math.max(current.maxRound, event.round);
+      byDepth.set(event.depth, current);
+    }
+  }
+
+  return {
+    eventCount,
+    preSummaryEventCount,
+    postSummaryEventCount,
+    maxRound,
+    depthMetrics: Array.from(byDepth.values()).sort((left, right) => left.depth - right.depth),
   };
 }
 
@@ -324,8 +398,13 @@ function buildDepthMetrics(samples: ParentQualitySample[], supportCoverageFloor:
     });
 }
 
-function evaluateThresholds(metrics: TreeQualityMetrics, thresholds: TreeQualityThresholds): TreeQualityThresholdFailure[] {
+function evaluateThresholds(
+  metrics: TreeQualityMetrics,
+  repartitionMetrics: RepartitionMetrics,
+  thresholds: TreeQualityThresholds,
+): TreeQualityThresholdFailure[] {
   const failures: TreeQualityThresholdFailure[] = [];
+  const repartitionEventRate = metrics.parentCount === 0 ? 0 : repartitionMetrics.eventCount / metrics.parentCount;
 
   if (metrics.unsupportedParentRate > thresholds.maxUnsupportedParentRate) {
     failures.push({
@@ -411,6 +490,42 @@ function evaluateThresholds(metrics: TreeQualityMetrics, thresholds: TreeQuality
     });
   }
 
+  if (repartitionEventRate < thresholds.minRepartitionEventRate) {
+    failures.push({
+      code: "min_repartition_event_rate",
+      message: "Repartition event rate dropped below threshold.",
+      details: {
+        actual: repartitionEventRate,
+        expected: thresholds.minRepartitionEventRate,
+        comparator: ">=",
+      },
+    });
+  }
+
+  if (repartitionEventRate > thresholds.maxRepartitionEventRate) {
+    failures.push({
+      code: "repartition_event_rate",
+      message: "Repartition event rate exceeded threshold.",
+      details: {
+        actual: repartitionEventRate,
+        expected: thresholds.maxRepartitionEventRate,
+        comparator: "<=",
+      },
+    });
+  }
+
+  if (repartitionMetrics.maxRound > thresholds.maxRepartitionMaxRound) {
+    failures.push({
+      code: "repartition_max_round",
+      message: "Maximum repartition round exceeded threshold.",
+      details: {
+        actual: repartitionMetrics.maxRound,
+        expected: thresholds.maxRepartitionMaxRound,
+        comparator: "<=",
+      },
+    });
+  }
+
   return failures;
 }
 
@@ -423,6 +538,9 @@ function normalizeThresholds(config: ExplanationConfig, overrides?: Partial<Tree
     maxComplexitySpreadMean: config.complexityBandWidth,
     minEvidenceCoverageMean: 1,
     minVocabularyContinuityMean: computeVocabularyContinuityThreshold(config),
+    minRepartitionEventRate: 0,
+    maxRepartitionEventRate: 1,
+    maxRepartitionMaxRound: 3,
   };
 
   return {
@@ -436,6 +554,12 @@ function normalizeThresholds(config: ExplanationConfig, overrides?: Partial<Tree
     ),
     minEvidenceCoverageMean: clampRate(overrides?.minEvidenceCoverageMean ?? defaults.minEvidenceCoverageMean),
     minVocabularyContinuityMean: clampRate(overrides?.minVocabularyContinuityMean ?? defaults.minVocabularyContinuityMean),
+    minRepartitionEventRate: clampRate(overrides?.minRepartitionEventRate ?? defaults.minRepartitionEventRate),
+    maxRepartitionEventRate: clampRate(overrides?.maxRepartitionEventRate ?? defaults.maxRepartitionEventRate),
+    maxRepartitionMaxRound: clampNonNegativeInteger(
+      overrides?.maxRepartitionMaxRound ?? defaults.maxRepartitionMaxRound,
+      defaults.maxRepartitionMaxRound,
+    ),
   };
 }
 
@@ -453,7 +577,18 @@ function clampSpread(value: number, fallback: number): number {
   return Math.max(0, value);
 }
 
+function clampNonNegativeInteger(value: number, fallback: number): number {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+  return Math.max(0, Math.floor(value));
+}
+
 function computeSupportCoverageFloor(config: ExplanationConfig): number {
+  if (config.entailmentMode === "strict") {
+    return 1;
+  }
+
   const audienceBump = config.audienceLevel === "expert" ? 0.05 : config.audienceLevel === "novice" ? -0.05 : 0;
   const proofBump = config.proofDetailMode === "formal" ? 0.1 : config.proofDetailMode === "minimal" ? -0.05 : 0;
   const raw = 0.5 + audienceBump + proofBump;

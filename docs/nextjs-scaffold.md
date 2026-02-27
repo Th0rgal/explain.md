@@ -33,12 +33,6 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 - Leaf detail uses persisted verification jobs from the ledger, so panel metadata is queryable and stable across reloads.
 - Verification requests emit deterministic hashes (`requestHash`, `queuedJobHash`, `finalJobHash`) and deterministic sequential job IDs (`job-000001`, ...).
 
-## Implemented in issues #46 and #47 (design + whole-tree mode)
-- Canonical semantic design-token layer in `apps/web/app/globals.css` with shared panel/focus/legend contracts.
-- Proof explorer supports `List | 3D Tree` modes with shared node-selection state.
-- 3D mode uses deterministic tree->scene transformation (`apps/web/lib/tree-scene.ts`) and a browser renderer (`apps/web/components/proof-tree-3d.tsx`).
-- Whole-tree mode hydrates reachable parent pages deterministically before scene rendering and exposes completeness via `isWholeTreeLoaded(...)`.
-
 ## Determinism and provenance
 - Two deterministic datasets are exposed through one contract:
   - `seed-verity` (seed tree)
@@ -52,34 +46,16 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
 - Dependency graph route exposes deterministic SCC/reachability data and per-declaration support closures for browser-side provenance checks.
 - Parent nodes include policy diagnostics in tree query payloads so browser views can audit complexity/prerequisite/term-budget compliance.
 - Policy report route exposes deterministic quality metrics/threshold outcomes using the evaluation harness, with optional threshold overrides for pedagogy calibration.
-- Cache report route exposes deterministic cache-reuse diagnostics (`status`, `cacheKey`, `sourceFingerprint`, `snapshotHash`, `cacheEntryHash`) and theorem-delta-aware outcomes (`cache_semantic_hit`, `cache_incremental_subtree_rebuild`, `cache_incremental_topology_rebuild`, `cache_incremental_rebuild`) with auditable topology reuse counters (stable-id reuse, same-depth child-hash reuse, same-depth child-statement-hash reuse, frontier-disambiguated reuse, ambiguity-skip counters, and frontier-partition recovery/retry-warm-start telemetry) for reproducible incremental recompute auditing.
+- Cache report route exposes deterministic cache-reuse diagnostics (`status`, `cacheKey`, `sourceFingerprint`, `snapshotHash`, `cacheEntryHash`) and optional `blockedSubtreePlan` evidence for reproducible incremental recompute auditing (`cache_topology_recovery_hit`, `cache_blocked_subtree_rebuild_hit`, `cache_topology_regeneration_rebuild_hit`, `cache_blocked_subtree_full_rebuild`). Topology-regeneration hits include machine-checkable reuse-mode counters and `regenerationHash`.
 - Shared config parsing is centralized in `apps/web/lib/config-input.ts` for route consistency across both query and POST contracts.
 - Shared config query parsing now covers the full pedagogy knob surface used by generation and hashing:
   - `abstractionLevel`, `complexityLevel`, `maxChildrenPerParent`
   - `audienceLevel`, `language`, `readingLevelTarget`
-  - `complexityBandWidth`, `termIntroductionBudget`, `proofDetailMode`
+  - `complexityBandWidth`, `termIntroductionBudget`, `proofDetailMode`, `entailmentMode`
+- Proof Explorer control panel exposes `entailmentMode` directly so strict lexical-entailment runs can be triggered and audited from browser routes.
 - Config profiles are persisted/queryable through deterministic API contracts with canonical storage keys, profile `configHash`, and response-level `requestHash` + `ledgerHash`.
 - Lean fixture datasets are persisted under `.explain-md/web-proof-cache` (override with `EXPLAIN_MD_WEB_PROOF_CACHE_DIR`) and invalidated by source fingerprint + config hash.
 - Lean fixture root lookup can be overridden with `EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT` for deterministic benchmark/invalidation runs against temporary fixture copies.
-- Lean fixture source-link base can be overridden with `EXPLAIN_MD_LEAN_FIXTURE_SOURCE_BASE_URL`; leaf-detail falls back to deterministic span-based URLs when leaf records omit `sourceUrl`.
-- Leaf panel renders source-link provenance mode directly from `view.shareReference.sourceUrlOrigin` (`leaf` | `source_span` | `missing`) and shows deterministic deep-link availability.
-- Tree rows expose deterministic keyboard semantics with ARIA tree metadata:
-  - roving tab-focus on statement rows (`role="treeitem"`)
-  - navigation keys (`ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight`, `Home`, `End`)
-  - deterministic activation keys (`Enter`/`Space`) with leaf selection and parent selection-clear behavior
-- Tree rendering applies a deterministic large-tree windowing policy:
-  - below threshold: render all rows (`mode=full`)
-  - above threshold: render anchored window + overscan (`mode=windowed`) centered on focused or selected row
-  - explicit section diagnostics for auditability (`data-tree-render-mode`, `data-tree-rendered-row-count`, `data-tree-hidden-above`, `data-tree-hidden-below`)
-  - deterministic paging controls to move the render window without changing proof data
-- Diff panel applies deterministic change grouping/highlighting:
-  - grouped rendering by `changed`, `added`, `removed`
-  - changed statements split into `prefix`, `changed`, `suffix` spans using deterministic common-prefix/common-suffix extraction
-  - explicit section diagnostics (`data-diff-total-changes`, `data-diff-rendered-changes`, `data-diff-truncated-count`)
-- Windowing thresholds can be set with public env vars:
-  - `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_MAX_ROWS` (default `120`)
-  - `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_OVERSCAN_ROWS` (default `24`)
-  - `NEXT_PUBLIC_EXPLAIN_MD_DIFF_RENDER_MAX_CHANGES` (default `24`)
 - Deterministic benchmark artifact generation is available via `npm run web:bench:cache` (writes `docs/benchmarks/proof-cache-benchmark.json`).
 - The Lean fixture uses a deterministic summary provider (`temperature=0` behavior with fixed evidence-only synthesis), so parent statements remain child-entailed and reproducible.
 - Reproducibility contract for each queued job is derived from the selected theorem leaf:
@@ -94,8 +70,33 @@ Provide a deterministic frontend baseline for explain.md so issue #15 can focus 
   - root snapshot from `GET /api/proofs/root`
   - per-parent child pages from `GET /api/proofs/nodes/:nodeId/children`
   - ancestry expansion from `GET /api/proofs/nodes/:nodeId/path`
+- Large-tree rendering is deterministically windowed in-browser:
+  - planner inputs: `totalRowCount`, `anchorRowIndex`, `maxVisibleRows`, `overscanRows`
+  - planner outputs: `mode`, `startIndex/endIndex`, `renderedRowCount`, `hiddenAboveCount`, `hiddenBelowCount`
+  - tree panel exposes machine-checkable diagnostics via `data-tree-*` attributes
+  - for very large trees, deterministic virtualization mode is enabled with fixed row height and spacer rows:
+    - mode: `data-tree-render-mode="virtualized"`
+    - indices: `data-tree-virtual-start-index`, `data-tree-virtual-end-index`
+  - keyboard navigation keeps deterministic tree semantics:
+    - `ArrowUp/ArrowDown`, `Home/End`, `PageUp/PageDown` move active row
+    - `ArrowRight` expands collapsed parents or enters first visible child
+    - `ArrowLeft` collapses expanded parents or moves to ancestor row
+  - active-row diagnostics remain machine-checkable (`data-tree-active-node-id`, `data-tree-active-row-index`)
+  - assistive-tech announcements are deterministic and surfaced on the tree panel as `data-tree-live-message`
+  - `Enter` / `Space` applies the active row action (parent expand/collapse, leaf selection)
 - Sibling complexity remains bounded by `maxChildrenPerParent` during child-page fetches.
 - This keeps behavior auditable while issue #15 iterates on richer interaction patterns.
+
+Public env knobs for deterministic window bounds:
+- `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_MAX_ROWS` (default `120`)
+- `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_OVERSCAN_ROWS` (default `24`)
+
+Public env knobs for deterministic virtualization bounds:
+- `NEXT_PUBLIC_EXPLAIN_MD_TREE_VIRTUALIZATION_ENABLED` (default `true`)
+- `NEXT_PUBLIC_EXPLAIN_MD_TREE_VIRTUALIZATION_MIN_ROWS` (default `400`)
+- `NEXT_PUBLIC_EXPLAIN_MD_TREE_ROW_HEIGHT_PX` (default `36`)
+- `NEXT_PUBLIC_EXPLAIN_MD_TREE_VIEWPORT_ROWS` (default `18`)
+- `NEXT_PUBLIC_EXPLAIN_MD_TREE_VIRTUALIZATION_OVERSCAN_ROWS` (default `6`)
 
 ## Local verification
 From repository root:

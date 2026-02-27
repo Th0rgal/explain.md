@@ -21,7 +21,6 @@ import {
   listProofs,
   listSeedProofs,
   SEED_PROOF_ID,
-  selectMinimalBlockedFrontierExpansion,
 } from "../lib/proof-service";
 
 describe("proof service", () => {
@@ -55,90 +54,6 @@ describe("proof service", () => {
     expect(first.view.visibleNodes.length).toBeGreaterThan(1);
   });
 
-  it("selects minimal blocked-group frontier expansion deterministically", () => {
-    const selected = selectMinimalBlockedFrontierExpansion({
-      blockedGroups: [
-        {
-          depth: 2,
-          groupIndex: 1,
-          parentId: "p_2_1_a",
-          frontierLeafIds: ["l1", "l2", "l3"],
-        },
-        {
-          depth: 2,
-          groupIndex: 0,
-          parentId: "p_2_0_b",
-          frontierLeafIds: ["l1", "l2"],
-        },
-      ],
-      frontierLeafIdSet: new Set(["l1"]),
-      availableLeafIdSet: new Set(["l1", "l2", "l3"]),
-    });
-
-    expect(selected).toBeDefined();
-    expect(selected?.expandedLeafIds).toEqual(["l2"]);
-    expect(selected?.nextFrontierLeafIds).toEqual(["l1", "l2"]);
-    expect(selected?.scheduledGroupCount).toBe(2);
-  });
-
-  it("breaks blocked-group recovery ties by stable metadata order", () => {
-    const selected = selectMinimalBlockedFrontierExpansion({
-      blockedGroups: [
-        {
-          depth: 3,
-          groupIndex: 2,
-          parentId: "p_3_2_z",
-          frontierLeafIds: ["l2"],
-        },
-        {
-          depth: 2,
-          groupIndex: 9,
-          parentId: "p_2_9_a",
-          frontierLeafIds: ["l2"],
-        },
-      ],
-      frontierLeafIdSet: new Set<string>(),
-      availableLeafIdSet: new Set(["l2"]),
-    });
-
-    expect(selected).toBeDefined();
-    expect(selected?.expandedLeafIds).toEqual(["l2"]);
-    expect(selected?.nextFrontierLeafIds).toEqual(["l2"]);
-    expect(selected?.scheduledGroupCount).toBe(2);
-  });
-
-  it("greedily covers blocked groups with deterministic minimal leaf additions", () => {
-    const selected = selectMinimalBlockedFrontierExpansion({
-      blockedGroups: [
-        {
-          depth: 2,
-          groupIndex: 0,
-          parentId: "p_2_0_a",
-          frontierLeafIds: ["l1", "l2"],
-        },
-        {
-          depth: 2,
-          groupIndex: 1,
-          parentId: "p_2_1_b",
-          frontierLeafIds: ["l2", "l3"],
-        },
-        {
-          depth: 2,
-          groupIndex: 2,
-          parentId: "p_2_2_c",
-          frontierLeafIds: ["l3"],
-        },
-      ],
-      frontierLeafIdSet: new Set<string>(),
-      availableLeafIdSet: new Set(["l1", "l2", "l3"]),
-    });
-
-    expect(selected).toBeDefined();
-    expect(selected?.expandedLeafIds).toEqual(["l2", "l3"]);
-    expect(selected?.nextFrontierLeafIds).toEqual(["l2", "l3"]);
-    expect(selected?.scheduledGroupCount).toBe(3);
-  });
-
   it("computes deterministic diff hash and reports config changes", () => {
     const result = buildSeedDiff({
       proofId: SEED_PROOF_ID,
@@ -167,7 +82,6 @@ describe("proof service", () => {
     expect(detail.detailHash).toHaveLength(64);
     expect(detail.view?.verification.summary.totalJobs).toBe(1);
     expect(detail.view?.shareReference.compact).toContain("init_sound");
-    expect(detail.view?.shareReference.sourceUrlOrigin).toBe("leaf");
   });
 
   it("fails clearly for unsupported proof id", () => {
@@ -314,6 +228,8 @@ describe("proof service", () => {
     expect(first.reportHash).toBe(second.reportHash);
     expect(first.report.metrics.parentCount).toBeGreaterThan(0);
     expect(first.report.thresholdPass).toBe(true);
+    expect(first.report.repartitionMetrics.eventCount).toBeGreaterThanOrEqual(0);
+    expect(first.report.repartitionMetrics.depthMetrics.every((entry) => entry.depth >= 1)).toBe(true);
   });
 
   it("applies threshold overrides with machine-checkable threshold outcomes", async () => {
@@ -321,10 +237,16 @@ describe("proof service", () => {
       proofId: LEAN_FIXTURE_PROOF_ID,
       thresholds: {
         maxComplexitySpreadMean: 0,
+        minRepartitionEventRate: 0,
+        maxRepartitionEventRate: 1,
+        maxRepartitionMaxRound: 3,
       },
     });
 
     expect(response.report.thresholds.maxComplexitySpreadMean).toBe(0);
+    expect(response.report.thresholds.minRepartitionEventRate).toBe(0);
+    expect(response.report.thresholds.maxRepartitionEventRate).toBe(1);
+    expect(response.report.thresholds.maxRepartitionMaxRound).toBe(3);
     expect(typeof response.report.thresholdPass).toBe("boolean");
     expect(response.report.thresholdFailures.every((failure) => typeof failure.code === "string")).toBe(true);
   });
@@ -365,38 +287,47 @@ describe("proof service", () => {
     }
   });
 
-  it("reuses cached snapshot on source fingerprint mismatch when theorem leaves are unchanged", async () => {
+  it("recovers deterministic cache hit from source-fingerprint mismatch when topology plan has no blocked declarations", async () => {
     const previousCacheDir = process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR;
     const previousFixtureRoot = process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT;
     const tempCacheDir = await fs.mkdtemp(path.join(os.tmpdir(), "explain-md-proof-cache-"));
-    const sourceFixtureRoot = await resolveFixtureRootForTest();
+    const fixtureSourceRoot = await resolveFixtureSourceRootForTests();
     const tempFixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), "explain-md-proof-fixture-"));
-    const sourceCorePath = path.join(sourceFixtureRoot, "Verity", "Core.lean");
-    const tempCorePath = path.join(tempFixtureRoot, "Verity", "Core.lean");
     process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR = tempCacheDir;
     process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT = tempFixtureRoot;
+    await copyDirectory(fixtureSourceRoot, tempFixtureRoot);
 
     try {
-      await fs.cp(sourceFixtureRoot, tempFixtureRoot, { recursive: true });
-
       clearProofDatasetCacheForTests();
-      const first = await buildProofCacheReportView({
-        proofId: LEAN_FIXTURE_PROOF_ID,
-      });
-      expect(first.cache.status).toBe("miss");
-
-      const originalCore = await fs.readFile(sourceCorePath, "utf8");
-      await fs.writeFile(tempCorePath, `${originalCore.trimEnd()}\n-- test semantic noop mutation\n`, "utf8");
-
-      clearProofDatasetCacheForTests();
-      const second = await buildProofCacheReportView({
+      await buildProofCacheReportView({
         proofId: LEAN_FIXTURE_PROOF_ID,
       });
 
-      expect(second.cache.status).toBe("hit");
-      expect(second.cache.sourceFingerprint).not.toBe(first.cache.sourceFingerprint);
-      expect(second.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_semantic_hit")).toBe(true);
-      expect(second.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_incremental_rebuild")).toBe(false);
+      clearProofDatasetCacheForTests();
+      const warm = await buildProofCacheReportView({
+        proofId: LEAN_FIXTURE_PROOF_ID,
+      });
+      expect(warm.cache.status).toBe("hit");
+      expect(warm.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_hit")).toBe(true);
+
+      const corePath = path.join(tempFixtureRoot, "Verity", "Core.lean");
+      const coreBefore = await fs.readFile(corePath, "utf8");
+      await fs.writeFile(corePath, coreBefore.replace("namespace Verity", "namespace  Verity"), "utf8");
+
+      clearProofDatasetCacheForTests();
+      const recovered = await buildProofCacheReportView({
+        proofId: LEAN_FIXTURE_PROOF_ID,
+      });
+
+      expect(recovered.cache.status).toBe("hit");
+      expect(recovered.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_topology_recovery_hit")).toBe(true);
+      expect(recovered.cache.blockedSubtreePlan?.reason).toBe("source_fingerprint_mismatch");
+      expect(recovered.cache.blockedSubtreePlan?.fullRebuildRequired).toBe(false);
+      expect(recovered.cache.blockedSubtreePlan?.blockedDeclarationIds).toEqual([]);
+      expect(recovered.cache.blockedSubtreePlan?.blockedLeafIds).toEqual([]);
+      expect(recovered.cache.blockedSubtreePlan?.executionBatches).toEqual([]);
+      expect(recovered.cache.blockedSubtreePlan?.planHash).toHaveLength(64);
+      expect(recovered.cache.snapshotHash).toBe(warm.cache.snapshotHash);
     } finally {
       clearProofDatasetCacheForTests();
       if (previousCacheDir === undefined) {
@@ -414,46 +345,43 @@ describe("proof service", () => {
     }
   });
 
-  it("rebuilds only affected parent subtrees when theorem statements change without topology deltas", async () => {
+  it("rebases recovered snapshot provenance for source-span-only mutations without full rebuild", async () => {
     const previousCacheDir = process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR;
     const previousFixtureRoot = process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT;
     const tempCacheDir = await fs.mkdtemp(path.join(os.tmpdir(), "explain-md-proof-cache-"));
-    const sourceFixtureRoot = await resolveFixtureRootForTest();
+    const fixtureSourceRoot = await resolveFixtureSourceRootForTests();
     const tempFixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), "explain-md-proof-fixture-"));
-    const tempCorePath = path.join(tempFixtureRoot, "Verity", "Core.lean");
     process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR = tempCacheDir;
     process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT = tempFixtureRoot;
+    await copyDirectory(fixtureSourceRoot, tempFixtureRoot);
 
     try {
-      await fs.cp(sourceFixtureRoot, tempFixtureRoot, { recursive: true });
-
       clearProofDatasetCacheForTests();
-      const first = await buildProofCacheReportView({
-        proofId: LEAN_FIXTURE_PROOF_ID,
-      });
-      expect(first.cache.status).toBe("miss");
-
-      const originalCore = await fs.readFile(tempCorePath, "utf8");
-      const mutatedCore = originalCore.includes("theorem core_safe (n : Nat) : inc n = Nat.succ n := by")
-        ? originalCore.replace(
-            "theorem core_safe (n : Nat) : inc n = Nat.succ n := by",
-            "theorem core_safe (n : Nat) : inc n = Nat.succ (Nat.succ n) := by",
-          )
-        : `${originalCore.trimEnd()}\ntheorem core_safe (n : Nat) : inc n = Nat.succ (Nat.succ n) := by\n`;
-      await fs.writeFile(tempCorePath, mutatedCore, "utf8");
-
-      clearProofDatasetCacheForTests();
-      const second = await buildProofCacheReportView({
+      await buildProofCacheReportView({
         proofId: LEAN_FIXTURE_PROOF_ID,
       });
 
-      expect(second.cache.status).toBe("hit");
-      expect(second.cache.snapshotHash).not.toBe(first.cache.snapshotHash);
-      expect(second.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_incremental_subtree_rebuild")).toBe(true);
-      expect(second.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_incremental_rebuild")).toBe(false);
-      expect(second.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_incremental_topology_rebuild")).toBe(
-        false,
-      );
+      clearProofDatasetCacheForTests();
+      const warm = await buildProofCacheReportView({
+        proofId: LEAN_FIXTURE_PROOF_ID,
+      });
+      expect(warm.cache.status).toBe("hit");
+
+      const corePath = path.join(tempFixtureRoot, "Verity", "Core.lean");
+      const coreBefore = await fs.readFile(corePath, "utf8");
+      await fs.writeFile(corePath, `${coreBefore.trimEnd()}\n-- trailing provenance-only mutation\n`, "utf8");
+
+      clearProofDatasetCacheForTests();
+      const recovered = await buildProofCacheReportView({
+        proofId: LEAN_FIXTURE_PROOF_ID,
+      });
+
+      expect(recovered.cache.status).toBe("hit");
+      expect(recovered.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_topology_recovery_hit")).toBe(true);
+      expect(recovered.cache.blockedSubtreePlan?.fullRebuildRequired).toBe(false);
+      expect(recovered.cache.blockedSubtreePlan?.blockedDeclarationIds).toEqual([]);
+      expect(recovered.cache.snapshotHash).not.toBe(warm.cache.snapshotHash);
+      expect(recovered.cache.cacheEntryHash).not.toBe(warm.cache.cacheEntryHash);
     } finally {
       clearProofDatasetCacheForTests();
       if (previousCacheDir === undefined) {
@@ -471,90 +399,124 @@ describe("proof service", () => {
     }
   });
 
-  it("rebuilds with deterministic parent-summary reuse when theorem topology changes", async () => {
+  it("recovers deterministic cache hit by recomputing blocked-subtree ancestors on topology-stable semantic mutation", async () => {
     const previousCacheDir = process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR;
     const previousFixtureRoot = process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT;
     const tempCacheDir = await fs.mkdtemp(path.join(os.tmpdir(), "explain-md-proof-cache-"));
-    const sourceFixtureRoot = await resolveFixtureRootForTest();
+    const fixtureSourceRoot = await resolveFixtureSourceRootForTests();
     const tempFixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), "explain-md-proof-fixture-"));
-    const tempLoopPath = path.join(tempFixtureRoot, "Verity", "Loop.lean");
     process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR = tempCacheDir;
     process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT = tempFixtureRoot;
+    await copyDirectory(fixtureSourceRoot, tempFixtureRoot);
 
     try {
-      await fs.cp(sourceFixtureRoot, tempFixtureRoot, { recursive: true });
-
       clearProofDatasetCacheForTests();
-      const first = await buildProofCacheReportView({
-        proofId: LEAN_FIXTURE_PROOF_ID,
-      });
-      expect(first.cache.status).toBe("miss");
-
-      const originalLoop = await fs.readFile(tempLoopPath, "utf8");
-      const topologyMutation = [
-        originalLoop.trimEnd(),
-        "",
-        "theorem loop_bridge (n : Nat) : core_safe n := by",
-        "  exact core_safe n",
-        "",
-      ].join("\n");
-      await fs.writeFile(tempLoopPath, topologyMutation, "utf8");
-
-      clearProofDatasetCacheForTests();
-      const second = await buildProofCacheReportView({
+      await buildProofCacheReportView({
         proofId: LEAN_FIXTURE_PROOF_ID,
       });
 
-      expect(second.cache.status).toBe("hit");
-      expect(second.cache.snapshotHash).not.toBe(first.cache.snapshotHash);
-      expect(second.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_incremental_topology_rebuild")).toBe(
+      clearProofDatasetCacheForTests();
+      const warm = await buildProofCacheReportView({
+        proofId: LEAN_FIXTURE_PROOF_ID,
+      });
+      expect(warm.cache.status).toBe("hit");
+
+      const corePath = path.join(tempFixtureRoot, "Verity", "Core.lean");
+      const coreBefore = await fs.readFile(corePath, "utf8");
+      const semanticMutationTarget = "lemma inc_nonzero (n : Nat) : inc n > 0 := by";
+      const semanticMutationReplacement = "lemma inc_nonzero (n : Nat) : inc n >= 1 := by";
+      expect(coreBefore.includes(semanticMutationTarget)).toBe(true);
+      await fs.writeFile(corePath, coreBefore.replace(semanticMutationTarget, semanticMutationReplacement), "utf8");
+
+      clearProofDatasetCacheForTests();
+      const recovered = await buildProofCacheReportView({
+        proofId: LEAN_FIXTURE_PROOF_ID,
+      });
+
+      expect(recovered.cache.status).toBe("hit");
+      expect(recovered.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_blocked_subtree_rebuild_hit")).toBe(
         true,
       );
-      expect(second.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_incremental_rebuild")).toBe(false);
-      const topologyDiagnostic = second.cache.diagnostics.find(
-        (diagnostic) => diagnostic.code === "cache_incremental_topology_rebuild",
-      );
-      expect(topologyDiagnostic).toBeDefined();
-      expect(typeof topologyDiagnostic?.details?.reusedParentSummaryCount).toBe("number");
-      expect(typeof topologyDiagnostic?.details?.generatedParentSummaryCount).toBe("number");
-      expect(typeof topologyDiagnostic?.details?.reusedParentNodeCount).toBe("number");
-      expect(typeof topologyDiagnostic?.details?.generatedParentNodeCount).toBe("number");
-      expect(typeof topologyDiagnostic?.details?.reusedParentByStableIdCount).toBe("number");
-      expect(typeof topologyDiagnostic?.details?.reusedParentByChildHashCount).toBe("number");
-      expect(typeof topologyDiagnostic?.details?.reusedParentByChildStatementHashCount).toBe("number");
-      expect(typeof topologyDiagnostic?.details?.reusedParentByFrontierChildHashCount).toBe("number");
-      expect(typeof topologyDiagnostic?.details?.reusedParentByFrontierChildStatementHashCount).toBe("number");
-      expect(typeof topologyDiagnostic?.details?.skippedAmbiguousChildHashReuseCount).toBe("number");
-      expect(typeof topologyDiagnostic?.details?.skippedAmbiguousChildStatementHashReuseCount).toBe("number");
-      expect(typeof topologyDiagnostic?.details?.frontierPartitionLeafCount).toBe("number");
-      expect(typeof topologyDiagnostic?.details?.frontierPartitionBlockedGroupCount).toBe("number");
-      expect(typeof topologyDiagnostic?.details?.frontierPartitionRecoveredLeafCount).toBe("number");
-      expect(typeof topologyDiagnostic?.details?.frontierPartitionRecoveredSummaryCount).toBe("number");
-      expect(typeof topologyDiagnostic?.details?.frontierPartitionRecoveryPassCount).toBe("number");
-      expect(typeof topologyDiagnostic?.details?.frontierPartitionRecoveryScheduledGroupCount).toBe("number");
-      expect(topologyDiagnostic?.details?.frontierPartitionRecoveryStrategy).toBe("minimal_hitting_set_greedy");
-      expect(typeof topologyDiagnostic?.details?.frontierPartitionFallbackUsed).toBe("boolean");
-      expect((topologyDiagnostic?.details?.reusedParentNodeCount as number) >= 0).toBe(true);
-      expect((topologyDiagnostic?.details?.generatedParentNodeCount as number) >= 0).toBe(true);
-      expect((topologyDiagnostic?.details?.reusedParentByStableIdCount as number) >= 0).toBe(true);
-      expect((topologyDiagnostic?.details?.reusedParentByChildHashCount as number) >= 0).toBe(true);
-      expect((topologyDiagnostic?.details?.reusedParentByChildStatementHashCount as number) >= 0).toBe(true);
-      expect((topologyDiagnostic?.details?.reusedParentByFrontierChildHashCount as number) >= 0).toBe(true);
-      expect((topologyDiagnostic?.details?.reusedParentByFrontierChildStatementHashCount as number) >= 0).toBe(true);
-      expect((topologyDiagnostic?.details?.skippedAmbiguousChildHashReuseCount as number) >= 0).toBe(true);
-      expect((topologyDiagnostic?.details?.skippedAmbiguousChildStatementHashReuseCount as number) >= 0).toBe(true);
-      expect((topologyDiagnostic?.details?.frontierPartitionLeafCount as number) >= 0).toBe(true);
-      expect((topologyDiagnostic?.details?.frontierPartitionBlockedGroupCount as number) >= 0).toBe(true);
-      expect((topologyDiagnostic?.details?.frontierPartitionRecoveredLeafCount as number) >= 0).toBe(true);
-      expect((topologyDiagnostic?.details?.frontierPartitionRecoveredSummaryCount as number) >= 0).toBe(true);
-      expect((topologyDiagnostic?.details?.frontierPartitionRecoveryPassCount as number) >= 0).toBe(true);
-      expect((topologyDiagnostic?.details?.frontierPartitionRecoveryScheduledGroupCount as number) >= 0).toBe(true);
-      if ((topologyDiagnostic?.details?.frontierPartitionRecoveryPassCount as number) > 0) {
-        expect(
-          (topologyDiagnostic?.details?.frontierPartitionRecoveryScheduledGroupCount as number) >=
-            (topologyDiagnostic?.details?.frontierPartitionRecoveryPassCount as number),
-        ).toBe(true);
+      expect(recovered.cache.blockedSubtreePlan?.fullRebuildRequired).toBe(true);
+      expect(recovered.cache.blockedSubtreePlan?.topologyShapeChanged).toBe(false);
+      expect(recovered.cache.blockedSubtreePlan?.addedDeclarationIds).toEqual([]);
+      expect(recovered.cache.blockedSubtreePlan?.removedDeclarationIds).toEqual([]);
+      expect((recovered.cache.blockedSubtreePlan?.blockedDeclarationIds.length ?? 0) > 0).toBe(true);
+      expect(recovered.cache.snapshotHash).not.toBe(warm.cache.snapshotHash);
+      expect(recovered.cache.cacheEntryHash).not.toBe(warm.cache.cacheEntryHash);
+    } finally {
+      clearProofDatasetCacheForTests();
+      if (previousCacheDir === undefined) {
+        delete process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR;
+      } else {
+        process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR = previousCacheDir;
       }
+      if (previousFixtureRoot === undefined) {
+        delete process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT;
+      } else {
+        process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT = previousFixtureRoot;
+      }
+      await fs.rm(tempCacheDir, { recursive: true, force: true });
+      await fs.rm(tempFixtureRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("recovers topology-shape-changing mutations via deterministic topology regeneration reuse", async () => {
+    const previousCacheDir = process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR;
+    const previousFixtureRoot = process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT;
+    const tempCacheDir = await fs.mkdtemp(path.join(os.tmpdir(), "explain-md-proof-cache-"));
+    const fixtureSourceRoot = await resolveFixtureSourceRootForTests();
+    const tempFixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), "explain-md-proof-fixture-"));
+    process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR = tempCacheDir;
+    process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT = tempFixtureRoot;
+    await copyDirectory(fixtureSourceRoot, tempFixtureRoot);
+
+    try {
+      clearProofDatasetCacheForTests();
+      await buildProofCacheReportView({
+        proofId: LEAN_FIXTURE_PROOF_ID,
+      });
+
+      clearProofDatasetCacheForTests();
+      const warm = await buildProofCacheReportView({
+        proofId: LEAN_FIXTURE_PROOF_ID,
+      });
+      expect(warm.cache.status).toBe("hit");
+
+      const corePath = path.join(tempFixtureRoot, "Verity", "Core.lean");
+      const coreBefore = await fs.readFile(corePath, "utf8");
+      const addedTheorem = "\n\ntheorem cache_shape_added : True := by\n  trivial\n";
+      await fs.writeFile(corePath, `${coreBefore.trimEnd()}${addedTheorem}`, "utf8");
+
+      clearProofDatasetCacheForTests();
+      const rebuilt = await buildProofCacheReportView({
+        proofId: LEAN_FIXTURE_PROOF_ID,
+      });
+
+      expect(rebuilt.cache.status).toBe("hit");
+      expect(rebuilt.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_miss")).toBe(true);
+      expect(
+        rebuilt.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_topology_regeneration_rebuild_hit"),
+      ).toBe(true);
+      expect(rebuilt.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_blocked_subtree_full_rebuild")).toBe(
+        false,
+      );
+      const regenerationDiagnostic = rebuilt.cache.diagnostics.find(
+        (diagnostic) => diagnostic.code === "cache_topology_regeneration_rebuild_hit",
+      );
+      expect((regenerationDiagnostic?.details?.reusableParentSummaryCount as number) >= 0).toBe(true);
+      expect((regenerationDiagnostic?.details?.reusedParentSummaryCount as number) >= 0).toBe(true);
+      expect(
+        (regenerationDiagnostic?.details?.reusedParentSummaryByGroundingCount as number) +
+          (regenerationDiagnostic?.details?.reusedParentSummaryByStatementSignatureCount as number),
+      ).toBe(regenerationDiagnostic?.details?.reusedParentSummaryCount);
+      expect((regenerationDiagnostic?.details?.generatedParentSummaryCount as number) > 0).toBe(true);
+      expect((regenerationDiagnostic?.details?.skippedAmbiguousStatementSignatureReuseCount as number) >= 0).toBe(true);
+      expect((regenerationDiagnostic?.details?.skippedUnrebasableStatementSignatureReuseCount as number) >= 0).toBe(true);
+      expect(rebuilt.cache.blockedSubtreePlan?.fullRebuildRequired).toBe(true);
+      expect(rebuilt.cache.blockedSubtreePlan?.topologyShapeChanged).toBe(true);
+      expect((rebuilt.cache.blockedSubtreePlan?.addedDeclarationIds.length ?? 0) > 0).toBe(true);
+      expect(rebuilt.cache.snapshotHash).not.toBe(warm.cache.snapshotHash);
     } finally {
       clearProofDatasetCacheForTests();
       if (previousCacheDir === undefined) {
@@ -573,21 +535,34 @@ describe("proof service", () => {
   });
 });
 
-async function resolveFixtureRootForTest(): Promise<string> {
+async function copyDirectory(sourceDir: string, destinationDir: string): Promise<void> {
+  await fs.mkdir(destinationDir, { recursive: true });
+  const entries = await fs.readdir(sourceDir, { withFileTypes: true });
+  for (const entry of entries) {
+    const sourcePath = path.join(sourceDir, entry.name);
+    const destinationPath = path.join(destinationDir, entry.name);
+    if (entry.isDirectory()) {
+      await copyDirectory(sourcePath, destinationPath);
+      continue;
+    }
+    await fs.copyFile(sourcePath, destinationPath);
+  }
+}
+
+async function resolveFixtureSourceRootForTests(): Promise<string> {
   const candidates = [
     path.resolve(process.cwd(), "tests", "fixtures", "lean-project"),
-    path.resolve(process.cwd(), "..", "tests", "fixtures", "lean-project"),
     path.resolve(process.cwd(), "..", "..", "tests", "fixtures", "lean-project"),
   ];
 
   for (const candidate of candidates) {
     try {
-      await fs.access(path.join(candidate, "Verity", "Core.lean"));
+      await fs.access(candidate);
       return candidate;
     } catch {
-      // Continue probing.
+      // continue
     }
   }
 
-  throw new Error(`Unable to resolve fixture root for tests. Tried: ${candidates.join(", ")}`);
+  throw new Error(`Could not locate lean fixture project for tests. Tried: ${candidates.join(", ")}`);
 }

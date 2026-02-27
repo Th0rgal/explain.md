@@ -13,21 +13,28 @@ By default this writes:
 ## What It Measures
 - Cold path (`coldNoPersistentCache`): persistent cache removed before each iteration.
 - Warm path (`warmPersistentCache`): persistent cache prewarmed, in-memory cache cleared between iterations.
-- Semantic noop path (`semanticNoop`): applies a source-only comment mutation and verifies theorem-delta-aware cache reuse (`cache_semantic_hit`).
-- Invalidation path (`invalidation`): applies a theorem-level mutation and verifies deterministic subtree recompute reuse (`cache_incremental_subtree_rebuild`) with hit recovery semantics.
-- Topology change path (`topologyChange`): applies a theorem-addition mutation and verifies deterministic topology-aware rebuild diagnostics (`cache_incremental_topology_rebuild`) with explicit stable-id reuse, child-hash reuse, and ambiguity-skip counters.
-  - Includes child-statement-hash reuse fallback counters for deterministic reindex-heavy topology shifts.
-  - Includes frontier-disambiguated fallback counters for ambiguity-safe reuse under deep multi-frontier reindexing.
-  - Includes frontier-partition scheduling counters (`frontierPartitionLeafCount`, `frontierPartitionBlockedGroupCount`, `frontierPartitionRecoveredLeafCount`, `frontierPartitionRecoveredSummaryCount`, `frontierPartitionRecoveryPassCount`, `frontierPartitionRecoveryScheduledGroupCount`, `frontierPartitionRecoveryStrategy`, `frontierPartitionFallbackUsed`) to audit minimal-subtree generation attempts, retry warm-start summary carry-over, and deterministic blocked-group recovery scheduling via strategy `minimal_hitting_set_greedy`.
+- Invalidation path (`invalidation`): mutates `Verity/Core.lean` in a temporary fixture copy, then verifies deterministic topology-plan evidence plus recovery.
+  - benchmark mutation rewrites one declaration statement (topology-stable semantic delta), so `afterChangeTopologyPlan.fullRebuildRequired=true` while recovery can still return `cache_blocked_subtree_rebuild_hit`.
+  - expected status flow is `beforeChangeStatus=hit`, `afterChangeStatus=hit`, `recoveryStatus=hit`.
+- Topology-shape invalidation path (`topologyShapeInvalidation`): appends a declaration in `Verity/Core.lean` to force declaration-set shape change.
+  - expected diagnostics include `cache_topology_regeneration_rebuild_hit`, and `afterChangeTopologyPlan.topologyShapeChanged=true`.
+  - `afterChangeRegenerationRecovery` records deterministic recovery telemetry:
+    - `reusableParentSummaryCount`
+    - `reusedParentSummaryCount`
+    - `reusedParentSummaryByGroundingCount`
+    - `reusedParentSummaryByStatementSignatureCount`
+    - `generatedParentSummaryCount`
+    - `skippedAmbiguousStatementSignatureReuseCount`
+    - `skippedUnrebasableStatementSignatureReuseCount`
+    - `regenerationHash`
+  - expected status flow is `beforeChangeStatus=hit`, `afterChangeStatus=hit`, `recoveryStatus=hit`.
 
 ## Determinism and Auditability
 - Report includes:
   - `requestHash`: canonical hash of benchmark inputs (`proofId`, `configHash`, iteration counts).
   - `outcomeHash`: canonical hash of machine-checkable outcomes:
     - cold/warm hit-miss status vectors
-    - semantic noop status transition + diagnostics
-    - invalidation status transitions and diagnostic codes
-    - topology-change status transitions, diagnostic codes, reuse counters (`reusedParentByStableIdCount`, `reusedParentByChildHashCount`, `reusedParentByChildStatementHashCount`, `reusedParentByFrontierChildHashCount`, `reusedParentByFrontierChildStatementHashCount`, `skippedAmbiguousChildHashReuseCount`, `skippedAmbiguousChildStatementHashReuseCount`) and frontier-partition counters (`frontierPartitionLeafCount`, `frontierPartitionBlockedGroupCount`, `frontierPartitionRecoveredLeafCount`, `frontierPartitionRecoveredSummaryCount`, `frontierPartitionRecoveryPassCount`, `frontierPartitionRecoveryScheduledGroupCount`, `frontierPartitionRecoveryStrategy`, `frontierPartitionFallbackUsed`)
+    - invalidation + topology-shape invalidation status transitions, diagnostic codes, topology-plan summaries, and topology-regeneration recovery telemetry
 - Timing fields are informative but not included in `outcomeHash`, so run-to-run performance jitter does not break reproducibility checks.
 
 ## Environment

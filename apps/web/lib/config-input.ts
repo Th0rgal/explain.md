@@ -11,6 +11,7 @@ interface RawConfigInput {
   complexityBandWidth?: unknown;
   termIntroductionBudget?: unknown;
   proofDetailMode?: unknown;
+  entailmentMode?: unknown;
 }
 
 export function normalizeConfigInput(input: RawConfigInput = {}): ExplanationConfigInput {
@@ -29,6 +30,7 @@ export function normalizeConfigInput(input: RawConfigInput = {}): ExplanationCon
     complexityBandWidth: normalizeInteger(input.complexityBandWidth, 1, 0, 3),
     termIntroductionBudget: normalizeOptionalInteger(input.termIntroductionBudget, 0, 8),
     proofDetailMode: normalizeEnum(input.proofDetailMode, "balanced", ["minimal", "balanced", "formal"] as const, "proofDetailMode"),
+    entailmentMode: normalizeEnum(input.entailmentMode, "calibrated", ["calibrated", "strict"] as const, "entailmentMode"),
   };
 }
 
@@ -43,5 +45,6 @@ export function readConfigFromSearchParams(searchParams: URLSearchParams): Expla
     complexityBandWidth: searchParams.get("complexityBandWidth"),
     termIntroductionBudget: searchParams.get("termIntroductionBudget"),
     proofDetailMode: searchParams.get("proofDetailMode"),
+    entailmentMode: searchParams.get("entailmentMode"),
   });
 }

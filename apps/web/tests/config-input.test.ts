@@ -13,6 +13,7 @@ describe("config input", () => {
       complexityBandWidth: "2",
       termIntroductionBudget: "3",
       proofDetailMode: "formal",
+      entailmentMode: "strict",
     });
 
     expect(readConfigFromSearchParams(params)).toEqual({
@@ -25,6 +26,7 @@ describe("config input", () => {
       complexityBandWidth: 2,
       termIntroductionBudget: 3,
       proofDetailMode: "formal",
+      entailmentMode: "strict",
     });
   });
 
@@ -48,6 +50,7 @@ describe("config input", () => {
         complexityBandWidth: 3,
         termIntroductionBudget: 0,
         proofDetailMode: "minimal",
+        entailmentMode: "calibrated",
       }),
     ).toEqual({
       abstractionLevel: 5,
@@ -59,6 +62,7 @@ describe("config input", () => {
       complexityBandWidth: 3,
       termIntroductionBudget: 0,
       proofDetailMode: "minimal",
+      entailmentMode: "calibrated",
     });
   });
 

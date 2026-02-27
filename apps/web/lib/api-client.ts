@@ -8,6 +8,7 @@ export interface ProofConfigInput {
   complexityBandWidth?: number;
   termIntroductionBudget?: number;
   proofDetailMode?: "minimal" | "balanced" | "formal";
+  entailmentMode?: "calibrated" | "strict";
 }
 
 interface ApiSuccess<T> {
@@ -240,17 +241,12 @@ export interface PolicyReportResponse {
       maxComplexitySpreadMean: number;
       minEvidenceCoverageMean: number;
       minVocabularyContinuityMean: number;
+      minRepartitionEventRate: number;
+      maxRepartitionEventRate: number;
+      maxRepartitionMaxRound: number;
     };
     thresholdPass: boolean;
-    thresholdFailures: Array<{
-      code: string;
-      message: string;
-      details: {
-        actual: number;
-        expected: number;
-        comparator: "<=" | ">=";
-      };
-    }>;
+    thresholdFailures: PolicyThresholdFailure[];
     parentSamples: Array<{
       parentId: string;
       depth: number;
@@ -275,6 +271,29 @@ export interface PolicyReportResponse {
       meanVocabularyContinuity: number;
       meanTermJumpRate: number;
     }>;
+    repartitionMetrics: {
+      eventCount: number;
+      preSummaryEventCount: number;
+      postSummaryEventCount: number;
+      maxRound: number;
+      depthMetrics: Array<{
+        depth: number;
+        eventCount: number;
+        preSummaryEventCount: number;
+        postSummaryEventCount: number;
+        maxRound: number;
+      }>;
+    };
+  };
+}
+
+export interface PolicyThresholdFailure {
+  code: string;
+  message: string;
+  details: {
+    actual: number;
+    expected: number;
+    comparator: "<=" | ">=";
   };
 }
 
@@ -293,10 +312,10 @@ export interface CacheReportResponse {
     diagnostics: Array<{
       code:
         | "cache_hit"
-        | "cache_semantic_hit"
-        | "cache_incremental_subtree_rebuild"
-        | "cache_incremental_topology_rebuild"
-        | "cache_incremental_rebuild"
+        | "cache_topology_recovery_hit"
+        | "cache_blocked_subtree_rebuild_hit"
+        | "cache_topology_regeneration_rebuild_hit"
+        | "cache_blocked_subtree_full_rebuild"
         | "cache_miss"
         | "cache_write_failed"
         | "cache_read_failed"
@@ -306,6 +325,21 @@ export interface CacheReportResponse {
       message: string;
       details?: Record<string, unknown>;
     }>;
+    blockedSubtreePlan?: {
+      schemaVersion: "1.0.0";
+      reason: "source_fingerprint_mismatch";
+      changedDeclarationIds: string[];
+      addedDeclarationIds: string[];
+      removedDeclarationIds: string[];
+      topologyShapeChanged: boolean;
+      blockedDeclarationIds: string[];
+      blockedLeafIds: string[];
+      unaffectedLeafIds: string[];
+      executionBatches: string[][];
+      cyclicBatchCount: number;
+      fullRebuildRequired: boolean;
+      planHash: string;
+    };
   };
 }
 
@@ -326,7 +360,6 @@ export interface LeafDetailResponse {
       compact: string;
       markdown: string;
       sourceUrl?: string;
-      sourceUrlOrigin: "leaf" | "source_span" | "missing";
     };
     verification: {
       summary: {
@@ -622,6 +655,9 @@ function toConfigSearchParams(proofId: string, config: ProofConfigInput): URLSea
   }
   if (config.proofDetailMode) {
     params.set("proofDetailMode", config.proofDetailMode);
+  }
+  if (config.entailmentMode) {
+    params.set("entailmentMode", config.entailmentMode);
   }
   return params;
 }

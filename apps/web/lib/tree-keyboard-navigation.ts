@@ -1,79 +1,133 @@
-export interface KeyboardTreeRow {
+export type TreeKeyboardKey =
+  | "ArrowUp"
+  | "ArrowDown"
+  | "ArrowLeft"
+  | "ArrowRight"
+  | "Home"
+  | "End"
+  | "PageUp"
+  | "PageDown";
+
+export interface TreeKeyboardIndexInput {
+  currentIndex: number;
+  totalRows: number;
+  key: string;
+  pageSize: number;
+}
+
+export interface TreeKeyboardRow {
   nodeId: string;
-  nodeKind: "leaf" | "parent";
   parentId?: string;
+  kind: "leaf" | "parent";
   isExpanded: boolean;
-  loadedChildIds: string[];
 }
 
 export type TreeKeyboardIntent =
-  | { kind: "move_focus"; nodeId: string }
-  | { kind: "set_expanded"; nodeId: string; expanded: boolean }
-  | { kind: "activate_leaf"; nodeId: string }
-  | { kind: "clear_leaf_selection" }
-  | { kind: "noop" };
+  | { kind: "set-active-index"; index: number }
+  | { kind: "expand"; index: number }
+  | { kind: "collapse"; index: number }
+  | { kind: "noop"; index: number };
 
-function isActivationKey(key: string): boolean {
-  return key === "Enter" || key === " ";
+export interface TreeKeyboardIntentInput extends TreeKeyboardIndexInput {
+  rows: TreeKeyboardRow[];
 }
 
-export function resolveTreeKeyboardIntent(key: string, focusedNodeId: string | null, rows: KeyboardTreeRow[]): TreeKeyboardIntent {
-  if (!focusedNodeId || rows.length === 0) {
-    return { kind: "noop" };
+export interface TreeKeyboardAnnouncementInput {
+  action: "active" | "expand" | "collapse";
+  statement: string;
+  depthFromRoot: number;
+  childCount?: number;
+}
+
+export function resolveTreeKeyboardIntent(input: TreeKeyboardIntentInput): TreeKeyboardIntent | null {
+  const boundedIndex = clamp(input.currentIndex, 0, Math.max(0, input.totalRows - 1));
+  const boundedRows = input.rows.slice(0, input.totalRows);
+  const activeRow = boundedRows[boundedIndex];
+  if (!activeRow) {
+    return null;
   }
 
-  const rowIndex = rows.findIndex((row) => row.nodeId === focusedNodeId);
-  if (rowIndex < 0) {
-    return { kind: "noop" };
-  }
-
-  const row = rows[rowIndex];
-  if (!row) {
-    return { kind: "noop" };
-  }
-
-  if (key === "ArrowDown") {
-    const next = rows[rowIndex + 1];
-    return next ? { kind: "move_focus", nodeId: next.nodeId } : { kind: "noop" };
-  }
-
-  if (key === "ArrowUp") {
-    const prev = rows[rowIndex - 1];
-    return prev ? { kind: "move_focus", nodeId: prev.nodeId } : { kind: "noop" };
-  }
-
-  if (key === "Home") {
-    return { kind: "move_focus", nodeId: rows[0]?.nodeId ?? focusedNodeId };
-  }
-
-  if (key === "End") {
-    return { kind: "move_focus", nodeId: rows[rows.length - 1]?.nodeId ?? focusedNodeId };
-  }
-
-  if (key === "ArrowRight") {
-    if (row.nodeKind !== "parent") {
-      return { kind: "noop" };
+  if (input.key === "ArrowRight") {
+    if (activeRow.kind !== "parent") {
+      return { kind: "noop", index: boundedIndex };
     }
-    if (!row.isExpanded) {
-      return { kind: "set_expanded", nodeId: row.nodeId, expanded: true };
+    if (!activeRow.isExpanded) {
+      return { kind: "expand", index: boundedIndex };
     }
-    const firstChildId = row.loadedChildIds[0];
-    return firstChildId ? { kind: "move_focus", nodeId: firstChildId } : { kind: "noop" };
+    const nextRow = boundedRows[boundedIndex + 1];
+    if (nextRow?.parentId === activeRow.nodeId) {
+      return { kind: "set-active-index", index: boundedIndex + 1 };
+    }
+    return { kind: "noop", index: boundedIndex };
   }
 
-  if (key === "ArrowLeft") {
-    if (row.nodeKind === "parent" && row.isExpanded) {
-      return { kind: "set_expanded", nodeId: row.nodeId, expanded: false };
+  if (input.key === "ArrowLeft") {
+    if (activeRow.kind === "parent" && activeRow.isExpanded) {
+      return { kind: "collapse", index: boundedIndex };
     }
-    return row.parentId ? { kind: "move_focus", nodeId: row.parentId } : { kind: "noop" };
+    if (!activeRow.parentId) {
+      return { kind: "noop", index: boundedIndex };
+    }
+    const parentIndex = boundedRows.findIndex((row) => row.nodeId === activeRow.parentId);
+    if (parentIndex < 0) {
+      return { kind: "noop", index: boundedIndex };
+    }
+    return { kind: "set-active-index", index: parentIndex };
   }
 
-  if (isActivationKey(key)) {
-    if (row.nodeKind === "leaf") {
-      return { kind: "activate_leaf", nodeId: row.nodeId };
-    }
-    return { kind: "clear_leaf_selection" };
+  const verticalIndex = resolveTreeKeyboardIndex(input);
+  if (verticalIndex === null) {
+    return null;
+  }
+  return { kind: "set-active-index", index: verticalIndex };
+}
+
+export function formatTreeKeyboardAnnouncement(input: TreeKeyboardAnnouncementInput): string {
+  const depthLabel = `depth ${Math.max(0, Math.floor(input.depthFromRoot))}`;
+  const statement = normalizeWhitespace(input.statement);
+  if (input.action === "expand") {
+    const boundedChildCount = Math.max(0, Math.floor(input.childCount ?? 0));
+    return `Expanded ${statement}; ${depthLabel}; ${boundedChildCount} loaded children.`;
+  }
+  if (input.action === "collapse") {
+    return `Collapsed ${statement}; ${depthLabel}.`;
+  }
+  return `Active ${statement}; ${depthLabel}.`;
+}
+
+export function resolveTreeKeyboardIndex(input: TreeKeyboardIndexInput): number | null {
+  if (input.totalRows <= 0) {
+    return null;
   }
 
-  return { kind: "noop" };
+  const boundedCurrentIndex = clamp(input.currentIndex, 0, input.totalRows - 1);
+  const boundedPageSize = Math.max(1, Math.floor(input.pageSize));
+
+  switch (input.key as TreeKeyboardKey) {
+    case "ArrowUp":
+      return clamp(boundedCurrentIndex - 1, 0, input.totalRows - 1);
+    case "ArrowDown":
+      return clamp(boundedCurrentIndex + 1, 0, input.totalRows - 1);
+    case "Home":
+      return 0;
+    case "End":
+      return input.totalRows - 1;
+    case "PageUp":
+      return clamp(boundedCurrentIndex - boundedPageSize, 0, input.totalRows - 1);
+    case "PageDown":
+      return clamp(boundedCurrentIndex + boundedPageSize, 0, input.totalRows - 1);
+    default:
+      return null;
+  }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(value, max));
+}
+
+function normalizeWhitespace(value: string): string {
+  return value
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\.$/, "");
 }

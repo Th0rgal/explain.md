@@ -1,22 +1,19 @@
 "use client";
 
-import dynamic from "next/dynamic";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import {
-  fetchCacheReport,
   fetchConfigProfiles,
   fetchDiff,
   fetchLeafDetail,
   fetchLeafVerificationJobs,
+  fetchPolicyReport,
   fetchNodeChildren,
   fetchNodePath,
-  fetchPolicyReport,
   fetchRoot,
   fetchVerificationJob,
   removeConfigProfile,
   saveConfigProfile,
   verifyLeaf,
-  type CacheReportResponse,
   type ConfigProfilesResponse,
   type DiffResponse,
   type LeafDetailResponse,
@@ -29,17 +26,20 @@ import {
   type VerificationJobResponse,
   type VerificationJobsResponse,
 } from "../lib/api-client";
-import { buildExplanationDiffPanelView } from "../lib/explanation-diff-view";
-import { buildLeafSourceProvenanceView } from "../lib/leaf-provenance";
-import { resolveTreeKeyboardIntent } from "../lib/tree-keyboard-navigation";
-import { computeTreeRenderWindow } from "../lib/tree-render-window";
-import { buildTreeScene, isWholeTreeLoaded } from "../lib/tree-scene";
+import { formatPolicyThresholdFailure } from "../lib/policy-thresholds";
+import {
+  formatTreeKeyboardAnnouncement,
+  resolveTreeKeyboardIntent,
+  type TreeKeyboardRow,
+} from "../lib/tree-keyboard-navigation";
+import { planTreeRenderWindow, resolveTreeRenderSettings } from "../lib/tree-render-window";
+import {
+  planTreeVirtualizationWindow,
+  resolveTreeVirtualizationSettings,
+  resolveVirtualScrollTopForRowIndex,
+} from "../lib/tree-virtualization";
 
-const ProofTree3D = dynamic(() => import("./proof-tree-3d").then((module) => module.ProofTree3D), {
-  ssr: false,
-});
-
-const DEFAULT_CONFIG: ProofConfigInput = {
+export const DEFAULT_CONFIG: ProofConfigInput = {
   abstractionLevel: 3,
   complexityLevel: 3,
   maxChildrenPerParent: 3,
@@ -49,22 +49,24 @@ const DEFAULT_CONFIG: ProofConfigInput = {
   complexityBandWidth: 1,
   termIntroductionBudget: 2,
   proofDetailMode: "balanced",
+  entailmentMode: "calibrated",
 };
 
 const DEFAULT_PROFILE_USER_ID = "local-user";
-const TREE_RENDER_MAX_VISIBLE_ROWS = Number.parseInt(process.env.NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_MAX_ROWS ?? "120", 10);
-const TREE_RENDER_OVERSCAN_ROWS = Number.parseInt(process.env.NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_OVERSCAN_ROWS ?? "24", 10);
-const DIFF_RENDER_MAX_CHANGES = Number.parseInt(process.env.NEXT_PUBLIC_EXPLAIN_MD_DIFF_RENDER_MAX_CHANGES ?? "24", 10);
+export const ENTAILMENT_MODE_OPTIONS: Array<{ value: NonNullable<ProofConfigInput["entailmentMode"]>; label: string }> = [
+  { value: "calibrated", label: "Calibrated" },
+  { value: "strict", label: "Strict" },
+];
+export const TREE_RENDER_SETTINGS = resolveTreeRenderSettings(process.env);
+export const TREE_VIRTUALIZATION_SETTINGS = resolveTreeVirtualizationSettings(process.env);
 
 interface ProofExplorerProps {
   proofId: string;
 }
 
-type ViewMode = "list" | "tree3d";
-
 export function ProofExplorer(props: ProofExplorerProps) {
+  const treeListRef = useRef<HTMLUListElement | null>(null);
   const [config, setConfig] = useState<ProofConfigInput>(DEFAULT_CONFIG);
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [profileName, setProfileName] = useState<string>("Default profile");
   const [profileId, setProfileId] = useState<string>("default");
   const [profiles, setProfiles] = useState<ConfigProfilesResponse["profiles"]>([]);
@@ -76,47 +78,23 @@ export function ProofExplorer(props: ProofExplorerProps) {
   const [treeSnapshotHash, setTreeSnapshotHash] = useState<string>("");
   const [nodesById, setNodesById] = useState<Record<string, TreeNodeRecord>>({});
   const [childrenByParentId, setChildrenByParentId] = useState<Record<string, NodeChildrenState>>({});
+  const [activeTreeNodeId, setActiveTreeNodeId] = useState<string | null>(null);
+  const [treeA11yAnnouncement, setTreeA11yAnnouncement] = useState<string>("");
+  const [renderAnchorRowIndex, setRenderAnchorRowIndex] = useState<number>(0);
+  const [treeScrollTopPx, setTreeScrollTopPx] = useState<number>(0);
   const [diff, setDiff] = useState<DiffResponse | null>(null);
   const [policyReport, setPolicyReport] = useState<PolicyReportResponse | null>(null);
-  const [cacheReport, setCacheReport] = useState<CacheReportResponse | null>(null);
   const [pathResult, setPathResult] = useState<NodePathResponse | null>(null);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedLeafId, setSelectedLeafId] = useState<string | null>(null);
-  const [focusedTreeNodeId, setFocusedTreeNodeId] = useState<string | null>(null);
   const [leafDetail, setLeafDetail] = useState<LeafDetailResponse | null>(null);
   const [verificationJobs, setVerificationJobs] = useState<VerificationJobsResponse | null>(null);
   const [selectedVerificationJobId, setSelectedVerificationJobId] = useState<string | null>(null);
   const [selectedVerificationJob, setSelectedVerificationJob] = useState<VerificationJobResponse | null>(null);
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
-  const [isHydrating3d, setIsHydrating3d] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const treeNodeButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const isHydrating3dRef = useRef<boolean>(false);
-  const nodesByIdRef = useRef<Record<string, TreeNodeRecord>>({});
-  const childrenByParentIdRef = useRef<Record<string, NodeChildrenState>>({});
   const profileProjectId = useMemo(() => props.proofId, [props.proofId]);
-  const leafSourceProvenance = useMemo(
-    () => (leafDetail?.view ? buildLeafSourceProvenanceView(leafDetail.view.shareReference) : undefined),
-    [leafDetail],
-  );
-  const diffPanelView = useMemo(
-    () => (diff ? buildExplanationDiffPanelView(diff.report, { maxChanges: DIFF_RENDER_MAX_CHANGES }) : null),
-    [diff],
-  );
-
-  useEffect(() => {
-    nodesByIdRef.current = nodesById;
-  }, [nodesById]);
-
-  useEffect(() => {
-    childrenByParentIdRef.current = childrenByParentId;
-  }, [childrenByParentId]);
-
-  useEffect(() => {
-    isHydrating3dRef.current = isHydrating3d;
-  }, [isHydrating3d]);
 
   useEffect(() => {
     let cancelled = false;
@@ -127,7 +105,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
       setProfileError(null);
       setPathResult(null);
       try {
-        const [rootData, diffData, policyData, cacheData] = await Promise.all([
+        const [rootData, diffData, policyData] = await Promise.all([
           fetchRoot(props.proofId, config),
           fetchDiff({
             proofId: props.proofId,
@@ -135,7 +113,6 @@ export function ProofExplorer(props: ProofExplorerProps) {
             candidateConfig: config,
           }),
           fetchPolicyReport(props.proofId, config),
-          fetchCacheReport(props.proofId, config),
         ]);
 
         if (cancelled) {
@@ -186,11 +163,9 @@ export function ProofExplorer(props: ProofExplorerProps) {
             : {},
         );
         setExpandedNodeIds(rootNode.kind === "parent" ? [rootNode.id] : []);
-        setSelectedNodeId(rootNode.id);
-        setSelectedLeafId(rootNode.kind === "leaf" ? rootNode.id : null);
+        setActiveTreeNodeId(rootNode.id);
         setDiff(diffData);
         setPolicyReport(policyData);
-        setCacheReport(cacheData);
       } catch (loadError) {
         if (cancelled) {
           return;
@@ -203,7 +178,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
       }
     }
 
-    void load();
+    load();
     return () => {
       cancelled = true;
     };
@@ -280,7 +255,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
       }
     }
 
-    void loadLeafPanel(selectedLeafId);
+    loadLeafPanel(selectedLeafId);
     return () => {
       cancelled = true;
     };
@@ -308,122 +283,11 @@ export function ProofExplorer(props: ProofExplorerProps) {
       }
     }
 
-    void loadSelectedJob(selectedVerificationJobId);
+    loadSelectedJob(selectedVerificationJobId);
     return () => {
       cancelled = true;
     };
   }, [selectedVerificationJobId]);
-
-  const wholeTreeLoaded = useMemo(() => {
-    if (!root?.root.node) {
-      return false;
-    }
-    return isWholeTreeLoaded(root.root.node.id, nodesById, childrenByParentId);
-  }, [childrenByParentId, nodesById, root]);
-
-  useEffect(() => {
-    if (viewMode !== "tree3d" || isHydrating3dRef.current || wholeTreeLoaded || !root?.root.node || root.root.node.kind !== "parent") {
-      return;
-    }
-
-    const rootNode = root.root.node;
-
-    let cancelled = false;
-
-    async function hydrateTree() {
-      setIsHydrating3d(true);
-      setError(null);
-
-      const queue: string[] = [rootNode.id];
-      const visited = new Set<string>();
-      const nextNodes: Record<string, TreeNodeRecord> = { ...nodesByIdRef.current };
-      const nextChildren: Record<string, NodeChildrenState> = { ...childrenByParentIdRef.current };
-      const limit = 100;
-
-      try {
-        while (queue.length > 0) {
-          const parentId = queue.shift() as string;
-          if (visited.has(parentId)) {
-            continue;
-          }
-          visited.add(parentId);
-
-          const parentNode = nextNodes[parentId];
-          if (!parentNode || parentNode.kind !== "parent") {
-            continue;
-          }
-
-          const existing = nextChildren[parentId];
-          const mergedIds = [...(existing?.childIds ?? [])];
-          let offset = existing?.nextOffset ?? 0;
-          let hasMore = existing?.hasMore ?? true;
-          let totalChildren = existing?.totalChildren ?? mergedIds.length;
-          let diagnostics = existing?.diagnostics ?? [];
-
-          while (hasMore) {
-            const result = await fetchNodeChildren(props.proofId, parentId, config, { offset, limit });
-            if (cancelled) {
-              return;
-            }
-
-            setTreeConfigHash(result.configHash);
-            setTreeSnapshotHash(result.snapshotHash);
-
-            totalChildren = result.children.totalChildren;
-            hasMore = result.children.hasMore;
-            diagnostics = result.children.diagnostics;
-            offset = result.children.offset + result.children.children.length;
-
-            nextNodes[parentId] = result.children.parent;
-            for (const child of result.children.children) {
-              nextNodes[child.id] = child;
-              if (!mergedIds.includes(child.id)) {
-                mergedIds.push(child.id);
-              }
-            }
-
-            if (result.children.children.length === 0) {
-              break;
-            }
-          }
-
-          nextChildren[parentId] = {
-            childIds: mergedIds,
-            totalChildren,
-            hasMore: false,
-            nextOffset: offset,
-            loading: false,
-            diagnostics,
-          };
-
-          const nestedParents = mergedIds.filter((childId) => nextNodes[childId]?.kind === "parent").sort((a, b) => a.localeCompare(b));
-          for (const childParentId of nestedParents) {
-            if (!visited.has(childParentId)) {
-              queue.push(childParentId);
-            }
-          }
-        }
-
-        if (!cancelled) {
-          setNodesById(nextNodes);
-          setChildrenByParentId(nextChildren);
-        }
-      } catch (hydrateError) {
-        if (!cancelled) {
-          setError(hydrateError instanceof Error ? hydrateError.message : String(hydrateError));
-        }
-      } finally {
-        setIsHydrating3d(false);
-        isHydrating3dRef.current = false;
-      }
-    }
-
-    void hydrateTree();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [config, props.proofId, root, viewMode, wholeTreeLoaded]);
 
   const visibleRows = useMemo(() => {
     if (!root?.root.node) {
@@ -466,81 +330,115 @@ export function ProofExplorer(props: ProofExplorerProps) {
     return rows;
   }, [childrenByParentId, expandedNodeIds, nodesById, root]);
 
-  const keyboardRows = useMemo(
+  const renderWindow = useMemo(
+    () =>
+      planTreeRenderWindow({
+        totalRowCount: visibleRows.length,
+        anchorRowIndex: renderAnchorRowIndex,
+        maxVisibleRows: TREE_RENDER_SETTINGS.maxVisibleRows,
+        overscanRows: TREE_RENDER_SETTINGS.overscanRows,
+      }),
+    [renderAnchorRowIndex, visibleRows.length],
+  );
+
+  const keyboardRows = useMemo<TreeKeyboardRow[]>(
     () =>
       visibleRows.map((row) => ({
         nodeId: row.node.id,
-        nodeKind: row.node.kind,
         parentId: row.parentId,
-        isExpanded: expandedNodeIds.includes(row.node.id),
-        loadedChildIds: childrenByParentId[row.node.id]?.childIds ?? [],
+        kind: row.node.kind,
+        isExpanded: row.node.kind === "parent" && expandedNodeIds.includes(row.node.id),
       })),
-    [childrenByParentId, expandedNodeIds, visibleRows],
+    [expandedNodeIds, visibleRows],
   );
 
-  const focusRowIndex = useMemo(
-    () => (focusedTreeNodeId ? visibleRows.findIndex((row) => row.node.id === focusedTreeNodeId) : -1),
-    [focusedTreeNodeId, visibleRows],
-  );
-  const selectedRowIndex = useMemo(
-    () => (selectedLeafId ? visibleRows.findIndex((row) => row.node.id === selectedLeafId) : -1),
-    [selectedLeafId, visibleRows],
-  );
-  const renderAnchorIndex = focusRowIndex >= 0 ? focusRowIndex : selectedRowIndex >= 0 ? selectedRowIndex : 0;
-  const renderWindow = useMemo(
+  const renderedRows = useMemo(
     () =>
-      computeTreeRenderWindow({
-        totalRowCount: visibleRows.length,
-        anchorRowIndex: renderAnchorIndex,
-        maxVisibleRows: TREE_RENDER_MAX_VISIBLE_ROWS,
-        overscanRows: TREE_RENDER_OVERSCAN_ROWS,
-      }),
-    [renderAnchorIndex, visibleRows.length],
+      renderWindow.endIndex >= renderWindow.startIndex
+        ? visibleRows.slice(renderWindow.startIndex, renderWindow.endIndex + 1)
+        : [],
+    [renderWindow.endIndex, renderWindow.startIndex, visibleRows],
   );
-  const renderedRows = useMemo(() => visibleRows.slice(renderWindow.startIndex, renderWindow.endIndex), [renderWindow, visibleRows]);
+
+  const virtualizationPlan = useMemo(
+    () =>
+      planTreeVirtualizationWindow({
+        totalRowCount: visibleRows.length,
+        scrollTopPx: treeScrollTopPx,
+        settings: TREE_VIRTUALIZATION_SETTINGS,
+      }),
+    [treeScrollTopPx, visibleRows.length],
+  );
+
+  const isVirtualizedTree = virtualizationPlan.mode === "virtualized";
+
+  const displayedRows = useMemo(() => {
+    if (isVirtualizedTree) {
+      if (virtualizationPlan.endIndex < virtualizationPlan.startIndex) {
+        return [] as typeof visibleRows;
+      }
+      return visibleRows.slice(virtualizationPlan.startIndex, virtualizationPlan.endIndex + 1);
+    }
+    return renderedRows;
+  }, [isVirtualizedTree, renderedRows, virtualizationPlan.endIndex, virtualizationPlan.startIndex, visibleRows]);
+
+  useEffect(() => {
+    const maxIndex = Math.max(0, visibleRows.length - 1);
+    setRenderAnchorRowIndex((current) => Math.max(0, Math.min(current, maxIndex)));
+  }, [visibleRows.length]);
+
+  useEffect(() => {
+    setTreeScrollTopPx((current) => Math.max(0, Math.min(current, virtualizationPlan.maxScrollTopPx)));
+  }, [virtualizationPlan.maxScrollTopPx]);
+
+  useEffect(() => {
+    if (!isVirtualizedTree || !treeListRef.current) {
+      return;
+    }
+    if (treeListRef.current.scrollTop !== treeScrollTopPx) {
+      treeListRef.current.scrollTop = treeScrollTopPx;
+    }
+  }, [isVirtualizedTree, treeScrollTopPx]);
 
   useEffect(() => {
     if (visibleRows.length === 0) {
-      setFocusedTreeNodeId(null);
+      setActiveTreeNodeId(null);
       return;
     }
-
-    setFocusedTreeNodeId((current) => {
-      if (current && visibleRows.some((row) => row.node.id === current)) {
-        return current;
-      }
-      return visibleRows[0]?.node.id ?? null;
-    });
-  }, [visibleRows]);
+    const hasCurrent = activeTreeNodeId ? visibleRows.some((row) => row.node.id === activeTreeNodeId) : false;
+    if (!hasCurrent) {
+      setActiveTreeNodeId(visibleRows[0]?.node.id ?? null);
+    }
+  }, [activeTreeNodeId, visibleRows]);
 
   useEffect(() => {
-    if (!focusedTreeNodeId) {
+    if (!selectedLeafId) {
       return;
     }
-    treeNodeButtonRefs.current[focusedTreeNodeId]?.focus();
-  }, [focusedTreeNodeId]);
-
-  const pathNodeIds = useMemo(() => {
-    if (!pathResult?.path.ok) {
-      return [] as string[];
+    const selectedIndex = visibleRows.findIndex((row) => row.node.id === selectedLeafId);
+    if (selectedIndex >= 0) {
+      setRenderAnchorRowIndex(selectedIndex);
     }
-    return pathResult.path.path.map((entry) => entry.id);
-  }, [pathResult]);
+  }, [selectedLeafId, visibleRows]);
 
-  const scene = useMemo(() => {
-    const rootId = root?.root.node?.id ?? "";
-    return buildTreeScene({
-      rootId,
-      nodesById,
-      childrenByParentId,
-      selectedNodeId,
-      selectedLeafId,
-      pathNodeIds,
-      configHash: treeConfigHash || root?.configHash || "",
-      snapshotHash: treeSnapshotHash || root?.snapshotHash || "",
-      policyReport,
-    });
-  }, [childrenByParentId, nodesById, pathNodeIds, policyReport, root, selectedLeafId, selectedNodeId, treeConfigHash, treeSnapshotHash]);
+  useEffect(() => {
+    if (!isVirtualizedTree || !activeTreeNodeId) {
+      return;
+    }
+    const activeIndex = visibleRows.findIndex((row) => row.node.id === activeTreeNodeId);
+    if (activeIndex < 0) {
+      return;
+    }
+    const nextScrollTop = resolveVirtualScrollTopForRowIndex(
+      treeScrollTopPx,
+      activeIndex,
+      visibleRows.length,
+      TREE_VIRTUALIZATION_SETTINGS,
+    );
+    if (nextScrollTop !== treeScrollTopPx) {
+      setTreeScrollTopPx(nextScrollTop);
+    }
+  }, [activeTreeNodeId, isVirtualizedTree, treeScrollTopPx, visibleRows]);
 
   function updateConfig<Key extends keyof ProofConfigInput>(key: Key, value: ProofConfigInput[Key]): void {
     setConfig((current) => ({
@@ -550,22 +448,14 @@ export function ProofExplorer(props: ProofExplorerProps) {
   }
 
   function toggleExpansion(nodeId: string): void {
-    const isExpanded = expandedNodeIds.includes(nodeId);
-    setNodeExpanded(nodeId, !isExpanded);
-  }
-
-  function setNodeExpanded(nodeId: string, expanded: boolean): void {
     const node = nodesById[nodeId];
     setExpandedNodeIds((current) => {
-      if (!expanded) {
-        return current.filter((value) => value !== nodeId);
-      }
       if (current.includes(nodeId)) {
-        return current;
+        return current.filter((value) => value !== nodeId);
       }
       return [...current, nodeId].sort((left, right) => left.localeCompare(right));
     });
-    if (expanded && node?.kind === "parent" && !childrenByParentId[nodeId]) {
+    if (node?.kind === "parent" && !childrenByParentId[nodeId]) {
       void loadChildrenPage(nodeId);
     }
   }
@@ -638,15 +528,6 @@ export function ProofExplorer(props: ProofExplorerProps) {
     }
   }
 
-  async function selectNode(nodeId: string, kind: "leaf" | "parent") {
-    setSelectedNodeId(nodeId);
-    if (kind === "leaf") {
-      await selectLeaf(nodeId);
-      return;
-    }
-    setSelectedLeafId(null);
-  }
-
   async function selectLeaf(nodeId: string): Promise<void> {
     setSelectedLeafId(nodeId);
     try {
@@ -691,6 +572,106 @@ export function ProofExplorer(props: ProofExplorerProps) {
     } finally {
       setIsVerifying(false);
     }
+  }
+
+  async function handleTreeKeyDown(event: KeyboardEvent<HTMLUListElement>): Promise<void> {
+    if (visibleRows.length === 0) {
+      return;
+    }
+
+    const currentIndex = Math.max(
+      0,
+      visibleRows.findIndex((row) => row.node.id === activeTreeNodeId),
+    );
+    const intent = resolveTreeKeyboardIntent({
+      currentIndex,
+      totalRows: visibleRows.length,
+      key: event.key,
+      pageSize: TREE_RENDER_SETTINGS.maxVisibleRows,
+      rows: keyboardRows,
+    });
+
+    if (intent !== null) {
+      event.preventDefault();
+      const activeRow = visibleRows[intent.index];
+      if (!activeRow) {
+        return;
+      }
+
+      if (intent.kind === "set-active-index") {
+        setActiveTreeNodeId(activeRow.node.id);
+        setRenderAnchorRowIndex(intent.index);
+        setTreeA11yAnnouncement(
+          formatTreeKeyboardAnnouncement({
+            action: "active",
+            statement: activeRow.node.statement,
+            depthFromRoot: activeRow.depthFromRoot,
+          }),
+        );
+        return;
+      }
+
+      if (intent.kind === "expand" && activeRow.node.kind === "parent") {
+        toggleExpansion(activeRow.node.id);
+        setActiveTreeNodeId(activeRow.node.id);
+        setRenderAnchorRowIndex(intent.index);
+        setTreeA11yAnnouncement(
+          formatTreeKeyboardAnnouncement({
+            action: "expand",
+            statement: activeRow.node.statement,
+            depthFromRoot: activeRow.depthFromRoot,
+            childCount: childrenByParentId[activeRow.node.id]?.childIds.length ?? 0,
+          }),
+        );
+        return;
+      }
+
+      if (intent.kind === "collapse" && activeRow.node.kind === "parent") {
+        toggleExpansion(activeRow.node.id);
+        setActiveTreeNodeId(activeRow.node.id);
+        setRenderAnchorRowIndex(intent.index);
+        setTreeA11yAnnouncement(
+          formatTreeKeyboardAnnouncement({
+            action: "collapse",
+            statement: activeRow.node.statement,
+            depthFromRoot: activeRow.depthFromRoot,
+          }),
+        );
+      }
+      return;
+    }
+
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
+    const activeRow = visibleRows[currentIndex];
+    if (!activeRow) {
+      return;
+    }
+
+    setActiveTreeNodeId(activeRow.node.id);
+    if (activeRow.node.kind === "parent") {
+      setTreeA11yAnnouncement(
+        formatTreeKeyboardAnnouncement({
+          action: expandedNodeIds.includes(activeRow.node.id) ? "collapse" : "expand",
+          statement: activeRow.node.statement,
+          depthFromRoot: activeRow.depthFromRoot,
+          childCount: childrenByParentId[activeRow.node.id]?.childIds.length ?? 0,
+        }),
+      );
+      toggleExpansion(activeRow.node.id);
+      return;
+    }
+    setTreeA11yAnnouncement(
+      formatTreeKeyboardAnnouncement({
+        action: "active",
+        statement: activeRow.node.statement,
+        depthFromRoot: activeRow.depthFromRoot,
+      }),
+    );
+    await selectLeaf(activeRow.node.id);
   }
 
   async function refreshProfiles(): Promise<void> {
@@ -740,46 +721,6 @@ export function ProofExplorer(props: ProofExplorerProps) {
     setConfig(selected.config as ProofConfigInput);
   }
 
-  function handleTreeKeyDown(nodeId: string, key: string): void {
-    const intent = resolveTreeKeyboardIntent(key, nodeId, keyboardRows);
-    if (intent.kind === "noop") {
-      return;
-    }
-
-    if (intent.kind === "move_focus") {
-      setFocusedTreeNodeId(intent.nodeId);
-      return;
-    }
-
-    if (intent.kind === "set_expanded") {
-      setNodeExpanded(intent.nodeId, intent.expanded);
-      if (intent.expanded) {
-        setFocusedTreeNodeId(intent.nodeId);
-      }
-      return;
-    }
-
-    if (intent.kind === "activate_leaf") {
-      void selectLeaf(intent.nodeId);
-      return;
-    }
-
-    setSelectedLeafId(null);
-  }
-
-  function shiftRenderWindow(direction: -1 | 1): void {
-    if (visibleRows.length === 0) {
-      return;
-    }
-    const currentIndex = focusRowIndex >= 0 ? focusRowIndex : 0;
-    const stepSize = Math.max(1, Math.floor(TREE_RENDER_MAX_VISIBLE_ROWS));
-    const nextIndex = Math.max(0, Math.min(visibleRows.length - 1, currentIndex + direction * stepSize));
-    const nextRow = visibleRows[nextIndex];
-    if (nextRow) {
-      setFocusedTreeNodeId(nextRow.node.id);
-    }
-  }
-
   if (isLoading) {
     return <div className="panel">Loading seeded explanation tree...</div>;
   }
@@ -793,30 +734,39 @@ export function ProofExplorer(props: ProofExplorerProps) {
   }
 
   return (
-    <div className="layout-grid proof-layout-grid">
+    <div className="layout-grid">
       <section className="panel controls" aria-label="Tree controls">
         <h2>Controls</h2>
-
         <label>
-          View mode
-          <select value={viewMode} onChange={(event) => setViewMode(event.target.value as ViewMode)}>
-            <option value="list">List</option>
-            <option value="tree3d">3D Tree</option>
-          </select>
+          Abstraction
+          <input
+            type="range"
+            min={1}
+            max={5}
+            value={config.abstractionLevel}
+            onChange={(event) => updateConfig("abstractionLevel", Number(event.target.value))}
+          />
         </label>
-
         <label>
-          Proof detail
-          <select
-            value={config.proofDetailMode}
-            onChange={(event) => updateConfig("proofDetailMode", event.target.value as "minimal" | "balanced" | "formal")}
-          >
-            <option value="minimal">Minimal</option>
-            <option value="balanced">Balanced</option>
-            <option value="formal">Formal</option>
-          </select>
+          Complexity
+          <input
+            type="range"
+            min={1}
+            max={5}
+            value={config.complexityLevel}
+            onChange={(event) => updateConfig("complexityLevel", Number(event.target.value))}
+          />
         </label>
-
+        <label>
+          Max children
+          <input
+            type="number"
+            min={2}
+            max={12}
+            value={config.maxChildrenPerParent}
+            onChange={(event) => updateConfig("maxChildrenPerParent", Number(event.target.value))}
+          />
+        </label>
         <label>
           Audience
           <select
@@ -828,85 +778,72 @@ export function ProofExplorer(props: ProofExplorerProps) {
             <option value="expert">Expert</option>
           </select>
         </label>
-
         <label>
-          Complexity
-          <input
-            type="range"
-            min={1}
-            max={5}
-            value={config.complexityLevel}
-            onChange={(event) => updateConfig("complexityLevel", Number(event.target.value))}
-          />
+          Reading level
+          <select
+            value={config.readingLevelTarget}
+            onChange={(event) =>
+              updateConfig(
+                "readingLevelTarget",
+                event.target.value as "elementary" | "middle_school" | "high_school" | "undergraduate" | "graduate",
+              )
+            }
+          >
+            <option value="elementary">Elementary</option>
+            <option value="middle_school">Middle school</option>
+            <option value="high_school">High school</option>
+            <option value="undergraduate">Undergraduate</option>
+            <option value="graduate">Graduate</option>
+          </select>
         </label>
-
         <label>
-          Max children
+          Proof detail
+          <select
+            value={config.proofDetailMode}
+            onChange={(event) => updateConfig("proofDetailMode", event.target.value as "minimal" | "balanced" | "formal")}
+          >
+            <option value="minimal">Minimal</option>
+            <option value="balanced">Balanced</option>
+            <option value="formal">Formal</option>
+          </select>
+        </label>
+        <label>
+          Entailment mode
+          <select
+            value={config.entailmentMode}
+            onChange={(event) => updateConfig("entailmentMode", event.target.value as "calibrated" | "strict")}
+          >
+            {ENTAILMENT_MODE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Complexity band
           <input
             type="number"
-            min={2}
-            max={12}
-            value={config.maxChildrenPerParent}
-            onChange={(event) => updateConfig("maxChildrenPerParent", Number(event.target.value))}
+            min={0}
+            max={3}
+            value={config.complexityBandWidth}
+            onChange={(event) => updateConfig("complexityBandWidth", Number(event.target.value))}
           />
         </label>
-
-        <details className="advanced-controls">
-          <summary>Advanced controls</summary>
-          <label>
-            Abstraction
-            <input
-              type="range"
-              min={1}
-              max={5}
-              value={config.abstractionLevel}
-              onChange={(event) => updateConfig("abstractionLevel", Number(event.target.value))}
-            />
-          </label>
-          <label>
-            Reading level
-            <select
-              value={config.readingLevelTarget}
-              onChange={(event) =>
-                updateConfig(
-                  "readingLevelTarget",
-                  event.target.value as "elementary" | "middle_school" | "high_school" | "undergraduate" | "graduate",
-                )
-              }
-            >
-              <option value="elementary">Elementary</option>
-              <option value="middle_school">Middle school</option>
-              <option value="high_school">High school</option>
-              <option value="undergraduate">Undergraduate</option>
-              <option value="graduate">Graduate</option>
-            </select>
-          </label>
-          <label>
-            Complexity band
-            <input
-              type="number"
-              min={0}
-              max={3}
-              value={config.complexityBandWidth}
-              onChange={(event) => updateConfig("complexityBandWidth", Number(event.target.value))}
-            />
-          </label>
-          <label>
-            Term budget
-            <input
-              type="number"
-              min={0}
-              max={8}
-              value={config.termIntroductionBudget}
-              onChange={(event) => updateConfig("termIntroductionBudget", Number(event.target.value))}
-            />
-          </label>
-          <label>
-            Language
-            <input type="text" value={config.language} onChange={(event) => updateConfig("language", event.target.value)} />
-          </label>
-        </details>
-
+        <label>
+          Term budget
+          <input
+            type="number"
+            min={0}
+            max={8}
+            value={config.termIntroductionBudget}
+            onChange={(event) => updateConfig("termIntroductionBudget", Number(event.target.value))}
+          />
+        </label>
+        <label>
+          Language
+          <input type="text" value={config.language} onChange={(event) => updateConfig("language", event.target.value)} />
+        </label>
         <label>
           Saved profiles
           <select value={profileId} onChange={(event) => applyProfileSelection(event.target.value)}>
@@ -928,7 +865,6 @@ export function ProofExplorer(props: ProofExplorerProps) {
           Profile name
           <input type="text" value={profileName} onChange={(event) => setProfileName(event.target.value)} />
         </label>
-
         <div className="tree-row">
           <button type="button" onClick={() => void saveCurrentProfile()}>
             Save profile
@@ -937,7 +873,6 @@ export function ProofExplorer(props: ProofExplorerProps) {
             Delete profile
           </button>
         </div>
-
         <p className="meta">Profile ledger hash: {profileLedgerHash || "unavailable"}</p>
         {profileError ? <p className="meta">Profile error: {profileError}</p> : null}
       </section>
@@ -945,218 +880,220 @@ export function ProofExplorer(props: ProofExplorerProps) {
       <section
         className="panel tree"
         aria-label="Root-first explanation tree"
-        data-tree-render-mode={renderWindow.mode}
-        data-tree-rendered-row-count={renderWindow.renderedRowCount}
-        data-tree-total-row-count={visibleRows.length}
-        data-tree-hidden-above={renderWindow.hiddenAboveCount}
-        data-tree-hidden-below={renderWindow.hiddenBelowCount}
+        data-tree-render-mode={isVirtualizedTree ? "virtualized" : renderWindow.mode}
+        data-tree-total-rows={visibleRows.length}
+        data-tree-rendered-rows={isVirtualizedTree ? virtualizationPlan.renderedRowCount : renderWindow.renderedRowCount}
+        data-tree-hidden-above={isVirtualizedTree ? virtualizationPlan.hiddenAboveCount : renderWindow.hiddenAboveCount}
+        data-tree-hidden-below={isVirtualizedTree ? virtualizationPlan.hiddenBelowCount : renderWindow.hiddenBelowCount}
+        data-tree-active-node-id={activeTreeNodeId ?? "none"}
+        data-tree-active-row-index={visibleRows.findIndex((row) => row.node.id === activeTreeNodeId)}
+        data-tree-live-message={treeA11yAnnouncement || "none"}
+        data-tree-virtual-start-index={isVirtualizedTree ? virtualizationPlan.startIndex : -1}
+        data-tree-virtual-end-index={isVirtualizedTree ? virtualizationPlan.endIndex : -1}
       >
-        <h2>{viewMode === "tree3d" ? "3D Tree" : "Tree"}</h2>
+        <h2>Tree</h2>
         <p className="meta">Config hash: {treeConfigHash || root?.configHash || "unavailable"}</p>
         <p className="meta">Snapshot hash: {treeSnapshotHash || root?.snapshotHash || "unavailable"}</p>
-        <p className="meta">
-          Render mode: {renderWindow.mode} | rows {renderWindow.renderedRowCount}/{visibleRows.length} | hidden above{" "}
-          {renderWindow.hiddenAboveCount} | hidden below {renderWindow.hiddenBelowCount}
-        </p>
-
-        {viewMode === "tree3d" ? (
-          <ProofTree3D
-            scene={scene}
-            isHydrating={isHydrating3d}
-            onSelectNode={(nodeId, kind) => {
-              void selectNode(nodeId, kind);
-            }}
-          />
-        ) : (
-          <>
-            {renderWindow.hiddenAboveCount > 0 ? (
-              <div className="tree-row">
-                <button type="button" onClick={() => shiftRenderWindow(-1)}>
-                  Show previous rows
-                </button>
-                <span className="meta">{renderWindow.hiddenAboveCount} rows above current window</span>
-              </div>
-            ) : null}
-            <ul className="tree-list" role="tree">
-              {renderedRows.map((row) => {
-                const { node } = row;
-                const childrenState = childrenByParentId[node.id];
-                const isExpanded = expandedNodeIds.includes(node.id);
-                const indentStyle = { paddingLeft: `${row.depthFromRoot * 1.25}rem` };
-                const isSelectedLeaf = node.kind === "leaf" && selectedLeafId === node.id;
-                const siblingIds = row.parentId ? childrenByParentId[row.parentId]?.childIds ?? [] : [node.id];
-                const siblingIndex = siblingIds.indexOf(node.id);
-                const setSize = siblingIds.length || 1;
-                const posInSet = siblingIndex >= 0 ? siblingIndex + 1 : 1;
-                return (
-                  <li
-                    key={node.id}
-                    role="none"
+        {isVirtualizedTree ? (
+          <div className="tree-row">
+            <span className="meta">
+              Virtualized {virtualizationPlan.renderedRowCount}/{visibleRows.length} rows (hidden above{" "}
+              {virtualizationPlan.hiddenAboveCount}, below {virtualizationPlan.hiddenBelowCount})
+            </span>
+          </div>
+        ) : null}
+        {!isVirtualizedTree && renderWindow.mode === "windowed" ? (
+          <div className="tree-row">
+            <button
+              type="button"
+              onClick={() =>
+                setRenderAnchorRowIndex(Math.max(0, renderWindow.startIndex - TREE_RENDER_SETTINGS.maxVisibleRows))
+              }
+              disabled={renderWindow.hiddenAboveCount === 0}
+            >
+              Show previous rows
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setRenderAnchorRowIndex(
+                  Math.min(
+                    Math.max(0, visibleRows.length - 1),
+                    renderWindow.endIndex + TREE_RENDER_SETTINGS.maxVisibleRows,
+                  ),
+                )
+              }
+              disabled={renderWindow.hiddenBelowCount === 0}
+            >
+              Show next rows
+            </button>
+            <span className="meta">
+              Rendering {renderWindow.renderedRowCount}/{visibleRows.length} rows (hidden above {renderWindow.hiddenAboveCount}, below{" "}
+              {renderWindow.hiddenBelowCount})
+            </span>
+          </div>
+        ) : null}
+        <ul
+          ref={treeListRef}
+          className="tree-list"
+          role="tree"
+          tabIndex={0}
+          aria-activedescendant={activeTreeNodeId ? `treeitem-${activeTreeNodeId}` : undefined}
+          onScroll={(event) => {
+            if (!isVirtualizedTree) {
+              return;
+            }
+            setTreeScrollTopPx(event.currentTarget.scrollTop);
+          }}
+          style={
+            isVirtualizedTree
+              ? {
+                  maxHeight: `${virtualizationPlan.viewportHeightPx}px`,
+                  overflowY: "auto",
+                }
+              : undefined
+          }
+          onKeyDown={(event) => {
+            void handleTreeKeyDown(event);
+          }}
+        >
+          {isVirtualizedTree && virtualizationPlan.topSpacerHeightPx > 0 ? (
+            <li
+              role="presentation"
+              aria-hidden="true"
+              style={{
+                height: `${virtualizationPlan.topSpacerHeightPx}px`,
+              }}
+            />
+          ) : null}
+          {displayedRows.map((row) => {
+            const { node } = row;
+            const childrenState = childrenByParentId[node.id];
+            const isExpanded = expandedNodeIds.includes(node.id);
+            const indentStyle = { paddingLeft: `${row.depthFromRoot * 1.25}rem` };
+            const isSelectedLeaf = node.kind === "leaf" && selectedLeafId === node.id;
+            const isActiveRow = node.id === activeTreeNodeId;
+            return (
+              <li
+                key={node.id}
+                id={`treeitem-${node.id}`}
+                role="treeitem"
+                aria-expanded={node.kind === "parent" ? isExpanded : undefined}
+                aria-selected={isSelectedLeaf || isActiveRow}
+                style={isVirtualizedTree ? { minHeight: `${TREE_VIRTUALIZATION_SETTINGS.rowHeightPx}px` } : undefined}
+              >
+                <div className="tree-row" style={indentStyle}>
+                  {node.kind === "parent" ? (
+                    <button type="button" onClick={() => toggleExpansion(node.id)} aria-label={`Toggle ${node.id}`}>
+                      {isExpanded ? "Collapse" : "Expand"}
+                    </button>
+                  ) : (
+                    <span className="leaf-pill">Leaf</span>
+                  )}
+                  <button
+                    type="button"
+                    className="statement-button"
+                    aria-pressed={isSelectedLeaf || isActiveRow}
+                    onClick={() => {
+                      setActiveTreeNodeId(node.id);
+                      if (node.kind === "leaf") {
+                        void selectLeaf(node.id);
+                      } else {
+                        setSelectedLeafId(null);
+                      }
+                    }}
                   >
-                    <div className="tree-row" style={indentStyle}>
-                      {node.kind === "parent" ? (
-                        <button type="button" onClick={() => toggleExpansion(node.id)} aria-label={`Toggle ${node.id}`} tabIndex={-1}>
-                          {isExpanded ? "Collapse" : "Expand"}
-                        </button>
-                      ) : (
-                        <span className="leaf-pill">Leaf</span>
-                      )}
-                      <button
-                        type="button"
-                        className="statement-button"
-                        ref={(element) => {
-                          treeNodeButtonRefs.current[node.id] = element;
-                        }}
-                        role="treeitem"
-                        aria-level={row.depthFromRoot + 1}
-                        aria-setsize={setSize}
-                        aria-posinset={posInSet}
-                        aria-expanded={node.kind === "parent" ? isExpanded : undefined}
-                        aria-selected={isSelectedLeaf}
-                        tabIndex={focusedTreeNodeId === node.id ? 0 : -1}
-                        onFocus={() => setFocusedTreeNodeId(node.id)}
-                        onKeyDown={(event) => {
-                          const handledKeys = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "Enter", " "]);
-                          if (!handledKeys.has(event.key)) {
-                            return;
-                          }
-                          event.preventDefault();
-                          handleTreeKeyDown(node.id, event.key);
-                        }}
-                        onClick={() => (node.kind === "leaf" ? selectLeaf(node.id) : setSelectedLeafId(null))}
-                      >
-                        {node.statement}
-                      </button>
-                      {node.kind === "parent" && childrenState ? (
-                        <span className="meta">
-                          {childrenState.childIds.length}/{childrenState.totalChildren} loaded
-                        </span>
-                      ) : null}
-                    </div>
-                    {node.kind === "parent" && isExpanded && childrenState?.hasMore ? (
-                      <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
-                        <button type="button" onClick={() => loadChildrenPage(node.id)} disabled={childrenState.loading}>
-                          {childrenState.loading ? "Loading…" : "Load more"}
-                        </button>
-                        <span className="meta">{row.hiddenChildCount} hidden children</span>
-                      </div>
-                    ) : null}
-                    {node.kind === "parent" && isExpanded && childrenState?.diagnostics.length ? (
-                      <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
-                        <span className="meta">{childrenState.diagnostics.map((diagnostic) => diagnostic.code).join(", ")}</span>
-                      </div>
-                    ) : null}
-                    {node.kind === "parent" && node.policyDiagnostics ? (
-                      <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
-                        <span className="meta">
-                          Policy pre/post: {node.policyDiagnostics.preSummary.ok ? "ok" : "violating"}/
-                          {node.policyDiagnostics.postSummary.ok ? "ok" : "violating"} | spread=
-                          {node.policyDiagnostics.preSummary.metrics.complexitySpread} | new-terms=
-                          {node.policyDiagnostics.postSummary.metrics.introducedTermCount}
-                        </span>
-                      </div>
-                    ) : null}
-                    {node.kind === "leaf" && pathNodeIds.includes(node.id) ? (
-                      <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
-                        <span className="meta">Included in selected ancestry path</span>
-                      </div>
-                    ) : null}
-                    {node.kind === "parent" && isExpanded && !childrenState ? (
-                      <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
-                        <span className="meta">Loading children...</span>
-                      </div>
-                    ) : null}
-                    {node.kind === "parent" && isExpanded && childrenState && childrenState.totalChildren === 0 ? (
-                      <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
-                        <span className="meta">No children</span>
-                      </div>
-                    ) : null}
-                    {node.kind === "parent" && isExpanded && childrenState && !childrenState.hasMore && childrenState.totalChildren > 0 ? (
-                      <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
-                        <span className="meta">All children loaded</span>
-                      </div>
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ul>
-            {renderWindow.hiddenBelowCount > 0 ? (
-              <div className="tree-row">
-                <button type="button" onClick={() => shiftRenderWindow(1)}>
-                  Show next rows
-                </button>
-                <span className="meta">{renderWindow.hiddenBelowCount} rows below current window</span>
-              </div>
-            ) : null}
-          </>
-        )}
-
-        <p className="meta">Whole-tree loaded: {wholeTreeLoaded ? "yes" : "no"}</p>
+                    {node.statement}
+                  </button>
+                  {node.kind === "parent" && childrenState ? (
+                    <span className="meta">
+                      {childrenState.childIds.length}/{childrenState.totalChildren} loaded
+                    </span>
+                  ) : null}
+                </div>
+                {node.kind === "parent" && isExpanded && childrenState?.hasMore ? (
+                  <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
+                    <button type="button" onClick={() => loadChildrenPage(node.id)} disabled={childrenState.loading}>
+                      {childrenState.loading ? "Loading…" : "Load more"}
+                    </button>
+                    <span className="meta">{row.hiddenChildCount} hidden children</span>
+                  </div>
+                ) : null}
+                {node.kind === "parent" && isExpanded && childrenState?.diagnostics.length ? (
+                  <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
+                    <span className="meta">{childrenState.diagnostics.map((diagnostic) => diagnostic.code).join(", ")}</span>
+                  </div>
+                ) : null}
+                {node.kind === "parent" && node.policyDiagnostics ? (
+                  <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
+                    <span className="meta">
+                      Policy pre/post: {node.policyDiagnostics.preSummary.ok ? "ok" : "violating"}/
+                      {node.policyDiagnostics.postSummary.ok ? "ok" : "violating"} | spread=
+                      {node.policyDiagnostics.preSummary.metrics.complexitySpread} | new-terms=
+                      {node.policyDiagnostics.postSummary.metrics.introducedTermCount}
+                    </span>
+                  </div>
+                ) : null}
+                {node.kind === "leaf" && pathResult?.path.path.some((pathNode) => pathNode.id === node.id) ? (
+                  <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
+                    <span className="meta">Included in selected ancestry path</span>
+                  </div>
+                ) : null}
+                {node.kind === "parent" && isExpanded && !childrenState ? (
+                  <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
+                    <span className="meta">Loading children...</span>
+                  </div>
+                ) : null}
+                {node.kind === "parent" && isExpanded && childrenState && childrenState.totalChildren === 0 ? (
+                  <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
+                    <span className="meta">No children</span>
+                  </div>
+                ) : null}
+                {node.kind === "parent" && isExpanded && childrenState && !childrenState.hasMore && childrenState.totalChildren > 0 ? (
+                  <div className="tree-row" style={{ paddingLeft: `${(row.depthFromRoot + 1) * 1.25}rem` }}>
+                    <span className="meta">All children loaded</span>
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
+          {isVirtualizedTree && virtualizationPlan.bottomSpacerHeightPx > 0 ? (
+            <li
+              role="presentation"
+              aria-hidden="true"
+              style={{
+                height: `${virtualizationPlan.bottomSpacerHeightPx}px`,
+              }}
+            />
+          ) : null}
+        </ul>
+        <p
+          aria-live="polite"
+          aria-atomic="true"
+          style={{
+            position: "absolute",
+            width: "1px",
+            height: "1px",
+            overflow: "hidden",
+            clip: "rect(0 0 0 0)",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {treeA11yAnnouncement}
+        </p>
       </section>
 
       <section className="panel diff" aria-label="Explanation diff">
         <h2>Diff</h2>
         <p className="meta">Diff hash: {diff?.diffHash ?? "unavailable"}</p>
         <p className="meta">Changed statements: {diff?.report.summary.changed ?? 0}</p>
-        <p
-          className="meta"
-          data-diff-total-changes={diffPanelView?.totalChanges ?? 0}
-          data-diff-rendered-changes={diffPanelView?.renderedChanges ?? 0}
-          data-diff-truncated-count={diffPanelView?.truncatedChangeCount ?? 0}
-        >
-          Rendered changes: {diffPanelView?.renderedChanges ?? 0}/{diffPanelView?.totalChanges ?? 0} | truncated:{" "}
-          {diffPanelView?.truncatedChangeCount ?? 0}
-        </p>
-        {diffPanelView ? (
-          <div className="diff-grid">
-            <div>
-              <h3>Changed ({diffPanelView.changed.length})</h3>
-              <ul>
-                {diffPanelView.changed.map((change) => (
-                  <li key={change.key} className="diff-change diff-change-changed">
-                    <p className="meta">
-                      {change.kind} | support leaves ({change.supportLeafCount}): {change.supportLeafIds.join(", ") || "none"}
-                    </p>
-                    <p>
-                      <strong>Before:</strong> {change.statementDelta?.prefix}
-                      <mark className="diff-mark-removed">{change.statementDelta?.beforeChanged || "(none)"}</mark>
-                      {change.statementDelta?.suffix}
-                    </p>
-                    <p>
-                      <strong>After:</strong> {change.statementDelta?.prefix}
-                      <mark className="diff-mark-added">{change.statementDelta?.afterChanged || "(none)"}</mark>
-                      {change.statementDelta?.suffix}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <h3>Added ({diffPanelView.added.length})</h3>
-              <ul>
-                {diffPanelView.added.map((change) => (
-                  <li key={change.key} className="diff-change diff-change-added">
-                    <p className="meta">
-                      {change.kind} | support leaves ({change.supportLeafCount}): {change.supportLeafIds.join(", ") || "none"}
-                    </p>
-                    <p>{change.statementAfter ?? "(missing candidate statement)"}</p>
-                  </li>
-                ))}
-              </ul>
-              <h3>Removed ({diffPanelView.removed.length})</h3>
-              <ul>
-                {diffPanelView.removed.map((change) => (
-                  <li key={change.key} className="diff-change diff-change-removed">
-                    <p className="meta">
-                      {change.kind} | support leaves ({change.supportLeafCount}): {change.supportLeafIds.join(", ") || "none"}
-                    </p>
-                    <p>{change.statementBefore ?? "(missing baseline statement)"}</p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        ) : null}
+        <ul>
+          {(diff?.report.changes ?? []).slice(0, 8).map((change) => (
+            <li key={change.key}>
+              <strong>{change.type}</strong> {change.kind} ({change.supportLeafIds.join(", ")})
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section className="panel diff" aria-label="Policy calibration report">
@@ -1166,26 +1103,27 @@ export function ProofExplorer(props: ProofExplorerProps) {
           Threshold pass: {policyReport ? (policyReport.report.thresholdPass ? "yes" : "no") : "unavailable"}
         </p>
         <p className="meta">
-          Parent count: {policyReport?.report.metrics.parentCount ?? 0} | violation rate: {policyReport?.report.metrics.policyViolationRate ?? 0}
+          Parent count: {policyReport?.report.metrics.parentCount ?? 0} | violation rate:{" "}
+          {policyReport?.report.metrics.policyViolationRate ?? 0}
+        </p>
+        <p className="meta">
+          Repartition events: {policyReport?.report.repartitionMetrics.eventCount ?? 0} (pre=
+          {policyReport?.report.repartitionMetrics.preSummaryEventCount ?? 0}, post=
+          {policyReport?.report.repartitionMetrics.postSummaryEventCount ?? 0}, max round=
+          {policyReport?.report.repartitionMetrics.maxRound ?? 0})
         </p>
         <ul>
-          {(policyReport?.report.thresholdFailures ?? []).slice(0, 6).map((failure) => (
-            <li key={failure.code}>
-              {failure.code}: {failure.details.actual} {failure.details.comparator} {failure.details.expected}
+          {(policyReport?.report.repartitionMetrics.depthMetrics ?? []).slice(0, 6).map((entry) => (
+            <li key={`repartition-depth-${entry.depth}`}>
+              depth {entry.depth}: {entry.eventCount} events (pre {entry.preSummaryEventCount}, post{" "}
+              {entry.postSummaryEventCount}), max round {entry.maxRound}
             </li>
           ))}
         </ul>
-      </section>
-
-      <section className="panel diff" aria-label="Cache report">
-        <h2>Cache</h2>
-        <p className="meta">Layer: {cacheReport?.cache.layer ?? "unavailable"}</p>
-        <p className="meta">Status: {cacheReport?.cache.status ?? "unavailable"}</p>
-        <p className="meta">Snapshot hash: {cacheReport?.cache.snapshotHash ?? "unavailable"}</p>
         <ul>
-          {(cacheReport?.cache.diagnostics ?? []).slice(0, 4).map((diagnostic) => (
-            <li key={diagnostic.code}>
-              {diagnostic.code}: {diagnostic.message}
+          {(policyReport?.report.thresholdFailures ?? []).slice(0, 6).map((failure) => (
+            <li key={failure.code}>
+              {formatPolicyThresholdFailure(failure)} [{failure.code}]
             </li>
           ))}
         </ul>
@@ -1198,24 +1136,6 @@ export function ProofExplorer(props: ProofExplorerProps) {
         {pathResult?.path.path.length ? <p className="meta">Ancestry: {pathResult.path.path.map((node) => node.id).join(" -> ")}</p> : null}
         {leafDetail?.view && (
           <>
-            <p className="meta" aria-label="Source URL provenance">
-              Source URL provenance: {leafSourceProvenance?.originLabel ?? "unavailable"}
-            </p>
-            <p className="meta">{leafSourceProvenance?.originDescription ?? "Source provenance unavailable."}</p>
-            {leafSourceProvenance?.deepLinkAvailable ? (
-              <p>
-                <a
-                  href={leafSourceProvenance.sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={`Open source link (${leafSourceProvenance.originLabel})`}
-                >
-                  Open source span
-                </a>
-              </p>
-            ) : (
-              <p className="meta">Source deep-link unavailable for this leaf.</p>
-            )}
             <p>
               <strong>{leafDetail.view.leaf.id}</strong>
             </p>
@@ -1223,7 +1143,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
             <p>Share: {leafDetail.view.shareReference.compact}</p>
             <p>Verification jobs: {leafDetail.view.verification.summary.totalJobs}</p>
             <p>Latest status: {leafDetail.view.verification.summary.latestStatus ?? "none"}</p>
-            <button type="button" onClick={() => void runVerificationForSelectedLeaf()} disabled={isVerifying}>
+            <button type="button" onClick={runVerificationForSelectedLeaf} disabled={isVerifying}>
               {isVerifying ? "Running verification..." : "Verify leaf proof"}
             </button>
             {verificationError && (

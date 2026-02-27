@@ -1,0 +1,66 @@
+{
+  "schemaVersion": "1.0.0",
+  "entries": [
+    {
+      "presetName": "fixture-verity-broad",
+      "presetHash": "6ddee2e1c8a4e96630ded749e609925f54bf1d6bddfebaedf78d5793f607eb18",
+      "qualityReportHash": "eb2806b98f1dbe1185ca749a0b0ee432729f93ded64292957ba2297fa4b0fab3",
+      "thresholdPass": true,
+      "leafCount": 13,
+      "parentCount": 5,
+      "repartitionEventCount": 1,
+      "repartitionMaxRound": 0
+    },
+    {
+      "presetName": "fixture-verity-counter-snapshot",
+      "presetHash": "84b172d99c48903f75b41d945ca91d3a39d1aac945402406cef203fb16ee305d",
+      "qualityReportHash": "b5d8dd175795e9215d1eaccc5fed0fe13999f396878ae3e7e5bd37a55bf7a35b",
+      "thresholdPass": true,
+      "leafCount": 30,
+      "parentCount": 8,
+      "repartitionEventCount": 0,
+      "repartitionMaxRound": 0
+    },
+    {
+      "presetName": "fixture-verity-counter-snapshot-strict",
+      "presetHash": "66f0f1e77d188eeefb5109d3d92af59436fb46524cab6697567774856b597f3f",
+      "qualityReportHash": "f48bb93696e4be2e2093ccee325b349c06e9df2ebe3ecb972099f432bdfb71fa",
+      "thresholdPass": true,
+      "leafCount": 30,
+      "parentCount": 8,
+      "repartitionEventCount": 0,
+      "repartitionMaxRound": 0
+    },
+    {
+      "presetName": "fixture-verity-pressure",
+      "presetHash": "5251da16b02169e49c30cb4aed8f05b07caab119bbde8d7f98fca170d825705a",
+      "qualityReportHash": "99b41a2ee5b628ec05b0037d96af24fc596db44328ba1c561b90290e100d0bcb",
+      "thresholdPass": true,
+      "leafCount": 4,
+      "parentCount": 3,
+      "repartitionEventCount": 1,
+      "repartitionMaxRound": 0
+    },
+    {
+      "presetName": "fixture-verity-token-snapshot",
+      "presetHash": "65daf2f6ac45bcf48630672fb372bf63925cd633979d874d32c2a68a45aa1312",
+      "qualityReportHash": "b921864ca90605de3996121c57dcf1999ba891f07d87dc1e79dd3731b12fa910",
+      "thresholdPass": true,
+      "leafCount": 28,
+      "parentCount": 8,
+      "repartitionEventCount": 0,
+      "repartitionMaxRound": 0
+    },
+    {
+      "presetName": "fixture-verity-token-snapshot-strict",
+      "presetHash": "9cf433c3342fa5d879f7fa532938b3523500dc8cc67e58181c796594cfe6686c",
+      "qualityReportHash": "5f470b737372038c93b03b42223c9cd241fd3bd430ed9cb08762023d9e7435a9",
+      "thresholdPass": true,
+      "leafCount": 28,
+      "parentCount": 8,
+      "repartitionEventCount": 0,
+      "repartitionMaxRound": 0
+    }
+  ],
+  "outcomeHash": "5413da91a55655a77ca29ce89a6b39d5890a4203da68a5b7341b2f9039f31fbf"
+}

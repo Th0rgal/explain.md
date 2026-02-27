@@ -19,12 +19,69 @@ describe("quality-benchmark-presets", () => {
     const presets = listQualityBenchmarkPresets();
     const names = presets.map((preset) => preset.name);
 
-    expect(names).toEqual(["fixture-verity-core", "fixture-verity-loop"]);
+    expect(names).toEqual([
+      "fixture-verity-broad",
+      "fixture-verity-core",
+      "fixture-verity-counter-snapshot",
+      "fixture-verity-counter-snapshot-strict",
+      "fixture-verity-loop",
+      "fixture-verity-pressure",
+      "fixture-verity-token-snapshot",
+      "fixture-verity-token-snapshot-strict",
+    ]);
     expect(presets[0].includePaths).toEqual(["Verity"]);
   });
 
   it("resolves known presets and rejects unknown names", () => {
     expect(resolveQualityBenchmarkPreset("fixture-verity-core")?.projectRoot).toBe("tests/fixtures/lean-project");
+    expect(resolveQualityBenchmarkPreset("fixture-verity-pressure")).toMatchObject({
+      projectRoot: "tests/fixtures/lean-pressure-project",
+      thresholdOverrides: {
+        maxUnsupportedParentRate: 1,
+        minRepartitionEventRate: 0.3,
+      },
+    });
+    expect(resolveQualityBenchmarkPreset("fixture-verity-broad")).toMatchObject({
+      projectRoot: "tests/fixtures/lean-broad-project",
+      thresholdOverrides: {
+        maxUnsupportedParentRate: 1,
+        minRepartitionEventRate: 0.1,
+        maxRepartitionEventRate: 0.6,
+        maxRepartitionMaxRound: 1,
+      },
+    });
+    expect(resolveQualityBenchmarkPreset("fixture-verity-counter-snapshot")).toMatchObject({
+      projectRoot: "tests/fixtures/lean-verity-counter-snapshot",
+      includePaths: ["Verity"],
+      configOverrides: {},
+      thresholdOverrides: {},
+    });
+    expect(resolveQualityBenchmarkPreset("fixture-verity-counter-snapshot-strict")).toMatchObject({
+      projectRoot: "tests/fixtures/lean-verity-counter-snapshot",
+      includePaths: ["Verity"],
+      configOverrides: {
+        entailmentMode: "strict",
+      },
+      thresholdOverrides: {
+        maxUnsupportedParentRate: 1,
+      },
+    });
+    expect(resolveQualityBenchmarkPreset("fixture-verity-token-snapshot")).toMatchObject({
+      projectRoot: "tests/fixtures/lean-verity-token-snapshot",
+      includePaths: ["Verity"],
+      configOverrides: {},
+      thresholdOverrides: {},
+    });
+    expect(resolveQualityBenchmarkPreset("fixture-verity-token-snapshot-strict")).toMatchObject({
+      projectRoot: "tests/fixtures/lean-verity-token-snapshot",
+      includePaths: ["Verity"],
+      configOverrides: {
+        entailmentMode: "strict",
+      },
+      thresholdOverrides: {
+        maxUnsupportedParentRate: 1,
+      },
+    });
     expect(resolveQualityBenchmarkPreset("unknown-preset")).toBeUndefined();
   });
 
@@ -34,6 +91,7 @@ describe("quality-benchmark-presets", () => {
       description: "Synthetic preset with multiple include paths for ordering test",
       projectRoot: "tests/fixtures/lean-project",
       includePaths: ["Verity/Core.lean", "Verity/Loop.lean", "Verity/Base.lean"],
+      configOverrides: {},
       thresholdOverrides: {},
     };
 

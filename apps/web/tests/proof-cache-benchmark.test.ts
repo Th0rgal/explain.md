@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { runProofCacheBenchmark } from "../lib/proof-cache-benchmark";
 
 describe("proof cache benchmark", () => {
-  it("produces machine-checkable cold/warm/semantic-noop/invalidation/topology-change outcomes", async () => {
+  it("produces machine-checkable cold/warm/invalidation outcomes", async () => {
     const report = await runProofCacheBenchmark({
       coldIterations: 2,
       warmIterations: 2,
@@ -14,34 +14,41 @@ describe("proof cache benchmark", () => {
 
     expect(report.scenarios.coldNoPersistentCache.statuses).toEqual(["miss", "miss"]);
     expect(report.scenarios.warmPersistentCache.statuses).toEqual(["hit", "hit"]);
-    expect(report.scenarios.semanticNoop.beforeChangeStatus).toBe("hit");
-    expect(report.scenarios.semanticNoop.afterChangeStatus).toBe("hit");
-    expect(report.scenarios.semanticNoop.afterChangeDiagnostics).toContain("cache_semantic_hit");
     expect(report.scenarios.invalidation.beforeChangeStatus).toBe("hit");
     expect(report.scenarios.invalidation.afterChangeStatus).toBe("hit");
-    expect(report.scenarios.invalidation.afterChangeDiagnostics).toContain("cache_incremental_subtree_rebuild");
-    expect(report.scenarios.invalidation.afterChangeDiagnostics).not.toContain("cache_incremental_rebuild");
+    expect(report.scenarios.invalidation.afterChangeDiagnostics).toContain("cache_miss");
+    expect(report.scenarios.invalidation.afterChangeDiagnostics).toContain("cache_blocked_subtree_rebuild_hit");
+    expect(report.scenarios.invalidation.afterChangeTopologyPlan?.fullRebuildRequired).toBe(true);
+    expect((report.scenarios.invalidation.afterChangeTopologyPlan?.blockedDeclarationCount ?? 0) > 0).toBe(true);
+    expect(report.scenarios.invalidation.afterChangeTopologyPlan?.planHash).toHaveLength(64);
     expect(report.scenarios.invalidation.recoveryStatus).toBe("hit");
-    expect(report.scenarios.topologyChange.beforeChangeStatus).toBe("hit");
-    expect(report.scenarios.topologyChange.afterChangeStatus).toBe("hit");
-    expect(report.scenarios.topologyChange.afterChangeDiagnostics).toContain("cache_incremental_topology_rebuild");
-    expect(report.scenarios.topologyChange.afterChangeDiagnostics).not.toContain("cache_incremental_rebuild");
-    expect(report.scenarios.topologyChange.reusedParentByStableIdCount).toBeGreaterThanOrEqual(0);
-    expect(report.scenarios.topologyChange.reusedParentByChildHashCount).toBeGreaterThanOrEqual(0);
-    expect(report.scenarios.topologyChange.reusedParentByChildStatementHashCount).toBeGreaterThanOrEqual(0);
-    expect(report.scenarios.topologyChange.reusedParentByFrontierChildHashCount).toBeGreaterThanOrEqual(0);
-    expect(report.scenarios.topologyChange.reusedParentByFrontierChildStatementHashCount).toBeGreaterThanOrEqual(0);
-    expect(report.scenarios.topologyChange.skippedAmbiguousChildHashReuseCount).toBeGreaterThanOrEqual(0);
-    expect(report.scenarios.topologyChange.skippedAmbiguousChildStatementHashReuseCount).toBeGreaterThanOrEqual(0);
-    expect(report.scenarios.topologyChange.frontierPartitionLeafCount).toBeGreaterThanOrEqual(0);
-    expect(report.scenarios.topologyChange.frontierPartitionBlockedGroupCount).toBeGreaterThanOrEqual(0);
-    expect(report.scenarios.topologyChange.frontierPartitionRecoveredLeafCount).toBeGreaterThanOrEqual(0);
-    expect(report.scenarios.topologyChange.frontierPartitionRecoveredSummaryCount).toBeGreaterThanOrEqual(0);
-    expect(report.scenarios.topologyChange.frontierPartitionRecoveryPassCount).toBeGreaterThanOrEqual(0);
-    expect(report.scenarios.topologyChange.frontierPartitionRecoveryScheduledGroupCount).toBeGreaterThanOrEqual(0);
-    expect(report.scenarios.topologyChange.frontierPartitionRecoveryStrategy).toBe("minimal_hitting_set_greedy");
-    expect(typeof report.scenarios.topologyChange.frontierPartitionFallbackUsed).toBe("boolean");
-    expect(report.scenarios.topologyChange.recoveryStatus).toBe("hit");
+
+    expect(report.scenarios.topologyShapeInvalidation.beforeChangeStatus).toBe("hit");
+    expect(report.scenarios.topologyShapeInvalidation.afterChangeStatus).toBe("hit");
+    expect(report.scenarios.topologyShapeInvalidation.afterChangeDiagnostics).toContain("cache_miss");
+    expect(report.scenarios.topologyShapeInvalidation.afterChangeDiagnostics).toContain(
+      "cache_topology_regeneration_rebuild_hit",
+    );
+    expect(report.scenarios.topologyShapeInvalidation.afterChangeRegenerationRecovery?.regenerationHash).toHaveLength(64);
+    expect(
+      (report.scenarios.topologyShapeInvalidation.afterChangeRegenerationRecovery?.reusedParentSummaryByGroundingCount ??
+        0) +
+        (report.scenarios.topologyShapeInvalidation.afterChangeRegenerationRecovery
+          ?.reusedParentSummaryByStatementSignatureCount ?? 0),
+    ).toBe(report.scenarios.topologyShapeInvalidation.afterChangeRegenerationRecovery?.reusedParentSummaryCount ?? 0);
+    expect(
+      report.scenarios.topologyShapeInvalidation.afterChangeRegenerationRecovery?.skippedAmbiguousStatementSignatureReuseCount ??
+        0,
+    ).toBeGreaterThanOrEqual(0);
+    expect(
+      report.scenarios.topologyShapeInvalidation.afterChangeRegenerationRecovery
+        ?.skippedUnrebasableStatementSignatureReuseCount ?? 0,
+    ).toBeGreaterThanOrEqual(0);
+    expect(report.scenarios.topologyShapeInvalidation.afterChangeTopologyPlan?.fullRebuildRequired).toBe(true);
+    expect(report.scenarios.topologyShapeInvalidation.afterChangeTopologyPlan?.topologyShapeChanged).toBe(true);
+    expect((report.scenarios.topologyShapeInvalidation.afterChangeTopologyPlan?.addedDeclarationCount ?? 0) > 0).toBe(true);
+    expect(report.scenarios.topologyShapeInvalidation.afterChangeTopologyPlan?.planHash).toHaveLength(64);
+    expect(report.scenarios.topologyShapeInvalidation.recoveryStatus).toBe("hit");
   });
 
   it("keeps deterministic outcome hash across reruns for identical inputs", async () => {

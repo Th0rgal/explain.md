@@ -43,7 +43,7 @@ describe("pedagogical policy engine", () => {
     expect(decision.metrics.prerequisiteOrderViolations).toBe(0);
   });
 
-  test("ignores in-group cyclic prerequisite edges during order validation", () => {
+  test("flags in-group cyclic prerequisite edges during order validation", () => {
     const config = normalizeConfig({});
     const decision = evaluatePreSummaryPolicy(
       [
@@ -53,8 +53,9 @@ describe("pedagogical policy engine", () => {
       config,
     );
 
-    expect(decision.ok).toBe(true);
-    expect(decision.metrics.prerequisiteOrderViolations).toBe(0);
+    expect(decision.ok).toBe(false);
+    expect(decision.metrics.prerequisiteOrderViolations).toBeGreaterThan(0);
+    expect(decision.violations.map((violation) => violation.code)).toContain("prerequisite_order");
   });
 
   test("flags post-summary evidence coverage and vocabulary continuity drift", () => {
@@ -79,6 +80,28 @@ describe("pedagogical policy engine", () => {
 
     expect(decision.ok).toBe(false);
     expect(decision.violations.map((violation) => violation.code)).toContain("evidence_coverage");
+    expect(decision.violations.map((violation) => violation.code)).toContain("vocabulary_continuity");
+  });
+
+  test("strict entailment mode raises vocabulary continuity floor to 1", () => {
+    const config = normalizeConfig({ entailmentMode: "strict" });
+    const summary: ParentSummary = {
+      parent_statement: "Storage bounds preserve safety.",
+      why_true_from_children: "Derived from c1.",
+      new_terms_introduced: [],
+      complexity_score: 3,
+      abstraction_score: 3,
+      evidence_refs: ["c1"],
+      confidence: 0.8,
+    };
+
+    const decision = evaluatePostSummaryPolicy(
+      [{ id: "c1", statement: "Storage bounds are preserved." }],
+      summary,
+      config,
+    );
+    expect(decision.metrics.vocabularyContinuityFloor).toBe(1);
+    expect(decision.ok).toBe(false);
     expect(decision.violations.map((violation) => violation.code)).toContain("vocabulary_continuity");
   });
 });

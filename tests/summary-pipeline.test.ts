@@ -135,6 +135,30 @@ describe("summary pipeline", () => {
     expect((thrown as SummaryValidationError).diagnostics.violations.map((v) => v.code)).toContain("unsupported_terms");
   });
 
+  test("strict entailment mode rejects any unsupported parent token", async () => {
+    const config = normalizeConfig({ entailmentMode: "strict" });
+    const provider = mockProvider({
+      parent_statement: "Storage bounds preserve safety invariants.",
+      why_true_from_children: "c1 proves this.",
+      new_terms_introduced: [],
+      complexity_score: 3,
+      abstraction_score: 3,
+      evidence_refs: ["c1"],
+      confidence: 0.7,
+    });
+
+    const thrown = await captureError(() =>
+      generateParentSummary(provider, {
+        config,
+        children: [{ id: "c1", statement: "Storage bounds are preserved." }],
+      }),
+    );
+    expect(thrown).toBeInstanceOf(SummaryValidationError);
+    const unsupported = (thrown as SummaryValidationError).diagnostics.violations.find((v) => v.code === "unsupported_terms");
+    expect(unsupported).toBeTruthy();
+    expect(unsupported?.details?.minimumRequired).toBe(1);
+  });
+
   test("extracts JSON from fenced block", async () => {
     const config = normalizeConfig({});
     const provider = {

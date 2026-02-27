@@ -10,7 +10,7 @@ Deterministic cache-reuse diagnostics for proof dataset generation.
 - Full shared config knobs (same parser as other proof query routes):
   - `abstractionLevel`, `complexityLevel`, `maxChildrenPerParent`
   - `audienceLevel`, `language`, `readingLevelTarget`
-  - `complexityBandWidth`, `termIntroductionBudget`, `proofDetailMode`
+  - `complexityBandWidth`, `termIntroductionBudget`, `proofDetailMode`, `entailmentMode`
 
 ## Response
 ```json
@@ -35,24 +35,47 @@ Deterministic cache-reuse diagnostics for proof dataset generation.
           "cacheEntryHash": "..."
         }
       }
-    ]
+    ],
+    "blockedSubtreePlan": {
+      "schemaVersion": "1.0.0",
+      "reason": "source_fingerprint_mismatch",
+      "changedDeclarationIds": [],
+      "addedDeclarationIds": [],
+      "removedDeclarationIds": [],
+      "topologyShapeChanged": false,
+      "blockedDeclarationIds": [],
+      "blockedLeafIds": [],
+      "unaffectedLeafIds": ["lean:Verity/Core:core_safe:8:1"],
+      "executionBatches": [],
+      "cyclicBatchCount": 0,
+      "fullRebuildRequired": false,
+      "planHash": "..."
+    }
   }
 }
 ```
 
 ## Determinism + invalidation
 - Persistent cache path is deterministic by `proofId` and `configHash`.
-- `sourceFingerprint` is computed from Lean fixture file paths + content hashes.
-- On `sourceFingerprint` mismatch, theorem-level canonical leaf deltas are computed:
-  - empty delta: cached snapshot is reused (`cache_semantic_hit`) and cache entry is rebased to the new fingerprint;
-  - non-empty delta + stable theorem topology (same IDs/dependencies): deterministic affected-ancestor subtree recompute runs with `cache_incremental_subtree_rebuild` diagnostics;
-  - non-empty delta + topology/structure change: deterministic topology-aware rebuild runs with `cache_incremental_topology_rebuild`, reusing parent nodes first by stable parent ID, then by child-grounding hash, and finally by same-depth child-statement hash when deterministic reindexing shifts parent IDs;
-    - when hash-based fallback candidates are ambiguous, reuse is allowed only if ordered descendant-leaf frontier hashes uniquely disambiguate a candidate;
-    - topology rebuild first attempts frontier-partitioned generation (generate only groups that descend from changed leaf IDs), then deterministically retries with a greedy minimal hitting-set frontier expansion across blocked groups (expands the smallest deterministic leaf set that covers blocked groups for the retry pass), while carrying forward reusable summaries from blocked attempts so unchanged generated parents are not regenerated across retries, and only falls back to unrestricted topology reuse if no blocked group can expand the frontier.
-  - final fallback remains deterministic full rebuild (`cache_incremental_rebuild`) when topology-aware reuse cannot be applied.
+- Reuse requires a matching `sourceFingerprint` (computed from Lean fixture file paths + content hashes).
 - Cache entry integrity is checked by snapshot/dependency hash validation before reuse.
-- On mismatch or invalid entry, the dataset is rebuilt deterministically and cache is overwritten.
-- Topology-rebuild diagnostics include machine-checkable reuse counters (`reusedParentSummaryCount`, `generatedParentSummaryCount`, `reusedParentNodeCount`, `generatedParentNodeCount`, `reusedParentByStableIdCount`, `reusedParentByChildHashCount`, `reusedParentByChildStatementHashCount`, `reusedParentByFrontierChildHashCount`, `reusedParentByFrontierChildStatementHashCount`, `skippedAmbiguousChildHashReuseCount`, `skippedAmbiguousChildStatementHashReuseCount`) plus frontier-partition telemetry (`frontierPartitionLeafCount`, `frontierPartitionBlockedGroupCount`, `frontierPartitionRecoveredLeafCount`, `frontierPartitionRecoveredSummaryCount`, `frontierPartitionRecoveryPassCount`, `frontierPartitionRecoveryScheduledGroupCount`, `frontierPartitionRecoveryStrategy`, `frontierPartitionFallbackUsed`).
+- On source-fingerprint mismatch, the service computes a deterministic blocked-subtree plan:
+  - if no declarations are blocked and dependency topology is unchanged, cache reuse is recovered with diagnostic `cache_topology_recovery_hit`.
+  - this recovery path rebases snapshot leaves to current ingestion output so source spans/source URLs stay provenance-accurate.
+  - if declarations are blocked but topology and cached leaf IDs are still reusable, ancestor parents are recomputed deterministically on cached topology with diagnostic `cache_blocked_subtree_rebuild_hit`.
+  - if declaration shape changes (added/removed IDs), deterministic topology regeneration runs with reusable cached parent summaries and emits `cache_topology_regeneration_rebuild_hit` with machine-checkable reuse telemetry:
+    - `reusableParentSummaryCount`
+    - `reusedParentSummaryCount`
+    - `reusedParentSummaryByGroundingCount`
+    - `reusedParentSummaryByStatementSignatureCount`
+    - `generatedParentSummaryCount`
+    - `skippedAmbiguousStatementSignatureReuseCount`
+    - `skippedUnrebasableStatementSignatureReuseCount`
+    - `regenerationHash`
+  - if recovery preconditions fail, `blockedSubtreePlan.fullRebuildRequired=true`; cache diagnostics include `cache_blocked_subtree_full_rebuild` with deterministic fallback reason, and dataset rebuild continues deterministically.
+- `blockedSubtreePlan.changedDeclarationIds` is computed from a semantic declaration fingerprint (statement + dependencies + declaration identity), so pure source-span/source-url shifts do not force full rebuild.
+- `blockedSubtreePlan.addedDeclarationIds`, `removedDeclarationIds`, and `topologyShapeChanged` make topology-shape deltas explicit and machine-checkable.
+- On invalid entry or topology mismatch, the dataset is rebuilt deterministically and cache is overwritten.
 
 ## Environment
 - `EXPLAIN_MD_WEB_PROOF_CACHE_DIR`

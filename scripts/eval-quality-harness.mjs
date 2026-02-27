@@ -74,6 +74,18 @@ function parseArgs(argv) {
       thresholdOverrides.minVocabularyContinuityMean = Number.parseFloat(arg.slice("--min-vocabulary-continuity-mean=".length));
       continue;
     }
+    if (arg.startsWith("--min-repartition-event-rate=")) {
+      thresholdOverrides.minRepartitionEventRate = Number.parseFloat(arg.slice("--min-repartition-event-rate=".length));
+      continue;
+    }
+    if (arg.startsWith("--max-repartition-event-rate=")) {
+      thresholdOverrides.maxRepartitionEventRate = Number.parseFloat(arg.slice("--max-repartition-event-rate=".length));
+      continue;
+    }
+    if (arg.startsWith("--max-repartition-max-round=")) {
+      thresholdOverrides.maxRepartitionMaxRound = Number.parseFloat(arg.slice("--max-repartition-max-round=".length));
+      continue;
+    }
     if (!arg.startsWith("--")) {
       projectRoot = path.resolve(cwd, arg);
       projectRootExplicit = true;
@@ -173,6 +185,7 @@ async function main() {
     complexityBandWidth: 2,
     termIntroductionBudget: 0,
     proofDetailMode: "formal",
+    ...(preset?.configOverrides ?? {}),
   });
 
   const started = Date.now();
@@ -201,6 +214,7 @@ async function main() {
     thresholdFailureCount: report.thresholdFailures.length,
     qualityReportHash: computeTreeQualityReportHash(report),
     metrics: report.metrics,
+    repartitionMetrics: report.repartitionMetrics,
     thresholds: report.thresholds,
     elapsedMs,
   };

@@ -4,8 +4,6 @@ This Next.js app provides a deterministic frontend scaffold for explain.md.
 
 ## Scope
 - App Router shell with deterministic proof explorer entrypoint.
-- Tokenized design system and editorial dark theme for proof/evidence surfaces (issue #46).
-- Whole-tree 3D explanation mode (`List | 3D Tree`) backed by deterministic scene transforms (issue #47).
 - API routes backed by core provenance contracts:
   - `GET /api/proofs/seed`
   - `GET /api/proofs/root`
@@ -40,56 +38,51 @@ The tree panel uses incremental root/children/path queries:
 - Query dependency reachability/SCC evidence deterministically with `/api/proofs/dependency-graph`.
 - Surface per-parent policy diagnostics (pre/post compliance + metrics) directly in tree rows.
 - Query deterministic pedagogy calibration metrics + threshold gates with `/api/proofs/policy-report`.
-  - Optional threshold overrides: `maxUnsupportedParentRate`, `maxPrerequisiteViolationRate`, `maxPolicyViolationRate`, `maxTermJumpRate`, `maxComplexitySpreadMean`, `minEvidenceCoverageMean`, `minVocabularyContinuityMean`.
-- Query deterministic cache reuse diagnostics with `/api/proofs/cache-report` (`status`, `cacheKey`, `sourceFingerprint`, `snapshotHash`, `cacheEntryHash`, plus theorem-delta-aware `cache_semantic_hit`/`cache_incremental_subtree_rebuild`/`cache_incremental_topology_rebuild`/`cache_incremental_rebuild` codes and topology reuse counters for stable-id reuse, same-depth child-hash reuse, same-depth child-statement-hash reuse, frontier-disambiguated reuse, ambiguity-skip counters, and frontier-partition recovery/retry-warm-start telemetry).
+  - Optional threshold overrides: `maxUnsupportedParentRate`, `maxPrerequisiteViolationRate`, `maxPolicyViolationRate`, `maxTermJumpRate`, `maxComplexitySpreadMean`, `minEvidenceCoverageMean`, `minVocabularyContinuityMean`, `minRepartitionEventRate`, `maxRepartitionEventRate`, `maxRepartitionMaxRound`.
+- Query deterministic cache reuse diagnostics with `/api/proofs/cache-report` (`status`, `cacheKey`, `sourceFingerprint`, `snapshotHash`, `cacheEntryHash`) plus optional `blockedSubtreePlan` for topology-recovery auditing (`cache_topology_recovery_hit`, `cache_blocked_subtree_rebuild_hit`, `cache_topology_regeneration_rebuild_hit`, `cache_blocked_subtree_full_rebuild`). Topology-regeneration hits include machine-checkable reuse-mode counters and `regenerationHash`.
 - Run deterministic cache benchmark evidence generation with `npm run benchmark:cache` (writes `docs/benchmarks/proof-cache-benchmark.json` from repo root).
 - Use shared config parser (`lib/config-input.ts`) across query routes to keep config semantics consistent.
 - Use shared config parser (`lib/config-input.ts`) across both query and POST routes (`/api/proofs/view`, `/api/proofs/diff`) so regeneration and tree-shape semantics do not drift.
 - Query/config contracts now expose the full pedagogy controls used by tree generation:
   - `abstractionLevel`, `complexityLevel`, `maxChildrenPerParent`
   - `audienceLevel`, `language`, `readingLevelTarget`
-  - `complexityBandWidth`, `termIntroductionBudget`, `proofDetailMode`
+  - `complexityBandWidth`, `termIntroductionBudget`, `proofDetailMode`, `entailmentMode`
+- Proof Explorer controls expose an explicit `entailmentMode` selector (`calibrated` vs `strict`) and propagate it through root/tree/policy queries.
+- Large trees use deterministic render-window planning to bound DOM row count while preserving root-first ordering.
+  - Window diagnostics are surfaced as `data-tree-*` attributes on the tree panel (`mode`, `total`, `rendered`, `hiddenAbove`, `hiddenBelow`).
+  - Paging controls (`Show previous rows` / `Show next rows`) shift the window deterministically without mutating proof data.
+  - For very large trees, deterministic DOM virtualization is enabled with fixed row height + spacer rows:
+    - `data-tree-render-mode="virtualized"`
+    - `data-tree-virtual-start-index` / `data-tree-virtual-end-index`
+  - Keyboard navigation is deterministic and window-aware:
+    - `ArrowUp/ArrowDown`, `Home/End`, and `PageUp/PageDown` move the active tree row.
+    - `ArrowRight` expands a collapsed parent, or moves to its first visible child when already expanded.
+    - `ArrowLeft` collapses an expanded parent, or moves focus to its parent row.
+    - `Enter` / `Space` activate the row action (expand/collapse parent or select leaf).
+  - Active-row diagnostics remain machine-checkable via `data-tree-active-node-id` and `data-tree-active-row-index`.
+  - Screen-reader activity announcements are deterministic and queryable via `data-tree-live-message`.
 - Config profile persistence/query is deterministic and file-backed:
   - per-project/user profile scope
   - canonical storage keys via `buildProfileStorageKey(...)`
   - response hashes: `requestHash`, `ledgerHash`
   - persisted profile `configHash` for auditability
 - Proof switching is supported through `/proofs?proofId=<id>` with validation against supported IDs.
-- 3D mode hydrates full reachable parent pages, then renders a deterministic scene hash contract from loaded tree data.
-  - Scene transform implementation: `apps/web/lib/tree-scene.ts`
-  - 3D renderer: `apps/web/components/proof-tree-3d.tsx`
 
 ## Verification integration
 - Leaf panel can trigger server-side verification and render status/log diagnostics.
 - Verification history is persisted to `.explain-md/web-verification-ledger.json`.
 - Lean fixture proof datasets are persisted to `.explain-md/web-proof-cache` (override with `EXPLAIN_MD_WEB_PROOF_CACHE_DIR`).
 - Lean fixture project root can be overridden with `EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT` (used by benchmark/invalidation harness).
-- Lean fixture source deep-link base can be overridden with `EXPLAIN_MD_LEAN_FIXTURE_SOURCE_BASE_URL`.
-- Leaf detail responses include `view.shareReference.sourceUrlOrigin` (`leaf` | `source_span` | `missing`) for auditable source-link provenance.
-- Leaf detail panel renders provenance mode and deep-link availability explicitly:
-  - `Leaf-attested URL` (`leaf`)
-  - `Resolved from source span` (`source_span`)
-  - `Missing source URL` (`missing`)
-- Tree panel now supports deterministic keyboard navigation with roving focus:
-  - `ArrowUp` / `ArrowDown`: move focus across visible rows
-  - `ArrowRight`: expand collapsed parent, then descend to first loaded child
-  - `ArrowLeft`: collapse expanded parent, otherwise move to parent row
-  - `Home` / `End`: jump to first/last visible row
-  - `Enter` / `Space`: activate focused row (leaf select, parent selection clear)
-- Tree panel now uses deterministic render windowing for large trees:
-  - full render below threshold, windowed render above threshold
-  - focus/selection anchored window center with stable overscan
-  - explicit browser-auditable diagnostics (`data-tree-render-mode`, rendered/hidden row counts)
-  - window paging controls (`Show previous rows` / `Show next rows`) for mouse-only traversal
-- Diff panel now uses deterministic change highlighting:
-  - grouped sections for `changed`, `added`, and `removed` entries
-  - statement-level before/after emphasis from deterministic common-prefix/common-suffix split
-  - explicit audit attributes (`data-diff-total-changes`, `data-diff-rendered-changes`, `data-diff-truncated-count`)
-- Render-window thresholds are configurable via:
+- Config profiles are persisted to `.explain-md/web-config-profiles.json` (override with `EXPLAIN_MD_WEB_CONFIG_PROFILE_LEDGER`).
+- Tree render window thresholds can be configured with:
   - `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_MAX_ROWS` (default `120`)
   - `NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_OVERSCAN_ROWS` (default `24`)
-  - `NEXT_PUBLIC_EXPLAIN_MD_DIFF_RENDER_MAX_CHANGES` (default `24`)
-- Config profiles are persisted to `.explain-md/web-config-profiles.json` (override with `EXPLAIN_MD_WEB_CONFIG_PROFILE_LEDGER`).
+- Tree virtualization thresholds can be configured with:
+  - `NEXT_PUBLIC_EXPLAIN_MD_TREE_VIRTUALIZATION_ENABLED` (default `true`)
+  - `NEXT_PUBLIC_EXPLAIN_MD_TREE_VIRTUALIZATION_MIN_ROWS` (default `400`)
+  - `NEXT_PUBLIC_EXPLAIN_MD_TREE_ROW_HEIGHT_PX` (default `36`)
+  - `NEXT_PUBLIC_EXPLAIN_MD_TREE_VIEWPORT_ROWS` (default `18`)
+  - `NEXT_PUBLIC_EXPLAIN_MD_TREE_VIRTUALIZATION_OVERSCAN_ROWS` (default `6`)
 - Job IDs are deterministic and monotonic (`job-000001`, `job-000002`, ...).
 - Reproducibility contract values can be configured with:
   - `EXPLAIN_MD_VERIFICATION_PROJECT_ROOT`

@@ -15,20 +15,11 @@ Issue: #9
 - Each sibling group is re-ordered locally by in-group prerequisites before policy checks and parent synthesis.
 - If local cycles remain, order is completed with deterministic cycle-break picks (lexical) so downstream dependents still follow released prerequisites.
 - Parent IDs are deterministic hashes of `(depth, groupIndex, childIds)`.
-- Parent generation runs in deterministic batch order (`summaryBatchSize`, default `4`) while preserving stable `groupIndex` ordering.
+- Top-level `groupIndex` values reserve the original grouping slot even when a sibling group is a singleton passthrough; this prevents downstream parent-ID drift.
+- Parent generation runs in deterministic request order.
 - Grouping diagnostics are preserved per depth for auditability.
-- Grouping diagnostics include `summaryBatches[]` with batch/group cardinalities for reproducible batching audits.
-- Grouping diagnostics include `summaryReuse` with generated vs reused group indexes when reusable parent summaries are provided.
-- `summaryReuse` also reports deterministic reuse origin:
-  - `reusedByParentIdGroupIndexes` when stable parent IDs match.
-  - `reusedByChildHashGroupIndexes` when parent IDs changed but same-depth child-grounding hashes still match.
-  - `reusedByChildStatementHashGroupIndexes` when parent IDs and child IDs changed but same-depth ordered child statements still match.
-  - `reusedByFrontierChildHashGroupIndexes` when child-hash fallback was ambiguous and deterministically resolved by ordered descendant-leaf frontier hash.
-  - `reusedByFrontierChildStatementHashGroupIndexes` when child-statement-hash fallback was ambiguous and deterministically resolved by ordered descendant-leaf frontier hash.
-  - `skippedAmbiguousChildHashGroupIndexes` when child-hash fallback has multiple deterministic candidates at a depth and reuse is intentionally skipped.
-  - `skippedAmbiguousChildStatementHashGroupIndexes` when child-statement-hash fallback has multiple deterministic candidates at a depth and reuse is intentionally skipped.
-- Repartition diagnostics are preserved per depth with reason codes and violation codes.
-- Policy diagnostics are attached per parent (`preSummary`, `postSummary`, `retriesUsed`, `rewriteTrace`).
+- Grouping diagnostics include deterministic `repartitionEvents` whenever a policy-failing group is split.
+- Policy diagnostics are attached per parent (`preSummary`, `postSummary`, `retriesUsed`).
 
 ## Tree validity checks
 `validateExplanationTree` enforces:
@@ -44,18 +35,16 @@ Issue: #9
 - Pre-summary checks:
   - sibling complexity spread must stay within `complexityBandWidth`
   - in-group prerequisite ordering must remain topological in the grouping-produced child order
-  - cyclic in-group prerequisite edges are deterministically waived as non-orderable
+  - cyclic in-group prerequisite edges are treated as prerequisite-order violations
 - Post-summary checks:
   - `evidence_refs` must cover all child IDs in the group
   - `new_terms_introduced` must satisfy `termIntroductionBudget`
   - vocabulary continuity ratio must satisfy deterministic audience/detail floor
 - Rewrite loop:
-  - the builder executes a bounded deterministic rewrite loop (up to 4 attempts)
-  - retry prompt strategy is chosen deterministically from prior violation codes (`evidence_strict`, `vocabulary_strict`, `strict_all`)
-  - every attempt is recorded in `rewriteTrace` with strategy + post-summary decision
-  - if still non-compliant after rewrite attempts, the builder deterministically repartitions the failing sibling group (bounded rounds)
-  - repartition happens in-place (FIFO) with stable contiguous splits of ordered children
-  - if repartition budget is exhausted, the builder fails with `TreePolicyError` and machine-readable diagnostics
+  - the builder retries once with a stricter deterministic system prompt
+  - if a group remains non-compliant, the builder deterministically repartitions that group into two ordered subgroups and retries
+  - repartition is bounded: groups of size `<= 2` cannot be split further and fail fast with `TreePolicyError`
+  - every repartition is recorded in `groupingDiagnostics[].repartitionEvents` with reason and violation codes
 
 ## Degenerate and boundary cases
 - One leaf: returns that leaf as root with depth `0`.
@@ -72,32 +61,7 @@ Request shape:
 - `leaves`: `[{ id, statement, complexity? }]`
 - `config`: normalized `ExplanationConfig`
 - `maxDepth?`: optional explicit depth guard
-- `summaryBatchSize?`: optional integer `1..32` controlling max concurrent parent summaries per depth
-- `reusableParentSummaries?`: optional map keyed by deterministic parent id (`p_<depth>_<groupIndex>_<digest>`) for stable-id parent reuse
-  - each entry includes `childStatementHash`, optional `childStatementTextHash`, optional frontier hashes (`frontierLeafIdHash`, `frontierLeafStatementHash`), and previously validated summary payload
-  - reuse is accepted only when the current child statement hash matches and post-summary policy still passes
-  - when stable IDs do not match (for example after deterministic topology reindexing), reuse falls back first to deterministic same-depth child-grounding hash matching, then to same-depth child-statement hash matching
-  - statement-hash fallback deterministically re-bases `evidence_refs` to current child IDs before policy validation
-  - ambiguous fallback matches are deterministically resolved only when ordered descendant-leaf frontier hashes uniquely identify one candidate; otherwise reuse is skipped
-- `generationFrontierLeafIds?`: optional deterministic generation frontier (leaf IDs)
-  - when set, parent-summary generation is allowed only for groups whose descendant leaf frontier intersects this set
-  - groups outside the frontier must reuse an existing parent summary or the build fails fast with `TreeFrontierPartitionError`
-  - `TreeFrontierPartitionError.blockedGroups[]` includes deterministic blocked group metadata (`depth`, `groupIndex`, `parentId`, `frontierLeafIds`) for caller-side frontier expansion/retry scheduling
-  - `TreeFrontierPartitionError.reusableParentSummaries` includes deterministic reusable summaries captured from already-built layers in the blocked attempt, enabling caller-side retry warm-start without regenerating those parents
-  - this enables minimal-subtree topology recompute scheduling with explicit fallback control in callers
 
 Output includes:
 - `rootId`, `leafIds`, `nodes`, `configHash`, `groupPlan`, `groupingDiagnostics`, `maxDepth`
 - `policyDiagnosticsByParent`
-
-Each `groupingDiagnostics` entry includes:
-- `orderedNodeIds`
-- `complexitySpreadByGroup`
-- `warnings`
-- `repartitionEvents[]` with:
-  - `reason`: `pre_summary_policy | post_summary_policy`
-  - `originalGroupIndex`
-  - `repartitionRound`
-  - `inputNodeIds`
-  - `outputGroups`
-  - `violationCodes`

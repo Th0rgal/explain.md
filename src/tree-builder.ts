@@ -4,10 +4,8 @@ import { groupChildrenDeterministically, type GroupingWarning } from "./child-gr
 import {
   evaluatePostSummaryPolicy,
   evaluatePreSummaryPolicy,
-  type ParentPolicyDiagnostics,
-  type PolicyRewriteAttempt,
-  type PolicyRewriteStrategy,
   type PolicyViolationCode,
+  type ParentPolicyDiagnostics,
 } from "./pedagogical-policy.js";
 import type { ProviderClient } from "./openai-provider.js";
 import { generateParentSummary, SummaryValidationError } from "./summary-pipeline.js";
@@ -49,28 +47,17 @@ export interface GroupingLayerDiagnostics {
   orderedNodeIds: string[];
   complexitySpreadByGroup: number[];
   warnings: GroupingWarning[];
-  summaryBatches?: SummaryBatchDiagnostics[];
-  summaryReuse?: SummaryReuseDiagnostics;
-  repartitionEvents: RepartitionEvent[];
+  repartitionEvents?: RepartitionEvent[];
 }
 
-export interface SummaryBatchDiagnostics {
-  batchIndex: number;
-  groupIndexes: number[];
-  groupCount: number;
-  inputNodeCount: number;
-}
-
-export interface SummaryReuseDiagnostics {
-  reusedGroupIndexes: number[];
-  generatedGroupIndexes: number[];
-  reusedByParentIdGroupIndexes?: number[];
-  reusedByChildHashGroupIndexes?: number[];
-  reusedByChildStatementHashGroupIndexes?: number[];
-  reusedByFrontierChildHashGroupIndexes?: number[];
-  reusedByFrontierChildStatementHashGroupIndexes?: number[];
-  skippedAmbiguousChildHashGroupIndexes?: number[];
-  skippedAmbiguousChildStatementHashGroupIndexes?: number[];
+export interface RepartitionEvent {
+  depth: number;
+  groupIndex: number;
+  round: number;
+  reason: "pre_summary_policy" | "post_summary_policy";
+  inputNodeIds: string[];
+  outputGroups: string[][];
+  violationCodes: PolicyViolationCode[];
 }
 
 export interface ExplanationTree {
@@ -84,40 +71,10 @@ export interface ExplanationTree {
   maxDepth: number;
 }
 
-export interface RepartitionEvent {
-  depth: number;
-  originalGroupIndex: number;
-  repartitionRound: number;
-  reason: "pre_summary_policy" | "post_summary_policy";
-  inputNodeIds: string[];
-  outputGroups: string[][];
-  violationCodes: string[];
-}
-
 export interface TreeBuildRequest {
   leaves: LeafNodeInput[];
   config: ExplanationConfig;
   maxDepth?: number;
-  summaryBatchSize?: number;
-  reusableParentSummaries?: Record<string, ReusableParentSummary>;
-  generationFrontierLeafIds?: string[];
-}
-
-export interface ReusableParentSummary {
-  childStatementHash: string;
-  childStatementTextHash?: string;
-  frontierLeafIdHash?: string;
-  frontierLeafStatementHash?: string;
-  summary: {
-    parent_statement: string;
-    why_true_from_children: string;
-    new_terms_introduced: string[];
-    complexity_score: number;
-    abstraction_score: number;
-    evidence_refs: string[];
-    confidence: number;
-  };
-  policyDiagnostics?: ParentPolicyDiagnostics;
 }
 
 export interface TreeValidationIssue {
@@ -146,49 +103,6 @@ export class TreePolicyError extends Error {
     this.name = "TreePolicyError";
     this.diagnostics = diagnostics;
   }
-}
-
-export interface FrontierGenerationBlockedGroup {
-  depth: number;
-  groupIndex: number;
-  parentId: string;
-  frontierLeafIds: string[];
-}
-
-export class TreeFrontierPartitionError extends Error {
-  public readonly blockedGroups: FrontierGenerationBlockedGroup[];
-  public readonly reusableParentSummaries: Record<string, ReusableParentSummary>;
-
-  public constructor(
-    message: string,
-    blockedGroups: FrontierGenerationBlockedGroup[],
-    reusableParentSummaries: Record<string, ReusableParentSummary> = {},
-  ) {
-    super(message);
-    this.name = "TreeFrontierPartitionError";
-    this.blockedGroups = blockedGroups;
-    this.reusableParentSummaries = reusableParentSummaries;
-  }
-}
-
-interface PendingSummaryTask {
-  groupIndex: number;
-  parentId: string;
-  orderedGroupNodeIds: string[];
-  children: Array<{ id: string; statement: string; complexity?: number; prerequisiteIds?: string[] }>;
-  preSummaryDecision: ParentPolicyDiagnostics["preSummary"];
-  complexitySpread: number;
-}
-
-interface ReusableSummaryCandidate {
-  key: string;
-  summary: ReusableParentSummary;
-}
-
-interface ReusableSummarySelection {
-  candidate?: ReusableSummaryCandidate;
-  ambiguous: boolean;
-  resolvedByFrontier: boolean;
 }
 
 export async function buildRecursiveExplanationTree(
@@ -240,12 +154,6 @@ export async function buildRecursiveExplanationTree(
   }
 
   const hardDepthLimit = request.maxDepth ?? computeDepthLimit(leaves.length, request.config.maxChildrenPerParent);
-  const summaryBatchSize = normalizeSummaryBatchSize(request.summaryBatchSize);
-  const reusableParentSummaries = request.reusableParentSummaries ?? {};
-  const generationFrontierLeafIdSet = normalizeGenerationFrontierLeafIdSet(request.generationFrontierLeafIds);
-  const reusableSummaryPools = buildReusableSummaryPools(reusableParentSummaries);
-  const consumedReusableSummaryKeys = new Set<string>();
-  const frontierSignatureMemo = new Map<string, { leafIds: string[]; leafStatements: string[] }>();
 
   let depth = 0;
   let activeNodeIds = leafIds.slice();
@@ -271,312 +179,55 @@ export async function buildRecursiveExplanationTree(
       complexityBandWidth: request.config.complexityBandWidth,
     });
     const groups = groupingResult.groups;
-    const summaryTasks: PendingSummaryTask[] = [];
-    const nextLayerByGroupIndex: Array<string | undefined> = new Array(groups.length);
-    const reusedGroupIndexes: number[] = [];
-    const generatedGroupIndexes: number[] = [];
-    const reusedByParentIdGroupIndexes: number[] = [];
-    const reusedByChildHashGroupIndexes: number[] = [];
-    const reusedByChildStatementHashGroupIndexes: number[] = [];
-    const reusedByFrontierChildHashGroupIndexes: number[] = [];
-    const reusedByFrontierChildStatementHashGroupIndexes: number[] = [];
-    const skippedAmbiguousChildHashGroupIndexes: number[] = [];
-    const skippedAmbiguousChildStatementHashGroupIndexes: number[] = [];
-    const blockedGenerationGroups: FrontierGenerationBlockedGroup[] = [];
+    const nextLayerIds: string[] = [];
+    const complexitySpreadByGroup: number[] = [];
     const repartitionEvents: RepartitionEvent[] = [];
-    const queue: GroupBuildWorkItem[] = groups.map((groupNodeIds, index) => ({
-      nodeIds: groupNodeIds.slice(),
-      originalGroupIndex: index,
-      repartitionRound: 0,
-    }));
+    let nextGroupIndex = groups.length;
 
-    while (queue.length > 0) {
-      const workItem = queue.shift() as GroupBuildWorkItem;
-      const index = workItem.originalGroupIndex;
-      if (workItem.nodeIds.length === 1) {
-        nextLayerByGroupIndex[index] = workItem.nodeIds[0];
-        continue;
-      }
-
-      const orderedGroupNodeIds = reorderGroupNodeIdsByPrerequisites(workItem.nodeIds, nodes, leafById);
-      const children = orderedGroupNodeIds.map((nodeId) => {
-        const node = nodes[nodeId];
-        const leafInput = leafById.get(node.id);
-        return {
-          id: node.id,
-          statement: node.statement,
-          complexity: node.complexityScore,
-          prerequisiteIds: leafInput?.prerequisiteIds,
-        };
-      });
-      const parentId = buildParentNodeId(depth, index, orderedGroupNodeIds);
-
-      const preSummaryDecision = evaluatePreSummaryPolicy(children, request.config);
-      if (!preSummaryDecision.ok) {
-        const repartitionGroups = repartitionGroupDeterministically(
-          orderedGroupNodeIds,
-          workItem.repartitionRound,
-          request.config.maxChildrenPerParent,
-        );
-        if (repartitionGroups) {
-          recordRepartitionEvent(
-            repartitionEvents,
-            depth,
-            workItem,
-            "pre_summary_policy",
-            orderedGroupNodeIds,
-            repartitionGroups,
-            preSummaryDecision.violations.map((violation) => violation.code),
-          );
-          enqueueRepartitionGroups(queue, workItem, repartitionGroups);
-          continue;
-        }
-
-        throw new TreePolicyError("Pre-summary pedagogical policy failed.", {
-          depth,
-          groupIndex: workItem.originalGroupIndex,
-          retriesUsed: 0,
-          preSummary: preSummaryDecision,
-          postSummary: {
-            ok: true,
-            violations: [],
-            metrics: {
-              complexitySpread: 0,
-              prerequisiteOrderViolations: 0,
-              introducedTermCount: 0,
-              evidenceCoverageRatio: 1,
-              vocabularyContinuityRatio: 1,
-              vocabularyContinuityFloor: 1,
-            },
-          },
-          rewriteTrace: [],
-        });
-      }
-
-      const childStatementHash = computeChildStatementHash(children);
-      const childStatementTextHash = computeChildStatementTextHash(children);
-      const frontierHashes = computeFrontierHashesForGroup(orderedGroupNodeIds, nodes, frontierSignatureMemo);
-      const canGenerateSummary =
-        generationFrontierLeafIdSet === undefined ||
-        groupIntersectsGenerationFrontier(orderedGroupNodeIds, nodes, frontierSignatureMemo, generationFrontierLeafIdSet);
-      let reusableParent = reusableParentSummaries[parentId];
-      let reusableParentKey = parentId;
-      let reuseMatchKind: "parent_id" | "child_hash" | "child_statement_hash" = "parent_id";
-      let reusedByFrontier = false;
-      if (
-        !reusableParent || reusableParent.childStatementHash !== childStatementHash
-      ) {
-        const poolKey = buildReusableSummaryPoolKey(depth, childStatementHash);
-        if (reusableSummaryPools.byDepthAndChildHash.has(poolKey)) {
-          const selection = selectReusableSummaryCandidate(
-            reusableSummaryPools.byDepthAndChildHash.get(poolKey) as ReusableSummaryCandidate[],
-            consumedReusableSummaryKeys,
-            frontierHashes,
-          );
-          if (selection.candidate) {
-            reusableParent = selection.candidate.summary;
-            reusableParentKey = selection.candidate.key;
-            reuseMatchKind = "child_hash";
-            reusedByFrontier = selection.resolvedByFrontier;
-          } else if (selection.ambiguous) {
-            skippedAmbiguousChildHashGroupIndexes.push(index);
-          }
-        }
-      }
-      if (
-        (!reusableParent || reusableParent.childStatementHash !== childStatementHash) &&
-        reuseMatchKind !== "child_hash"
-      ) {
-        const statementPoolKey = buildReusableSummaryPoolKey(depth, childStatementTextHash);
-        if (reusableSummaryPools.byDepthAndChildStatementHash.has(statementPoolKey)) {
-          const selection = selectReusableSummaryCandidate(
-            reusableSummaryPools.byDepthAndChildStatementHash.get(statementPoolKey) as ReusableSummaryCandidate[],
-            consumedReusableSummaryKeys,
-            frontierHashes,
-          );
-          if (selection.candidate) {
-            reusableParent = selection.candidate.summary;
-            reusableParentKey = selection.candidate.key;
-            reuseMatchKind = "child_statement_hash";
-            reusedByFrontier = selection.resolvedByFrontier;
-          } else if (selection.ambiguous) {
-            skippedAmbiguousChildStatementHashGroupIndexes.push(index);
-          }
-        }
-      }
-
-      const matchesByChildHash = reusableParent?.childStatementHash === childStatementHash;
-      const matchesByChildStatementHash =
-        reusableParent?.childStatementTextHash !== undefined && reusableParent.childStatementTextHash === childStatementTextHash;
-      if (reusableParent && (matchesByChildHash || matchesByChildStatementHash)) {
-        const summaryForPolicy =
-          matchesByChildHash || !matchesByChildStatementHash
-            ? reusableParent.summary
-            : {
-                ...reusableParent.summary,
-                evidence_refs: children.map((child) => child.id),
-              };
-        const postSummaryDecision = evaluatePostSummaryPolicy(children, summaryForPolicy, request.config);
-        if (postSummaryDecision.ok) {
-          const policyDiagnostics = reusableParent.policyDiagnostics
-            ? cloneParentPolicyDiagnostics(reusableParent.policyDiagnostics, depth, index)
-            : {
-                depth,
-                groupIndex: index,
-                retriesUsed: 0,
-                preSummary: preSummaryDecision,
-                postSummary: postSummaryDecision,
-                rewriteTrace: [],
-              };
-          const parentNode: ExplanationTreeNode = {
-            id: parentId,
-            kind: "parent",
-            statement: summaryForPolicy.parent_statement,
-            childIds: orderedGroupNodeIds.slice(),
-            depth,
-            complexityScore: summaryForPolicy.complexity_score,
-            abstractionScore: summaryForPolicy.abstraction_score,
-            confidence: summaryForPolicy.confidence,
-            whyTrueFromChildren: summaryForPolicy.why_true_from_children,
-            newTermsIntroduced: summaryForPolicy.new_terms_introduced.slice(),
-            evidenceRefs: summaryForPolicy.evidence_refs.slice(),
-            policyDiagnostics,
-          };
-
-          nodes[parentId] = parentNode;
-          policyDiagnosticsByParent[parentId] = policyDiagnostics;
-          nextLayerByGroupIndex[index] = parentId;
-          groupPlan.push({
-            depth,
-            index,
-            inputNodeIds: orderedGroupNodeIds.slice(),
-            outputNodeId: parentId,
-            complexitySpread: groupingResult.diagnostics.complexitySpreadByGroup[index] ?? 0,
-          });
-          consumedReusableSummaryKeys.add(reusableParentKey);
-          reusedGroupIndexes.push(index);
-          if (reuseMatchKind === "parent_id") {
-            reusedByParentIdGroupIndexes.push(index);
-          } else if (reuseMatchKind === "child_hash") {
-            reusedByChildHashGroupIndexes.push(index);
-            if (reusedByFrontier) {
-              reusedByFrontierChildHashGroupIndexes.push(index);
-            }
-          } else {
-            reusedByChildStatementHashGroupIndexes.push(index);
-            if (reusedByFrontier) {
-              reusedByFrontierChildStatementHashGroupIndexes.push(index);
-            }
-          }
-          continue;
-        }
-      }
-
-      if (!canGenerateSummary) {
-        blockedGenerationGroups.push({
-          depth,
-          groupIndex: index,
-          parentId,
-          frontierLeafIds: collectGroupFrontierLeafIds(orderedGroupNodeIds, nodes, frontierSignatureMemo),
-        });
-        continue;
-      }
-
-      summaryTasks.push({
-        groupIndex: index,
-        parentId,
-        orderedGroupNodeIds,
-        children,
-        preSummaryDecision,
-        complexitySpread: groupingResult.diagnostics.complexitySpreadByGroup[index] ?? 0,
-      });
-      generatedGroupIndexes.push(index);
-    }
-
-    if (blockedGenerationGroups.length > 0) {
-      throw new TreeFrontierPartitionError(
-        "Deterministic frontier-partition mode blocked summary generation outside changed frontier.",
-        blockedGenerationGroups,
-        buildReusableParentSummariesFromNodes(nodes, policyDiagnosticsByParent),
-      );
-    }
-
-    const summaryBatches: SummaryBatchDiagnostics[] = [];
-    for (let start = 0, batchIndex = 0; start < summaryTasks.length; start += summaryBatchSize, batchIndex += 1) {
-      const batchTasks = summaryTasks.slice(start, start + summaryBatchSize);
-      const parentSummaries = await Promise.all(
-        batchTasks.map((task) =>
-          generatePolicyCompliantParentSummary(
-            provider,
-            task.children,
-            request.config,
-            depth,
-            task.groupIndex,
-            task.preSummaryDecision,
-          ),
-        ),
-      );
-
-      summaryBatches.push({
-        batchIndex,
-        groupIndexes: batchTasks.map((task) => task.groupIndex),
-        groupCount: batchTasks.length,
-        inputNodeCount: batchTasks.reduce((sum, task) => sum + task.orderedGroupNodeIds.length, 0),
+    for (let index = 0; index < groups.length; index += 1) {
+      const result = await buildGroupWithDeterministicRepartition({
+        provider,
+        depth,
+        initialGroupIndex: index,
+        nodeIds: groups[index],
+        round: 0,
+        maxChildrenPerParent: request.config.maxChildrenPerParent,
+        leafById,
+        nodes,
+        config: request.config,
+        getNextGroupIndex: () => {
+          const value = nextGroupIndex;
+          nextGroupIndex += 1;
+          return value;
+        },
       });
 
-      for (let taskIndex = 0; taskIndex < batchTasks.length; taskIndex += 1) {
-        const task = batchTasks[taskIndex];
-        const parentSummary = parentSummaries[taskIndex];
-        const parentId = task.parentId;
-        const parentNode: ExplanationTreeNode = {
-          id: parentId,
-          kind: "parent",
-          statement: parentSummary.summary.parent_statement,
-          childIds: task.orderedGroupNodeIds.slice(),
-          depth,
-          complexityScore: parentSummary.summary.complexity_score,
-          abstractionScore: parentSummary.summary.abstraction_score,
-          confidence: parentSummary.summary.confidence,
-          whyTrueFromChildren: parentSummary.summary.why_true_from_children,
-          newTermsIntroduced: parentSummary.summary.new_terms_introduced,
-          evidenceRefs: parentSummary.summary.evidence_refs,
-          policyDiagnostics: parentSummary.policyDiagnostics,
-        };
-
-        nodes[parentId] = parentNode;
-        policyDiagnosticsByParent[parentId] = parentSummary.policyDiagnostics;
-        nextLayerByGroupIndex[task.groupIndex] = parentId;
+      for (const parent of result.createdParents) {
+        nodes[parent.parentId] = parent.node;
+        policyDiagnosticsByParent[parent.parentId] = parent.node.policyDiagnostics as ParentPolicyDiagnostics;
+        nextLayerIds.push(parent.parentId);
         groupPlan.push({
           depth,
-          index: task.groupIndex,
-          inputNodeIds: task.orderedGroupNodeIds.slice(),
-          outputNodeId: parentId,
-          complexitySpread: task.complexitySpread,
+          index: parent.groupIndex,
+          inputNodeIds: parent.inputNodeIds.slice(),
+          outputNodeId: parent.parentId,
+          complexitySpread: parent.complexitySpread,
         });
+        complexitySpreadByGroup.push(parent.complexitySpread);
       }
+
+      for (const passthroughLeafId of result.passthroughLeafIds) {
+        nextLayerIds.push(passthroughLeafId);
+      }
+
+      repartitionEvents.push(...result.repartitionEvents);
     }
 
-    const nextLayerIds = nextLayerByGroupIndex.filter((nodeId): nodeId is string => typeof nodeId === "string");
     groupingDiagnostics.push({
       depth,
       orderedNodeIds: groupingResult.diagnostics.orderedNodeIds,
-      complexitySpreadByGroup: groupingResult.diagnostics.complexitySpreadByGroup,
+      complexitySpreadByGroup,
       warnings: groupingResult.diagnostics.warnings,
-      summaryBatches,
-      summaryReuse:
-        reusedGroupIndexes.length > 0 || generatedGroupIndexes.length > 0
-          ? {
-              reusedGroupIndexes,
-              generatedGroupIndexes,
-              reusedByParentIdGroupIndexes,
-              reusedByChildHashGroupIndexes,
-              reusedByChildStatementHashGroupIndexes,
-              reusedByFrontierChildHashGroupIndexes,
-              reusedByFrontierChildStatementHashGroupIndexes,
-              skippedAmbiguousChildHashGroupIndexes,
-              skippedAmbiguousChildStatementHashGroupIndexes,
-            }
-          : undefined,
       repartitionEvents,
     });
 
@@ -608,339 +259,252 @@ export async function buildRecursiveExplanationTree(
   return tree;
 }
 
-function normalizeGenerationFrontierLeafIdSet(leafIds: string[] | undefined): Set<string> | undefined {
-  if (!leafIds) {
-    return undefined;
-  }
-  const normalized = leafIds.map((leafId) => leafId.trim()).filter((leafId) => leafId.length > 0);
-  if (normalized.length === 0) {
-    return undefined;
-  }
-  return new Set(normalized);
+interface BuildGroupWithRepartitionRequest {
+  provider: ProviderClient;
+  depth: number;
+  initialGroupIndex: number;
+  nodeIds: string[];
+  round: number;
+  maxChildrenPerParent: number;
+  leafById: Map<string, LeafNodeInput>;
+  nodes: Record<string, ExplanationTreeNode>;
+  config: ExplanationConfig;
+  getNextGroupIndex: () => number;
 }
 
-function groupIntersectsGenerationFrontier(
-  orderedGroupNodeIds: string[],
-  nodes: Record<string, ExplanationTreeNode>,
-  memo: Map<string, { leafIds: string[]; leafStatements: string[] }>,
-  frontierLeafIdSet: Set<string>,
-): boolean {
-  for (const nodeId of orderedGroupNodeIds) {
-    const frontier = collectLeafFrontier(nodeId, nodes, memo);
-    for (const leafId of frontier.leafIds) {
-      if (frontierLeafIdSet.has(leafId)) {
-        return true;
-      }
-    }
-  }
-  return false;
+interface CreatedParentRecord {
+  parentId: string;
+  node: ExplanationTreeNode;
+  inputNodeIds: string[];
+  groupIndex: number;
+  complexitySpread: number;
 }
 
-function collectGroupFrontierLeafIds(
-  orderedGroupNodeIds: string[],
-  nodes: Record<string, ExplanationTreeNode>,
-  memo: Map<string, { leafIds: string[]; leafStatements: string[] }>,
-): string[] {
-  const leafIds = new Set<string>();
-  for (const nodeId of orderedGroupNodeIds) {
-    const frontier = collectLeafFrontier(nodeId, nodes, memo);
-    for (const leafId of frontier.leafIds) {
-      leafIds.add(leafId);
-    }
-  }
-  return [...leafIds].sort((left, right) => left.localeCompare(right));
+interface BuildGroupWithRepartitionResult {
+  createdParents: CreatedParentRecord[];
+  passthroughLeafIds: string[];
+  repartitionEvents: RepartitionEvent[];
 }
 
-function buildReusableSummaryPools(
-  reusableParentSummaries: Record<string, ReusableParentSummary>,
-): {
-  byDepthAndChildHash: Map<string, ReusableSummaryCandidate[]>;
-  byDepthAndChildStatementHash: Map<string, ReusableSummaryCandidate[]>;
-} {
-  const byDepthAndChildHash = new Map<string, ReusableSummaryCandidate[]>();
-  const byDepthAndChildStatementHash = new Map<string, ReusableSummaryCandidate[]>();
-  const orderedParentIds = Object.keys(reusableParentSummaries).sort((left, right) => left.localeCompare(right));
-  for (const parentId of orderedParentIds) {
-    const summary = reusableParentSummaries[parentId];
-    const depth = resolveReusableSummaryDepth(parentId, summary);
-    if (depth === undefined) {
-      continue;
-    }
-    const childHashPoolKey = buildReusableSummaryPoolKey(depth, summary.childStatementHash);
-    const existingByChildHash = byDepthAndChildHash.get(childHashPoolKey);
-    const candidate: ReusableSummaryCandidate = { key: parentId, summary };
-    if (existingByChildHash) {
-      existingByChildHash.push(candidate);
-    } else {
-      byDepthAndChildHash.set(childHashPoolKey, [candidate]);
-    }
-
-    if (summary.childStatementTextHash !== undefined) {
-      const childStatementHashPoolKey = buildReusableSummaryPoolKey(depth, summary.childStatementTextHash);
-      const existingByChildStatementHash = byDepthAndChildStatementHash.get(childStatementHashPoolKey);
-      if (existingByChildStatementHash) {
-        existingByChildStatementHash.push(candidate);
-      } else {
-        byDepthAndChildStatementHash.set(childStatementHashPoolKey, [candidate]);
-      }
-    }
-  }
-  return {
-    byDepthAndChildHash,
-    byDepthAndChildStatementHash,
-  };
-}
-
-function selectReusableSummaryCandidate(
-  candidates: ReusableSummaryCandidate[],
-  consumedKeys: Set<string>,
-  frontierHashes?: { leafIdHash: string; leafStatementHash: string },
-): ReusableSummarySelection {
-  const available: ReusableSummaryCandidate[] = [];
-  for (const candidate of candidates) {
-    if (!consumedKeys.has(candidate.key)) {
-      available.push(candidate);
-    }
-  }
-  if (available.length === 1) {
-    return { candidate: available[0], ambiguous: false, resolvedByFrontier: false };
-  }
-  if (available.length <= 1 || !frontierHashes) {
-    return { ambiguous: available.length > 1, resolvedByFrontier: false };
-  }
-
-  const byLeafIdHash = available.filter((candidate) => candidate.summary.frontierLeafIdHash === frontierHashes.leafIdHash);
-  if (byLeafIdHash.length === 1) {
-    return { candidate: byLeafIdHash[0], ambiguous: false, resolvedByFrontier: true };
-  }
-  if (byLeafIdHash.length > 1) {
-    const byLeafStatementHash = byLeafIdHash.filter(
-      (candidate) => candidate.summary.frontierLeafStatementHash === frontierHashes.leafStatementHash,
-    );
-    if (byLeafStatementHash.length === 1) {
-      return { candidate: byLeafStatementHash[0], ambiguous: false, resolvedByFrontier: true };
-    }
-    return { ambiguous: true, resolvedByFrontier: false };
-  }
-
-  const byLeafStatementHash = available.filter(
-    (candidate) => candidate.summary.frontierLeafStatementHash === frontierHashes.leafStatementHash,
-  );
-  if (byLeafStatementHash.length === 1) {
-    return { candidate: byLeafStatementHash[0], ambiguous: false, resolvedByFrontier: true };
-  }
-  return { ambiguous: available.length > 1, resolvedByFrontier: false };
-}
-
-function resolveReusableSummaryDepth(parentId: string, summary: ReusableParentSummary): number | undefined {
-  const diagnosticDepth = summary.policyDiagnostics?.depth;
-  if (typeof diagnosticDepth === "number" && Number.isInteger(diagnosticDepth) && diagnosticDepth >= 0) {
-    return diagnosticDepth;
-  }
-  const match = parentId.match(/^p_(\d+)_\d+_/);
-  if (!match) {
-    return undefined;
-  }
-  const parsed = Number(match[1]);
-  if (!Number.isInteger(parsed) || parsed < 0) {
-    return undefined;
-  }
-  return parsed;
-}
-
-function buildReusableSummaryPoolKey(depth: number, childStatementHash: string): string {
-  return `${depth}:${childStatementHash}`;
-}
-
-function computeFrontierHashesForGroup(
-  orderedGroupNodeIds: string[],
-  nodes: Record<string, ExplanationTreeNode>,
-  memo: Map<string, { leafIds: string[]; leafStatements: string[] }>,
-): { leafIdHash: string; leafStatementHash: string } {
-  const leafIds: string[] = [];
-  const leafStatements: string[] = [];
-  for (const nodeId of orderedGroupNodeIds) {
-    const frontier = collectLeafFrontier(nodeId, nodes, memo);
-    leafIds.push(...frontier.leafIds);
-    leafStatements.push(...frontier.leafStatements);
-  }
-
-  return {
-    leafIdHash: createHash("sha256")
-      .update(leafIds.map((leafId, index) => `${index}:${leafId}`).join("\n"))
-      .digest("hex"),
-    leafStatementHash: createHash("sha256")
-      .update(leafStatements.map((statement, index) => `${index}:${statement}`).join("\n"))
-      .digest("hex"),
-  };
-}
-
-function buildReusableParentSummariesFromNodes(
-  nodes: Record<string, ExplanationTreeNode>,
-  policyDiagnosticsByParent: Record<string, ParentPolicyDiagnostics>,
-): Record<string, ReusableParentSummary> {
-  const summaries: Record<string, ReusableParentSummary> = {};
-  const frontierMemo = new Map<string, { leafIds: string[]; leafStatements: string[] }>();
-  const parentIds = Object.keys(nodes)
-    .filter((nodeId) => nodes[nodeId]?.kind === "parent")
-    .sort((left, right) => left.localeCompare(right));
-  for (const parentId of parentIds) {
-    const parent = nodes[parentId];
-    if (
-      !parent ||
-      parent.kind !== "parent" ||
-      parent.whyTrueFromChildren === undefined ||
-      parent.complexityScore === undefined ||
-      parent.abstractionScore === undefined ||
-      parent.confidence === undefined
-    ) {
-      continue;
-    }
-    const children: Array<{ id: string; statement: string }> = [];
-    let missingChild = false;
-    for (const childId of parent.childIds) {
-      const child = nodes[childId];
-      if (!child) {
-        missingChild = true;
-        break;
-      }
-      children.push({ id: child.id, statement: child.statement });
-    }
-    if (missingChild) {
-      continue;
-    }
-    const frontier = collectLeafFrontier(parent.id, nodes, frontierMemo);
-    summaries[parent.id] = {
-      childStatementHash: computeChildStatementHash(children),
-      childStatementTextHash: computeChildStatementTextHash(children),
-      frontierLeafIdHash: createHash("sha256")
-        .update(frontier.leafIds.map((leafId, index) => `${index}:${leafId}`).join("\n"))
-        .digest("hex"),
-      frontierLeafStatementHash: createHash("sha256")
-        .update(frontier.leafStatements.map((statement, index) => `${index}:${statement}`).join("\n"))
-        .digest("hex"),
-      summary: {
-        parent_statement: parent.statement,
-        why_true_from_children: parent.whyTrueFromChildren,
-        new_terms_introduced: (parent.newTermsIntroduced ?? []).slice(),
-        complexity_score: parent.complexityScore,
-        abstraction_score: parent.abstractionScore,
-        evidence_refs: parent.evidenceRefs.slice(),
-        confidence: parent.confidence,
-      },
-      policyDiagnostics: policyDiagnosticsByParent[parent.id] ?? parent.policyDiagnostics,
+async function buildGroupWithDeterministicRepartition(
+  request: BuildGroupWithRepartitionRequest,
+): Promise<BuildGroupWithRepartitionResult> {
+  if (request.nodeIds.length === 1) {
+    return {
+      createdParents: [],
+      passthroughLeafIds: [request.nodeIds[0]],
+      repartitionEvents: [],
     };
   }
-  return summaries;
+
+  const orderedGroupNodeIds = reorderGroupNodeIdsByPrerequisites(request.nodeIds, request.nodes, request.leafById);
+  const children = orderedGroupNodeIds.map((nodeId) => {
+    const node = request.nodes[nodeId];
+    const leafInput = request.leafById.get(node.id);
+    return {
+      id: node.id,
+      statement: node.statement,
+      complexity: node.complexityScore,
+      prerequisiteIds: leafInput?.prerequisiteIds,
+    };
+  });
+
+  const preSummaryDecision = evaluatePreSummaryPolicy(children, request.config);
+  if (!preSummaryDecision.ok) {
+    const splitGroups = splitGroupDeterministically(orderedGroupNodeIds, request.maxChildrenPerParent);
+    if (!splitGroups) {
+      throw new TreePolicyError("Pre-summary pedagogical policy failed.", {
+        depth: request.depth,
+        groupIndex: request.initialGroupIndex,
+        retriesUsed: request.round,
+        preSummary: preSummaryDecision,
+        postSummary: buildDefaultPassingPostSummary(request.config),
+      });
+    }
+
+    const repartitionEvent = buildRepartitionEvent(
+      request.depth,
+      request.initialGroupIndex,
+      request.round,
+      "pre_summary_policy",
+      orderedGroupNodeIds,
+      splitGroups,
+      preSummaryDecision.violations.map((violation) => violation.code),
+    );
+
+    const nestedResults: BuildGroupWithRepartitionResult[] = [];
+    for (const groupNodeIds of splitGroups) {
+      nestedResults.push(
+        await buildGroupWithDeterministicRepartition({
+          ...request,
+          nodeIds: groupNodeIds,
+          round: request.round + 1,
+        }),
+      );
+    }
+
+    return mergeRepartitionResults(repartitionEvent, nestedResults);
+  }
+
+  let parentSummary:
+    | {
+        summary: Awaited<ReturnType<typeof generateParentSummary>>["summary"];
+        policyDiagnostics: ParentPolicyDiagnostics;
+      }
+    | undefined;
+  try {
+    parentSummary = await generatePolicyCompliantParentSummary(
+      request.provider,
+      children,
+      request.config,
+      request.depth,
+      request.initialGroupIndex,
+      preSummaryDecision,
+    );
+  } catch (error) {
+    if (!(error instanceof TreePolicyError)) {
+      throw error;
+    }
+
+    const splitGroups = splitGroupDeterministically(orderedGroupNodeIds, request.maxChildrenPerParent);
+    if (!splitGroups) {
+      throw error;
+    }
+
+    const repartitionEvent = buildRepartitionEvent(
+      request.depth,
+      request.initialGroupIndex,
+      request.round,
+      "post_summary_policy",
+      orderedGroupNodeIds,
+      splitGroups,
+      [
+        ...error.diagnostics.preSummary.violations.map((violation) => violation.code),
+        ...error.diagnostics.postSummary.violations.map((violation) => violation.code),
+      ],
+    );
+
+    const nestedResults: BuildGroupWithRepartitionResult[] = [];
+    for (const groupNodeIds of splitGroups) {
+      nestedResults.push(
+        await buildGroupWithDeterministicRepartition({
+          ...request,
+          nodeIds: groupNodeIds,
+          round: request.round + 1,
+        }),
+      );
+    }
+
+    return mergeRepartitionResults(repartitionEvent, nestedResults);
+  }
+
+  const groupIndex = request.round === 0 ? request.initialGroupIndex : request.getNextGroupIndex();
+  const parentId = buildParentNodeId(request.depth, groupIndex, orderedGroupNodeIds);
+  const parentNode: ExplanationTreeNode = {
+    id: parentId,
+    kind: "parent",
+    statement: parentSummary.summary.parent_statement,
+    childIds: orderedGroupNodeIds.slice(),
+    depth: request.depth,
+    complexityScore: parentSummary.summary.complexity_score,
+    abstractionScore: parentSummary.summary.abstraction_score,
+    confidence: parentSummary.summary.confidence,
+    whyTrueFromChildren: parentSummary.summary.why_true_from_children,
+    newTermsIntroduced: parentSummary.summary.new_terms_introduced,
+    evidenceRefs: parentSummary.summary.evidence_refs,
+    policyDiagnostics: parentSummary.policyDiagnostics,
+  };
+
+  return {
+    createdParents: [
+      {
+        parentId,
+        node: parentNode,
+        inputNodeIds: orderedGroupNodeIds,
+        groupIndex,
+        complexitySpread: preSummaryDecision.metrics.complexitySpread,
+      },
+    ],
+    passthroughLeafIds: [],
+    repartitionEvents: [],
+  };
 }
 
-function collectLeafFrontier(
-  nodeId: string,
-  nodes: Record<string, ExplanationTreeNode>,
-  memo: Map<string, { leafIds: string[]; leafStatements: string[] }>,
-): { leafIds: string[]; leafStatements: string[] } {
-  const existing = memo.get(nodeId);
-  if (existing) {
-    return existing;
-  }
-
-  const node = nodes[nodeId];
-  if (!node) {
-    throw new Error(`Missing node '${nodeId}' while collecting frontier leaves.`);
-  }
-  if (node.kind === "leaf") {
-    const signature = { leafIds: [node.id], leafStatements: [node.statement] };
-    memo.set(nodeId, signature);
-    return signature;
-  }
-
-  const leafIds: string[] = [];
-  const leafStatements: string[] = [];
-  for (const childId of node.childIds) {
-    const childSignature = collectLeafFrontier(childId, nodes, memo);
-    leafIds.push(...childSignature.leafIds);
-    leafStatements.push(...childSignature.leafStatements);
-  }
-
-  const signature = { leafIds, leafStatements };
-  memo.set(nodeId, signature);
-  return signature;
-}
-
-interface GroupBuildWorkItem {
-  nodeIds: string[];
-  originalGroupIndex: number;
-  repartitionRound: number;
-}
-
-const MAX_REPARTITION_ROUNDS = 2;
-
-function repartitionGroupDeterministically(
-  groupNodeIds: string[],
-  repartitionRound: number,
-  maxChildrenPerParent: number,
-): string[][] | undefined {
-  if (groupNodeIds.length <= 2 || repartitionRound >= MAX_REPARTITION_ROUNDS) {
+function splitGroupDeterministically(nodeIds: string[], maxChildrenPerParent: number): string[][] | undefined {
+  if (nodeIds.length <= 2) {
     return undefined;
   }
 
-  const boundedSize = Math.min(maxChildrenPerParent, Math.ceil(groupNodeIds.length / 2));
-  const leftSize = Math.max(1, boundedSize);
-  const left = groupNodeIds.slice(0, leftSize);
-  const right = groupNodeIds.slice(leftSize);
-  return right.length > 0 ? [left, right] : [left];
-}
+  const pivot = Math.ceil(nodeIds.length / 2);
+  const left = nodeIds.slice(0, pivot);
+  const right = nodeIds.slice(pivot);
 
-function enqueueRepartitionGroups(
-  queue: GroupBuildWorkItem[],
-  source: GroupBuildWorkItem,
-  repartitionGroups: string[][],
-): void {
-  const nextItems = repartitionGroups.map((nodeIds) => ({
-    nodeIds,
-    originalGroupIndex: source.originalGroupIndex,
-    repartitionRound: source.repartitionRound + 1,
-  }));
-
-  for (let index = nextItems.length - 1; index >= 0; index -= 1) {
-    queue.unshift(nextItems[index]);
+  if (left.length === 0 || right.length === 0) {
+    return undefined;
   }
+
+  if (left.length > maxChildrenPerParent || right.length > maxChildrenPerParent) {
+    return undefined;
+  }
+
+  return [left, right];
 }
 
-function recordRepartitionEvent(
-  events: RepartitionEvent[],
+function buildDefaultPassingPostSummary(config: ExplanationConfig): ParentPolicyDiagnostics["postSummary"] {
+  void config;
+  return {
+    ok: true,
+    violations: [],
+    metrics: {
+      complexitySpread: 0,
+      prerequisiteOrderViolations: 0,
+      introducedTermCount: 0,
+      evidenceCoverageRatio: 1,
+      vocabularyContinuityRatio: 1,
+      vocabularyContinuityFloor: 1,
+    },
+  };
+}
+
+function buildRepartitionEvent(
   depth: number,
-  workItem: GroupBuildWorkItem,
+  groupIndex: number,
+  round: number,
   reason: RepartitionEvent["reason"],
   inputNodeIds: string[],
   outputGroups: string[][],
-  violationCodes: string[],
-): void {
-  events.push({
+  violationCodes: PolicyViolationCode[],
+): RepartitionEvent {
+  return {
     depth,
-    originalGroupIndex: workItem.originalGroupIndex,
-    repartitionRound: workItem.repartitionRound + 1,
+    groupIndex,
+    round,
     reason,
     inputNodeIds: inputNodeIds.slice(),
     outputGroups: outputGroups.map((group) => group.slice()),
-    violationCodes: violationCodes.slice().sort((a, b) => a.localeCompare(b)),
-  });
+    violationCodes: Array.from(new Set(violationCodes)).sort((left, right) => left.localeCompare(right)),
+  };
 }
 
-function computeGroupComplexitySpread(groupNodeIds: string[], nodes: Record<string, ExplanationTreeNode>, fallback: number): number {
-  let min = Number.POSITIVE_INFINITY;
-  let max = Number.NEGATIVE_INFINITY;
-  for (const nodeId of groupNodeIds) {
-    const node = nodes[nodeId];
-    const value = typeof node?.complexityScore === "number" ? node.complexityScore : fallback;
-    min = Math.min(min, value);
-    max = Math.max(max, value);
+function mergeRepartitionResults(
+  repartitionEvent: RepartitionEvent,
+  nestedResults: BuildGroupWithRepartitionResult[],
+): BuildGroupWithRepartitionResult {
+  const createdParents: CreatedParentRecord[] = [];
+  const passthroughLeafIds: string[] = [];
+  const repartitionEvents: RepartitionEvent[] = [repartitionEvent];
+
+  for (const nested of nestedResults) {
+    createdParents.push(...nested.createdParents);
+    passthroughLeafIds.push(...nested.passthroughLeafIds);
+    repartitionEvents.push(...nested.repartitionEvents);
   }
 
-  if (!Number.isFinite(min) || !Number.isFinite(max)) {
-    return 0;
-  }
-  return max - min;
+  return {
+    createdParents,
+    passthroughLeafIds,
+    repartitionEvents,
+  };
 }
 
 export function validateExplanationTree(tree: ExplanationTree, maxChildrenPerParent: number): TreeValidationResult {
@@ -1077,58 +641,6 @@ function buildParentNodeId(depth: number, index: number, childIds: string[]): st
   return `p_${depth}_${index}_${digest}`;
 }
 
-function computeChildStatementHash(children: Array<{ id: string; statement: string }>): string {
-  return createHash("sha256")
-    .update(
-      children
-        .map((child) => `${child.id}:${child.statement}`)
-        .join("\n"),
-    )
-    .digest("hex");
-}
-
-function computeChildStatementTextHash(children: Array<{ statement: string }>): string {
-  return createHash("sha256")
-    .update(
-      children
-        .map((child, index) => `${index}:${child.statement}`)
-        .join("\n"),
-    )
-    .digest("hex");
-}
-
-function cloneParentPolicyDiagnostics(
-  diagnostics: ParentPolicyDiagnostics,
-  depth: number,
-  groupIndex: number,
-): ParentPolicyDiagnostics {
-  return {
-    depth,
-    groupIndex,
-    retriesUsed: diagnostics.retriesUsed,
-    preSummary: {
-      ok: diagnostics.preSummary.ok,
-      violations: diagnostics.preSummary.violations.map((violation) => ({ ...violation })),
-      metrics: { ...diagnostics.preSummary.metrics },
-    },
-    postSummary: {
-      ok: diagnostics.postSummary.ok,
-      violations: diagnostics.postSummary.violations.map((violation) => ({ ...violation })),
-      metrics: { ...diagnostics.postSummary.metrics },
-    },
-    rewriteTrace: (diagnostics.rewriteTrace ?? []).map((attempt) => ({
-      attemptIndex: attempt.attemptIndex,
-      strategy: attempt.strategy,
-      postSummary: {
-        ok: attempt.postSummary.ok,
-        violations: attempt.postSummary.violations.map((violation) => ({ ...violation })),
-        metrics: { ...attempt.postSummary.metrics },
-      },
-      summaryValidationErrorCodes: attempt.summaryValidationErrorCodes?.slice(),
-    })),
-  };
-}
-
 function reorderGroupNodeIdsByPrerequisites(
   groupNodeIds: string[],
   nodes: Record<string, ExplanationTreeNode>,
@@ -1187,18 +699,6 @@ function computeDepthLimit(leafCount: number, maxChildrenPerParent: number): num
   return Math.max(optimistic, safeUpperBound);
 }
 
-function normalizeSummaryBatchSize(summaryBatchSize: number | undefined): number {
-  if (summaryBatchSize === undefined) {
-    return 4;
-  }
-
-  if (!Number.isInteger(summaryBatchSize) || summaryBatchSize < 1 || summaryBatchSize > 32) {
-    throw new Error("summaryBatchSize must be an integer in [1, 32] when provided.");
-  }
-
-  return summaryBatchSize;
-}
-
 function insertSorted(values: string[], value: string): void {
   let index = 0;
   while (index < values.length && values[index].localeCompare(value) < 0) {
@@ -1215,47 +715,42 @@ async function generatePolicyCompliantParentSummary(
   groupIndex: number,
   preSummaryDecision: ParentPolicyDiagnostics["preSummary"],
 ): Promise<{ summary: Awaited<ReturnType<typeof generateParentSummary>>["summary"]; policyDiagnostics: ParentPolicyDiagnostics }> {
-  const maxAttempts = 4;
-  const attemptedStrategies: PolicyRewriteStrategy[] = [];
-  const rewriteTrace: PolicyRewriteAttempt[] = [];
+  const maxAttempts = 2;
+  let retriesUsed = 0;
   let lastPostSummary = evaluatePostSummaryPolicy(children, emptySummary(children), config);
-  let nextStrategy: PolicyRewriteStrategy = "baseline";
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const strategy = nextStrategy;
-    attemptedStrategies.push(strategy);
     try {
       const result = await generateParentSummary(provider, {
         children,
         config,
-        systemPrompt: buildPolicyRewriteSystemPrompt(strategy),
+        systemPrompt:
+          attempt === 0
+            ? undefined
+            : [
+                "You are a proof-grounded summarizer.",
+                "Use only child-grounded vocabulary except declared new_terms_introduced.",
+                "Cite every child ID in evidence_refs.",
+                "Keep parent claims explicitly entailed by child statements.",
+                "Output strict JSON only.",
+              ].join(" "),
       });
 
       const postSummaryDecision = evaluatePostSummaryPolicy(children, result.summary, config);
       lastPostSummary = postSummaryDecision;
-      rewriteTrace.push({
-        attemptIndex: attempt,
-        strategy,
-        postSummary: postSummaryDecision,
-      });
       if (postSummaryDecision.ok) {
+        retriesUsed = attempt;
         return {
           summary: result.summary,
           policyDiagnostics: {
             depth,
             groupIndex,
-            retriesUsed: attempt,
+            retriesUsed,
             preSummary: preSummaryDecision,
             postSummary: postSummaryDecision,
-            rewriteTrace,
           },
         };
       }
-      const candidate = selectNextRewriteStrategy(postSummaryDecision.violations, attemptedStrategies);
-      if (candidate === undefined) {
-        break;
-      }
-      nextStrategy = candidate;
     } catch (error) {
       if (error instanceof SummaryValidationError) {
         lastPostSummary = {
@@ -1270,19 +765,6 @@ async function generatePolicyCompliantParentSummary(
             vocabularyContinuityFloor: 1,
           },
         };
-        rewriteTrace.push({
-          attemptIndex: attempt,
-          strategy,
-          postSummary: lastPostSummary,
-          summaryValidationErrorCodes: error.diagnostics.violations.map((violation) => violation.code).sort((a, b) =>
-            a.localeCompare(b),
-          ),
-        });
-        const candidate = selectNextRewriteStrategy(lastPostSummary.violations, attemptedStrategies);
-        if (candidate === undefined) {
-          break;
-        }
-        nextStrategy = candidate;
       } else {
         throw error;
       }
@@ -1292,71 +774,10 @@ async function generatePolicyCompliantParentSummary(
   throw new TreePolicyError("Failed to produce a policy-compliant parent summary after deterministic retries.", {
     depth,
     groupIndex,
-    retriesUsed: Math.max(0, rewriteTrace.length - 1),
+    retriesUsed: maxAttempts - 1,
     preSummary: preSummaryDecision,
     postSummary: lastPostSummary,
-    rewriteTrace,
   });
-}
-
-function buildPolicyRewriteSystemPrompt(strategy: PolicyRewriteStrategy): string | undefined {
-  if (strategy === "baseline") {
-    return undefined;
-  }
-
-  const instructions: string[] = [
-    "You are a proof-grounded summarizer.",
-    "Keep parent claims explicitly entailed by child statements.",
-    "Output strict JSON only.",
-  ];
-
-  if (strategy === "evidence_strict") {
-    instructions.push("Cite every child ID exactly once in evidence_refs.");
-    instructions.push("Never omit any child ID from evidence_refs.");
-  } else if (strategy === "vocabulary_strict") {
-    instructions.push("Use only child-grounded vocabulary except declared new_terms_introduced.");
-    instructions.push("Minimize new_terms_introduced and keep wording lexically close to children.");
-  } else {
-    instructions.push("Cite every child ID exactly once in evidence_refs.");
-    instructions.push("Use only child-grounded vocabulary except declared new_terms_introduced.");
-    instructions.push("Minimize new_terms_introduced and keep wording lexically close to children.");
-  }
-
-  return instructions.join(" ");
-}
-
-function selectNextRewriteStrategy(
-  violations: ParentPolicyDiagnostics["postSummary"]["violations"],
-  attempted: PolicyRewriteStrategy[],
-): PolicyRewriteStrategy | undefined {
-  const attemptedSet = new Set(attempted);
-  const candidates = buildRewriteStrategyCandidates(violations);
-  for (const candidate of candidates) {
-    if (!attemptedSet.has(candidate)) {
-      return candidate;
-    }
-  }
-  return undefined;
-}
-
-function buildRewriteStrategyCandidates(
-  violations: ParentPolicyDiagnostics["postSummary"]["violations"],
-): PolicyRewriteStrategy[] {
-  const violationCodes = new Set<PolicyViolationCode>(violations.map((violation) => violation.code));
-  const hasEvidenceCoverage = violationCodes.has("evidence_coverage");
-  const hasVocabularyDrift =
-    violationCodes.has("term_budget") || violationCodes.has("vocabulary_continuity") || violationCodes.has("sibling_complexity_spread");
-
-  if (hasEvidenceCoverage && hasVocabularyDrift) {
-    return ["strict_all", "evidence_strict", "vocabulary_strict", "baseline"];
-  }
-  if (hasEvidenceCoverage) {
-    return ["evidence_strict", "strict_all", "vocabulary_strict", "baseline"];
-  }
-  if (hasVocabularyDrift) {
-    return ["vocabulary_strict", "strict_all", "evidence_strict", "baseline"];
-  }
-  return ["strict_all", "evidence_strict", "vocabulary_strict", "baseline"];
 }
 
 function mapCriticViolationToPolicyViolation(
@@ -1369,8 +790,9 @@ function mapCriticViolationToPolicyViolation(
       return { code: "evidence_coverage", message: violation.message, details: violation.details };
     case "schema":
     case "complexity_band":
-    case "unsupported_terms":
       return { code: "vocabulary_continuity", message: violation.message, details: violation.details };
+    case "unsupported_terms":
+      return { code: "entailment", message: violation.message, details: violation.details };
     default: {
       const exhaustiveCheck: never = violation.code;
       throw new Error(`Unhandled critic violation code: ${String(exhaustiveCheck)}`);

@@ -1,88 +1,102 @@
 import { describe, expect, it } from "vitest";
-import { computeTreeRenderWindow } from "../lib/tree-render-window";
+import { planTreeRenderWindow, resolveTreeRenderSettings } from "../lib/tree-render-window";
 
-describe("tree render window", () => {
-  it("renders full rows when tree is below the window threshold", () => {
-    const result = computeTreeRenderWindow({
-      totalRowCount: 40,
-      anchorRowIndex: 10,
-      maxVisibleRows: 80,
-      overscanRows: 12,
+describe("tree render window planner", () => {
+  it("returns full mode when total rows are below max", () => {
+    const plan = planTreeRenderWindow({
+      totalRowCount: 12,
+      anchorRowIndex: 3,
+      maxVisibleRows: 20,
+      overscanRows: 4,
     });
-
-    expect(result).toEqual({
+    expect(plan).toEqual({
       mode: "full",
-      anchorRowIndex: 10,
       startIndex: 0,
-      endIndex: 40,
-      renderedRowCount: 40,
+      endIndex: 11,
+      renderedRowCount: 12,
       hiddenAboveCount: 0,
       hiddenBelowCount: 0,
     });
   });
 
-  it("renders a deterministic centered window around the anchor", () => {
-    const result = computeTreeRenderWindow({
-      totalRowCount: 300,
-      anchorRowIndex: 150,
+  it("returns deterministic centered window with overscan", () => {
+    const plan = planTreeRenderWindow({
+      totalRowCount: 500,
+      anchorRowIndex: 250,
       maxVisibleRows: 100,
-      overscanRows: 10,
+      overscanRows: 20,
     });
-
-    expect(result).toEqual({
+    expect(plan).toEqual({
       mode: "windowed",
-      anchorRowIndex: 150,
-      startIndex: 90,
-      endIndex: 210,
+      startIndex: 180,
+      endIndex: 319,
+      renderedRowCount: 140,
+      hiddenAboveCount: 180,
+      hiddenBelowCount: 180,
+    });
+  });
+
+  it("clamps anchor near boundaries", () => {
+    expect(
+      planTreeRenderWindow({
+        totalRowCount: 500,
+        anchorRowIndex: -50,
+        maxVisibleRows: 100,
+        overscanRows: 20,
+      }),
+    ).toEqual({
+      mode: "windowed",
+      startIndex: 0,
+      endIndex: 119,
       renderedRowCount: 120,
-      hiddenAboveCount: 90,
-      hiddenBelowCount: 90,
+      hiddenAboveCount: 0,
+      hiddenBelowCount: 380,
+    });
+
+    expect(
+      planTreeRenderWindow({
+        totalRowCount: 500,
+        anchorRowIndex: 9999,
+        maxVisibleRows: 100,
+        overscanRows: 20,
+      }),
+    ).toEqual({
+      mode: "windowed",
+      startIndex: 380,
+      endIndex: 499,
+      renderedRowCount: 120,
+      hiddenAboveCount: 380,
+      hiddenBelowCount: 0,
+    });
+  });
+});
+
+describe("tree render settings parser", () => {
+  it("uses deterministic defaults for missing/invalid values", () => {
+    expect(resolveTreeRenderSettings({})).toEqual({
+      maxVisibleRows: 120,
+      overscanRows: 24,
+    });
+    expect(
+      resolveTreeRenderSettings({
+        NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_MAX_ROWS: "0",
+        NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_OVERSCAN_ROWS: "-1",
+      }),
+    ).toEqual({
+      maxVisibleRows: 1,
+      overscanRows: 0,
     });
   });
 
-  it("clamps window boundaries near the start and end", () => {
-    const startResult = computeTreeRenderWindow({
-      totalRowCount: 300,
-      anchorRowIndex: 2,
-      maxVisibleRows: 90,
-      overscanRows: 10,
+  it("parses numeric environment overrides", () => {
+    expect(
+      resolveTreeRenderSettings({
+        NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_MAX_ROWS: "220",
+        NEXT_PUBLIC_EXPLAIN_MD_TREE_RENDER_OVERSCAN_ROWS: "40",
+      }),
+    ).toEqual({
+      maxVisibleRows: 220,
+      overscanRows: 40,
     });
-    const endResult = computeTreeRenderWindow({
-      totalRowCount: 300,
-      anchorRowIndex: 299,
-      maxVisibleRows: 90,
-      overscanRows: 10,
-    });
-
-    expect(startResult.startIndex).toBe(0);
-    expect(startResult.endIndex).toBe(100);
-    expect(endResult.startIndex).toBe(200);
-    expect(endResult.endIndex).toBe(300);
-  });
-
-  it("defaults anchor to first row when null", () => {
-    const result = computeTreeRenderWindow({
-      totalRowCount: 180,
-      anchorRowIndex: null,
-      maxVisibleRows: 60,
-      overscanRows: 6,
-    });
-
-    expect(result.anchorRowIndex).toBe(0);
-    expect(result.startIndex).toBe(0);
-  });
-
-  it("sanitizes invalid maxVisibleRows and overscan inputs", () => {
-    const result = computeTreeRenderWindow({
-      totalRowCount: 220,
-      anchorRowIndex: 20,
-      maxVisibleRows: Number.NaN,
-      overscanRows: -5,
-    });
-
-    expect(result.mode).toBe("windowed");
-    expect(result.renderedRowCount).toBe(120);
-    expect(result.startIndex).toBe(0);
-    expect(result.endIndex).toBe(120);
   });
 });

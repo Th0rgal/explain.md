@@ -16,6 +16,7 @@ Issue #18 introduces deterministic quality scoring for generated explanation tre
   - SHA-256 hash of canonical report bytes.
 - `listQualityBenchmarkPresets()`, `resolveQualityBenchmarkPreset(name)`
   - Deterministic benchmark corpus presets for repeatable CI runs.
+  - Presets can include deterministic `configOverrides` (for example `entailmentMode: "strict"`).
 - `computeQualityBenchmarkPresetHash(preset)`
   - SHA-256 hash of canonical preset bytes for audit trails.
 
@@ -36,6 +37,10 @@ Issue #18 introduces deterministic quality scoring for generated explanation tre
   - Mean ratio of introduced terms to meaningful parent tokens.
 
 Reports also include per-parent samples and per-depth aggregates.
+Reports now also include `repartitionMetrics` to audit how often bounded repartition loops were needed:
+- total event count
+- split by `pre_summary_policy` and `post_summary_policy`
+- per-depth counts and max retry round
 
 ## Threshold gating
 The evaluator computes a threshold verdict (`thresholdPass`) with machine-readable failures:
@@ -46,8 +51,12 @@ The evaluator computes a threshold verdict (`thresholdPass`) with machine-readab
 - `complexity_spread_mean`
 - `evidence_coverage_mean`
 - `vocabulary_continuity_mean`
+- `min_repartition_event_rate`
+- `repartition_event_rate`
+- `repartition_max_round`
 
 Defaults are deterministic and can be overridden in `options.thresholds`.
+When `config.entailmentMode` is `strict`, the support-coverage floor is fixed at `1.0` (no unsupported lexical claims).
 
 ## Human review rubric
 Use this rubric when manually spot-checking parent nodes flagged by the automated report:
@@ -81,7 +90,43 @@ npm run eval:quality -- --list-presets
 Run with a deterministic preset and emit an auditable artifact JSON:
 
 ```bash
-npm run eval:quality -- --preset=fixture-verity-core --out=.explain-md/quality-gate-report.json
+npm run eval:quality -- --preset=fixture-verity-core --out=.explain-md/quality-gate-report-core.json
+```
+
+Pressure-focused preset (expects bounded but non-zero repartition pressure):
+
+```bash
+npm run eval:quality -- --preset=fixture-verity-pressure --out=.explain-md/quality-gate-report-pressure.json
+```
+
+Broader Verity fixture preset (core + loop + invariants + cycle pressure):
+
+```bash
+npm run eval:quality -- --preset=fixture-verity-broad --out=.explain-md/quality-gate-report-broad.json
+```
+
+Frozen real-Verity snapshot preset (counter example + AST + proofs):
+
+```bash
+npm run eval:quality -- --preset=fixture-verity-counter-snapshot --out=.explain-md/quality-gate-report-counter-snapshot.json
+```
+
+Strict-entailment variant of the same frozen snapshot:
+
+```bash
+npm run eval:quality -- --preset=fixture-verity-counter-snapshot-strict --out=.explain-md/quality-gate-report-counter-snapshot-strict.json
+```
+
+Frozen real-Verity snapshot preset (SimpleToken correctness/isolation/supply):
+
+```bash
+npm run eval:quality -- --preset=fixture-verity-token-snapshot --out=.explain-md/quality-gate-report-token-snapshot.json
+```
+
+Strict-entailment variant of the same frozen SimpleToken snapshot:
+
+```bash
+npm run eval:quality -- --preset=fixture-verity-token-snapshot-strict --out=.explain-md/quality-gate-report-token-snapshot-strict.json
 ```
 
 Optional threshold overrides:
@@ -89,13 +134,18 @@ Optional threshold overrides:
 ```bash
 npm run eval:quality -- /path/to/lean-project \
   --max-unsupported-parent-rate=0.05 \
-  --min-vocabulary-continuity-mean=0.70
+  --min-vocabulary-continuity-mean=0.70 \
+  --min-repartition-event-rate=0.20 \
+  --max-repartition-event-rate=0.50 \
+  --max-repartition-max-round=1
 ```
 
 Exit codes:
 - `0`: tree validates and thresholds pass.
 - `2`: tree validity or threshold gate failed.
 - `1`: runtime error.
+
+CLI JSON output includes `repartitionMetrics` so CI and benchmark artifacts can audit rewrite/repartition-loop pressure without re-running tree construction.
 
 ## CI quality gate
 GitHub Actions runs `.github/workflows/quality-gate.yml` on PRs and `main` pushes:
@@ -104,11 +154,30 @@ GitHub Actions runs `.github/workflows/quality-gate.yml` on PRs and `main` pushe
 - `npm test`
 - `npm run eval:quality:ci`
 
-The workflow uploads `.explain-md/quality-gate-report.json` as `quality-gate-report`.
-The report includes:
+The workflow uploads `.explain-md/quality-gate-report-*.json` as `quality-gate-reports`.
+Each report includes:
 - `qualityReportHash` (canonical report hash)
 - `preset.name` + `preset.hash`
 - threshold pass/failure and metrics summary
+- a deterministic baseline check artifact at `.explain-md/quality-gate-baseline-check.json`
+
+CI also runs a deterministic baseline drift gate against committed benchmark expectations:
+
+```bash
+npm run eval:quality:baseline
+```
+
+The baseline source of truth is:
+- `docs/benchmarks/quality-gate-baseline.json`
+
+To intentionally refresh baseline expectations after a reviewed benchmark change:
+
+```bash
+node scripts/eval-quality-baseline.mjs \
+  --reports=.explain-md/quality-gate-report-pressure.json,.explain-md/quality-gate-report-broad.json,.explain-md/quality-gate-report-counter-snapshot.json,.explain-md/quality-gate-report-counter-snapshot-strict.json,.explain-md/quality-gate-report-token-snapshot.json,.explain-md/quality-gate-report-token-snapshot-strict.json \
+  --baseline=docs/benchmarks/quality-gate-baseline.json \
+  --write-baseline
+```
 
 ## Verity benchmark examples
 - Loop/arithmetic/conditional-heavy subset:

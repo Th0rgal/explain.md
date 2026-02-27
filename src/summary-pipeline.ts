@@ -82,7 +82,6 @@ const STOP_WORDS = new Set<string>([
   "without",
 ]);
 
-const MIN_PARENT_TOKEN_COVERAGE = 0.45;
 const MIN_PARENT_TOKENS_FOR_COVERAGE_CHECK = 4;
 
 export async function generateParentSummary(
@@ -141,6 +140,7 @@ export function buildSummaryPromptMessages(
     `- audience_level=${config.audienceLevel}`,
     `- reading_level_target=${config.readingLevelTarget}`,
     `- proof_detail_mode=${config.proofDetailMode}`,
+    `- entailment_mode=${config.entailmentMode}`,
     `- term_introduction_budget=${config.termIntroductionBudget}`,
     "- evidence_refs must only contain provided child IDs.",
     "Children:",
@@ -237,14 +237,16 @@ export function validateParentSummary(
     });
   }
 
+  const supportCoverageFloor = computeSupportCoverageFloor(config);
   const coverage = computeParentTokenCoverage(summary.parent_statement, children, newTermsIntroduced);
-  if (coverage.total >= MIN_PARENT_TOKENS_FOR_COVERAGE_CHECK && coverage.ratio < MIN_PARENT_TOKEN_COVERAGE) {
+  if (coverage.total >= MIN_PARENT_TOKENS_FOR_COVERAGE_CHECK && coverage.ratio < supportCoverageFloor) {
     violations.push({
       code: "unsupported_terms",
       message: "parent_statement has low evidence-term coverage and may introduce unsupported claims.",
       details: {
         coverageRatio: coverage.ratio,
-        minimumRequired: MIN_PARENT_TOKEN_COVERAGE,
+        minimumRequired: supportCoverageFloor,
+        entailmentMode: config.entailmentMode,
         unsupported: coverage.unsupported,
       },
     });
@@ -405,4 +407,20 @@ function computeParentTokenCoverage(
 
   const ratio = significantTokens.length === 0 ? 1 : covered / significantTokens.length;
   return { ratio, total: significantTokens.length, unsupported: [...unsupported].sort() };
+}
+
+function computeSupportCoverageFloor(config: ExplanationConfig): number {
+  if (config.entailmentMode === "strict") {
+    return 1;
+  }
+
+  const proofFloor = config.proofDetailMode === "formal" ? 0.75 : config.proofDetailMode === "balanced" ? 0.65 : 0.55;
+  const audienceDelta = config.audienceLevel === "novice" ? -0.05 : config.audienceLevel === "expert" ? 0.05 : 0;
+  const termBudgetDelta =
+    config.termIntroductionBudget === 0 ? 0.05 : config.termIntroductionBudget >= 3 ? -0.05 : 0;
+  return clamp(proofFloor + audienceDelta + termBudgetDelta, 0.45, 0.95);
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
