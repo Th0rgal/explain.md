@@ -94,6 +94,8 @@ export interface ProofDatasetCacheDiagnostic {
     | "cache_hit"
     | "cache_topology_recovery_hit"
     | "cache_blocked_subtree_rebuild_hit"
+    | "cache_topology_regeneration_rebuild_hit"
+    | "cache_blocked_subtree_full_rebuild"
     | "cache_miss"
     | "cache_write_failed"
     | "cache_read_failed"
@@ -108,6 +110,9 @@ export interface ProofDatasetBlockedSubtreePlan {
   schemaVersion: "1.0.0";
   reason: "source_fingerprint_mismatch";
   changedDeclarationIds: string[];
+  addedDeclarationIds: string[];
+  removedDeclarationIds: string[];
+  topologyShapeChanged: boolean;
   blockedDeclarationIds: string[];
   blockedLeafIds: string[];
   unaffectedLeafIds: string[];
@@ -1044,6 +1049,93 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
         },
       };
     }
+
+    const topologyRegenerationRecovery = await attemptTopologyRegenerationRecovery({
+      proofId,
+      config,
+      configHash,
+      sourceFingerprint,
+      ingestionHash,
+      dependencyGraphHash,
+      cachedTree: cachedTreeForTopologyRecovery,
+      currentLeaves: theoremLeaves,
+    });
+
+    if (topologyRegenerationRecovery) {
+      const cacheWriteError = await writeProofDatasetCacheEntry(cachePath, topologyRegenerationRecovery.cacheEntry);
+      if (cacheWriteError) {
+        cacheDiagnostics.push({
+          code: "cache_write_failed",
+          message: "Failed writing topology-regeneration recovery cache entry; continuing with recovered dataset.",
+          details: { cachePath, error: cacheWriteError },
+        });
+      }
+
+      cacheDiagnostics.push({
+        code: "cache_topology_regeneration_rebuild_hit",
+        message: "Recovered cached dataset by deterministic topology regeneration with reusable parent summaries.",
+        details: {
+          cachePath,
+          planHash: blockedSubtreePlan.planHash,
+          reusableParentSummaryCount: topologyRegenerationRecovery.reusableParentSummaryCount,
+          reusedParentSummaryCount: topologyRegenerationRecovery.reusedParentSummaryCount,
+          reusedParentSummaryByGroundingCount: topologyRegenerationRecovery.reusedParentSummaryByGroundingCount,
+          reusedParentSummaryByStatementSignatureCount:
+            topologyRegenerationRecovery.reusedParentSummaryByStatementSignatureCount,
+          generatedParentSummaryCount: topologyRegenerationRecovery.generatedParentSummaryCount,
+          skippedAmbiguousStatementSignatureReuseCount:
+            topologyRegenerationRecovery.skippedAmbiguousStatementSignatureReuseCount,
+          skippedUnrebasableStatementSignatureReuseCount:
+            topologyRegenerationRecovery.skippedUnrebasableStatementSignatureReuseCount,
+          regenerationHash: topologyRegenerationRecovery.regenerationHash,
+        },
+      });
+
+      return {
+        dataset: {
+          proofId,
+          title: `Lean Verity fixture (${theoremLeaves.length} declarations, ingestion=${ingestionHash.slice(0, 8)}, depgraph=${dependencyGraphHash.slice(0, 8)})`,
+          config,
+          configHash,
+          tree: topologyRegenerationRecovery.tree,
+          leaves: theoremLeaves,
+          dependencyGraph,
+          dependencyGraphHash,
+        },
+        queryApi: createTreeQueryApi(topologyRegenerationRecovery.cacheEntry.snapshot),
+        cache: {
+          layer: "persistent",
+          status: "hit",
+          cacheKey,
+          sourceFingerprint,
+          cachePath,
+          snapshotHash: topologyRegenerationRecovery.cacheEntry.snapshotHash,
+          cacheEntryHash: computeProofDatasetCacheEntryHash(topologyRegenerationRecovery.cacheEntry),
+          diagnostics: cacheDiagnostics,
+          blockedSubtreePlan,
+        },
+      };
+    }
+
+    if (blockedSubtreePlan.fullRebuildRequired) {
+      cacheDiagnostics.push({
+        code: "cache_blocked_subtree_full_rebuild",
+        message: "Blocked-subtree recovery unavailable; rebuilding full dataset deterministically.",
+        details: {
+          cachePath,
+          planHash: blockedSubtreePlan.planHash,
+          reason: classifyBlockedSubtreeFullRebuildReason(blockedSubtreePlan, {
+            cachedDependencyGraphHash: cached.entry.dependencyGraphHash,
+            currentDependencyGraphHash: dependencyGraphHash,
+          }),
+          topologyShapeChanged: blockedSubtreePlan.topologyShapeChanged,
+          blockedDeclarationCount: blockedSubtreePlan.blockedDeclarationIds.length,
+          addedDeclarationCount: blockedSubtreePlan.addedDeclarationIds.length,
+          removedDeclarationCount: blockedSubtreePlan.removedDeclarationIds.length,
+          cyclicBatchCount: blockedSubtreePlan.cyclicBatchCount,
+        },
+      });
+    }
   }
 
   const tree = await buildRecursiveExplanationTree(createDeterministicSummaryProvider(), {
@@ -1246,6 +1338,13 @@ function buildBlockedSubtreePlan(
   const declarationIds = [...new Set([...cachedByDeclarationId.keys(), ...currentByDeclarationId.keys()])].sort((a, b) =>
     a.localeCompare(b),
   );
+  const addedDeclarationIds = declarationIds
+    .filter((declarationId) => !cachedByDeclarationId.has(declarationId) && currentByDeclarationId.has(declarationId))
+    .sort((a, b) => a.localeCompare(b));
+  const removedDeclarationIds = declarationIds
+    .filter((declarationId) => cachedByDeclarationId.has(declarationId) && !currentByDeclarationId.has(declarationId))
+    .sort((a, b) => a.localeCompare(b));
+  const topologyShapeChanged = addedDeclarationIds.length > 0 || removedDeclarationIds.length > 0;
 
   const changedDeclarationIds = declarationIds.filter((declarationId) => {
     const cached = cachedByDeclarationId.get(declarationId);
@@ -1288,6 +1387,9 @@ function buildBlockedSubtreePlan(
     schemaVersion: "1.0.0" as const,
     reason: "source_fingerprint_mismatch" as const,
     changedDeclarationIds,
+    addedDeclarationIds,
+    removedDeclarationIds,
+    topologyShapeChanged,
     blockedDeclarationIds,
     blockedLeafIds,
     unaffectedLeafIds,
@@ -1301,6 +1403,25 @@ function buildBlockedSubtreePlan(
     ...planWithoutHash,
     planHash: computeCanonicalRequestHash(planWithoutHash),
   };
+}
+
+function classifyBlockedSubtreeFullRebuildReason(
+  plan: ProofDatasetBlockedSubtreePlan,
+  options: {
+    cachedDependencyGraphHash: string;
+    currentDependencyGraphHash: string;
+  },
+): "topology_shape_changed" | "cyclic_blocked_subtree" | "dependency_graph_changed" | "recovery_preconditions_failed" {
+  if (plan.topologyShapeChanged) {
+    return "topology_shape_changed";
+  }
+  if (plan.cyclicBatchCount > 0) {
+    return "cyclic_blocked_subtree";
+  }
+  if (options.cachedDependencyGraphHash !== options.currentDependencyGraphHash) {
+    return "dependency_graph_changed";
+  }
+  return "recovery_preconditions_failed";
 }
 
 function computeLeafSemanticFingerprint(leaf: TheoremLeafRecord): string {
@@ -1337,6 +1458,44 @@ interface BlockedSubtreeRecoveryResult {
   recomputedLeafIds: string[];
   recomputedParentIds: string[];
   recomputeHash: string;
+}
+
+interface TopologyRegenerationRecoveryResult {
+  tree: ExplanationTree;
+  cacheEntry: ProofDatasetCacheEntry;
+  reusableParentSummaryCount: number;
+  reusedParentSummaryCount: number;
+  reusedParentSummaryByGroundingCount: number;
+  reusedParentSummaryByStatementSignatureCount: number;
+  generatedParentSummaryCount: number;
+  skippedAmbiguousStatementSignatureReuseCount: number;
+  skippedUnrebasableStatementSignatureReuseCount: number;
+  regenerationHash: string;
+}
+
+interface TopologyRegenerationRecoveryRequest {
+  proofId: string;
+  config: ExplanationConfig;
+  configHash: string;
+  sourceFingerprint: string;
+  ingestionHash: string;
+  dependencyGraphHash: string;
+  cachedTree: ExplanationTree;
+  currentLeaves: TheoremLeafRecord[];
+}
+
+interface ReusableParentSummary {
+  parentId: string;
+  children: Array<{ id: string; statement: string }>;
+  summary: {
+    parent_statement: string;
+    why_true_from_children: string;
+    new_terms_introduced: string[];
+    complexity_score: number;
+    abstraction_score: number;
+    evidence_refs: string[];
+    confidence: number;
+  };
 }
 
 async function attemptBlockedSubtreeRecovery(
@@ -1586,6 +1745,251 @@ async function attemptBlockedSubtreeRecovery(
       dependencyGraphHash: request.dependencyGraphHash,
     }),
   };
+}
+
+async function attemptTopologyRegenerationRecovery(
+  request: TopologyRegenerationRecoveryRequest,
+): Promise<TopologyRegenerationRecoveryResult | undefined> {
+  const reusableSummaryByGroundingKey = buildReusableParentSummaryByGroundingKey(request.cachedTree);
+  const reusableSummaryByStatementSignatureKey = buildReusableParentSummaryByStatementSignatureKey(request.cachedTree);
+  if (reusableSummaryByGroundingKey.size === 0 && reusableSummaryByStatementSignatureKey.size === 0) {
+    return undefined;
+  }
+
+  const baseProvider = createDeterministicSummaryProvider();
+  let generatedParentSummaryCount = 0;
+  let skippedAmbiguousStatementSignatureReuseCount = 0;
+  let skippedUnrebasableStatementSignatureReuseCount = 0;
+  const reusedParentIdsByGrounding = new Set<string>();
+  const reusedParentIdsByStatementSignature = new Set<string>();
+  const provider: ProviderClient = {
+    generate: async (generateRequest) => {
+      const prompt = generateRequest.messages[1]?.content;
+      const parsedChildren = prompt ? parseChildrenFromPrompt(prompt) : [];
+      if (parsedChildren.length > 0) {
+        const groundingKey = buildParentReuseKey(parsedChildren);
+        const reusableByGrounding = reusableSummaryByGroundingKey.get(groundingKey);
+        if (reusableByGrounding) {
+          reusedParentIdsByGrounding.add(reusableByGrounding.parentId);
+          return {
+            text: JSON.stringify(reusableByGrounding.summary),
+            model: "mock-deterministic-reuse",
+            finishReason: "stop",
+            raw: {
+              source: "cache_parent_summary_reuse",
+              reuseMode: "grounding",
+              parentId: reusableByGrounding.parentId,
+            },
+          };
+        }
+
+        const statementSignatureKey = buildParentStatementSignatureKey(parsedChildren);
+        const statementCandidates = reusableSummaryByStatementSignatureKey.get(statementSignatureKey) ?? [];
+        if (statementCandidates.length === 1) {
+          const reusableByStatementSignature = statementCandidates[0];
+          const rebasedEvidenceRefs = rebaseEvidenceRefsToCurrentChildren(
+            reusableByStatementSignature.summary.evidence_refs,
+            reusableByStatementSignature.children,
+            parsedChildren,
+          );
+          if (rebasedEvidenceRefs) {
+            reusedParentIdsByStatementSignature.add(reusableByStatementSignature.parentId);
+            return {
+              text: JSON.stringify({
+                ...reusableByStatementSignature.summary,
+                evidence_refs: rebasedEvidenceRefs,
+              }),
+              model: "mock-deterministic-reuse",
+              finishReason: "stop",
+              raw: {
+                source: "cache_parent_summary_reuse",
+                reuseMode: "statement_signature",
+                parentId: reusableByStatementSignature.parentId,
+              },
+            };
+          }
+          skippedUnrebasableStatementSignatureReuseCount += 1;
+        } else if (statementCandidates.length > 1) {
+          skippedAmbiguousStatementSignatureReuseCount += 1;
+        }
+      }
+      generatedParentSummaryCount += 1;
+      return baseProvider.generate(generateRequest);
+    },
+    stream: baseProvider.stream,
+  };
+
+  let tree: ExplanationTree;
+  try {
+    tree = await buildRecursiveExplanationTree(provider, {
+      leaves: mapTheoremLeavesToTreeLeaves(request.currentLeaves),
+      config: request.config,
+    });
+  } catch {
+    return undefined;
+  }
+
+  const validation = validateExplanationTree(tree, request.config.maxChildrenPerParent);
+  if (!validation.ok) {
+    return undefined;
+  }
+
+  const snapshot = exportTreeStorageSnapshot(tree, {
+    proofId: request.proofId,
+    leaves: request.currentLeaves,
+    config: request.config,
+  });
+  const snapshotHash = computeTreeStorageSnapshotHash(snapshot);
+  const cacheEntry: ProofDatasetCacheEntry = {
+    schemaVersion: PROOF_DATASET_CACHE_SCHEMA_VERSION,
+    proofId: request.proofId,
+    configHash: request.configHash,
+    sourceFingerprint: request.sourceFingerprint,
+    ingestionHash: request.ingestionHash,
+    dependencyGraphHash: request.dependencyGraphHash,
+    snapshotHash,
+    snapshot,
+  };
+
+  const reusedParentSummaryByGroundingCount = reusedParentIdsByGrounding.size;
+  const reusedParentSummaryByStatementSignatureCount = reusedParentIdsByStatementSignature.size;
+  const reusedParentSummaryCount = reusedParentSummaryByGroundingCount + reusedParentSummaryByStatementSignatureCount;
+
+  return {
+    tree,
+    cacheEntry,
+    reusableParentSummaryCount: reusableSummaryByGroundingKey.size,
+    reusedParentSummaryCount,
+    reusedParentSummaryByGroundingCount,
+    reusedParentSummaryByStatementSignatureCount,
+    generatedParentSummaryCount,
+    skippedAmbiguousStatementSignatureReuseCount,
+    skippedUnrebasableStatementSignatureReuseCount,
+    regenerationHash: computeCanonicalRequestHash({
+      reusableParentSummaryCount: reusableSummaryByGroundingKey.size,
+      reusedParentIdsByGrounding: [...reusedParentIdsByGrounding].sort((left, right) => left.localeCompare(right)),
+      reusedParentIdsByStatementSignature: [...reusedParentIdsByStatementSignature].sort((left, right) =>
+        left.localeCompare(right),
+      ),
+      generatedParentSummaryCount,
+      skippedAmbiguousStatementSignatureReuseCount,
+      skippedUnrebasableStatementSignatureReuseCount,
+      dependencyGraphHash: request.dependencyGraphHash,
+      configHash: request.configHash,
+    }),
+  };
+}
+
+function buildReusableParentSummaryByGroundingKey(tree: ExplanationTree): Map<string, ReusableParentSummary> {
+  const reusable = new Map<string, ReusableParentSummary>();
+  const parentNodes = Object.values(tree.nodes)
+    .filter((node) => node.kind === "parent")
+    .sort((left, right) => left.id.localeCompare(right.id));
+
+  for (const parentNode of parentNodes) {
+    const children = parentNode.childIds
+      .map((childId) => tree.nodes[childId])
+      .filter((node): node is ExplanationTreeNode => node !== undefined)
+      .map((node) => ({ id: node.id, statement: node.statement }));
+    if (children.length !== parentNode.childIds.length) {
+      continue;
+    }
+
+    if (
+      typeof parentNode.statement !== "string" ||
+      parentNode.statement.length === 0 ||
+      typeof parentNode.whyTrueFromChildren !== "string" ||
+      parentNode.whyTrueFromChildren.length === 0 ||
+      !Array.isArray(parentNode.evidenceRefs) ||
+      parentNode.evidenceRefs.length === 0
+    ) {
+      continue;
+    }
+
+    const key = buildParentReuseKey(children);
+    const nextValue: ReusableParentSummary = {
+      parentId: parentNode.id,
+      children,
+      summary: {
+        parent_statement: parentNode.statement,
+        why_true_from_children: parentNode.whyTrueFromChildren,
+        new_terms_introduced: parentNode.newTermsIntroduced ? parentNode.newTermsIntroduced.slice() : [],
+        complexity_score: parentNode.complexityScore ?? 3,
+        abstraction_score: parentNode.abstractionScore ?? 3,
+        evidence_refs: parentNode.evidenceRefs.slice(),
+        confidence: parentNode.confidence ?? 1,
+      },
+    };
+    const existing = reusable.get(key);
+    if (!existing || nextValue.parentId.localeCompare(existing.parentId) < 0) {
+      reusable.set(key, nextValue);
+    }
+  }
+
+  return reusable;
+}
+
+function buildReusableParentSummaryByStatementSignatureKey(tree: ExplanationTree): Map<string, ReusableParentSummary[]> {
+  const bySignature = new Map<string, ReusableParentSummary[]>();
+  const reusableByGrounding = buildReusableParentSummaryByGroundingKey(tree);
+  const values = [...reusableByGrounding.values()].sort((left, right) => left.parentId.localeCompare(right.parentId));
+  for (const reusable of values) {
+    const key = buildParentStatementSignatureKey(reusable.children);
+    const existing = bySignature.get(key) ?? [];
+    existing.push(reusable);
+    bySignature.set(key, existing);
+  }
+  return bySignature;
+}
+
+function buildParentReuseKey(children: Array<{ id: string; statement: string }>): string {
+  return computeCanonicalRequestHash({
+    children: children
+      .map((child) => ({ id: child.id, statement: child.statement }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+  });
+}
+
+function buildParentStatementSignatureKey(children: Array<{ statement: string }>): string {
+  return computeCanonicalRequestHash({
+    statements: children.map((child) => child.statement).sort((left, right) => left.localeCompare(right)),
+  });
+}
+
+function rebaseEvidenceRefsToCurrentChildren(
+  priorEvidenceRefs: string[],
+  priorChildren: Array<{ id: string; statement: string }>,
+  currentChildren: Array<{ id: string; statement: string }>,
+): string[] | undefined {
+  const priorStatementById = new Map(priorChildren.map((child) => [child.id, child.statement]));
+  const availableCurrentIdsByStatement = new Map<string, string[]>();
+  for (const child of currentChildren) {
+    const existing = availableCurrentIdsByStatement.get(child.statement) ?? [];
+    existing.push(child.id);
+    availableCurrentIdsByStatement.set(child.statement, existing);
+  }
+  for (const [statement, childIds] of availableCurrentIdsByStatement.entries()) {
+    childIds.sort((left, right) => left.localeCompare(right));
+    availableCurrentIdsByStatement.set(statement, childIds);
+  }
+
+  const rebased: string[] = [];
+  const consumedIds = new Set<string>();
+  for (const evidenceRef of priorEvidenceRefs) {
+    const statement = priorStatementById.get(evidenceRef);
+    if (!statement) {
+      return undefined;
+    }
+    const candidates = availableCurrentIdsByStatement.get(statement) ?? [];
+    const next = candidates.find((candidate) => !consumedIds.has(candidate));
+    if (!next) {
+      return undefined;
+    }
+    consumedIds.add(next);
+    rebased.push(next);
+  }
+
+  return rebased;
 }
 
 function buildParentsByChildId(nodes: Record<string, ExplanationTreeNode>): Map<string, string[]> {

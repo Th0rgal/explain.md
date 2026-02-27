@@ -438,9 +438,85 @@ describe("proof service", () => {
         true,
       );
       expect(recovered.cache.blockedSubtreePlan?.fullRebuildRequired).toBe(true);
+      expect(recovered.cache.blockedSubtreePlan?.topologyShapeChanged).toBe(false);
+      expect(recovered.cache.blockedSubtreePlan?.addedDeclarationIds).toEqual([]);
+      expect(recovered.cache.blockedSubtreePlan?.removedDeclarationIds).toEqual([]);
       expect((recovered.cache.blockedSubtreePlan?.blockedDeclarationIds.length ?? 0) > 0).toBe(true);
       expect(recovered.cache.snapshotHash).not.toBe(warm.cache.snapshotHash);
       expect(recovered.cache.cacheEntryHash).not.toBe(warm.cache.cacheEntryHash);
+    } finally {
+      clearProofDatasetCacheForTests();
+      if (previousCacheDir === undefined) {
+        delete process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR;
+      } else {
+        process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR = previousCacheDir;
+      }
+      if (previousFixtureRoot === undefined) {
+        delete process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT;
+      } else {
+        process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT = previousFixtureRoot;
+      }
+      await fs.rm(tempCacheDir, { recursive: true, force: true });
+      await fs.rm(tempFixtureRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("recovers topology-shape-changing mutations via deterministic topology regeneration reuse", async () => {
+    const previousCacheDir = process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR;
+    const previousFixtureRoot = process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT;
+    const tempCacheDir = await fs.mkdtemp(path.join(os.tmpdir(), "explain-md-proof-cache-"));
+    const fixtureSourceRoot = await resolveFixtureSourceRootForTests();
+    const tempFixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), "explain-md-proof-fixture-"));
+    process.env.EXPLAIN_MD_WEB_PROOF_CACHE_DIR = tempCacheDir;
+    process.env.EXPLAIN_MD_LEAN_FIXTURE_PROJECT_ROOT = tempFixtureRoot;
+    await copyDirectory(fixtureSourceRoot, tempFixtureRoot);
+
+    try {
+      clearProofDatasetCacheForTests();
+      await buildProofCacheReportView({
+        proofId: LEAN_FIXTURE_PROOF_ID,
+      });
+
+      clearProofDatasetCacheForTests();
+      const warm = await buildProofCacheReportView({
+        proofId: LEAN_FIXTURE_PROOF_ID,
+      });
+      expect(warm.cache.status).toBe("hit");
+
+      const corePath = path.join(tempFixtureRoot, "Verity", "Core.lean");
+      const coreBefore = await fs.readFile(corePath, "utf8");
+      const addedTheorem = "\n\ntheorem cache_shape_added : True := by\n  trivial\n";
+      await fs.writeFile(corePath, `${coreBefore.trimEnd()}${addedTheorem}`, "utf8");
+
+      clearProofDatasetCacheForTests();
+      const rebuilt = await buildProofCacheReportView({
+        proofId: LEAN_FIXTURE_PROOF_ID,
+      });
+
+      expect(rebuilt.cache.status).toBe("hit");
+      expect(rebuilt.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_miss")).toBe(true);
+      expect(
+        rebuilt.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_topology_regeneration_rebuild_hit"),
+      ).toBe(true);
+      expect(rebuilt.cache.diagnostics.some((diagnostic) => diagnostic.code === "cache_blocked_subtree_full_rebuild")).toBe(
+        false,
+      );
+      const regenerationDiagnostic = rebuilt.cache.diagnostics.find(
+        (diagnostic) => diagnostic.code === "cache_topology_regeneration_rebuild_hit",
+      );
+      expect((regenerationDiagnostic?.details?.reusableParentSummaryCount as number) >= 0).toBe(true);
+      expect((regenerationDiagnostic?.details?.reusedParentSummaryCount as number) >= 0).toBe(true);
+      expect(
+        (regenerationDiagnostic?.details?.reusedParentSummaryByGroundingCount as number) +
+          (regenerationDiagnostic?.details?.reusedParentSummaryByStatementSignatureCount as number),
+      ).toBe(regenerationDiagnostic?.details?.reusedParentSummaryCount);
+      expect((regenerationDiagnostic?.details?.generatedParentSummaryCount as number) > 0).toBe(true);
+      expect((regenerationDiagnostic?.details?.skippedAmbiguousStatementSignatureReuseCount as number) >= 0).toBe(true);
+      expect((regenerationDiagnostic?.details?.skippedUnrebasableStatementSignatureReuseCount as number) >= 0).toBe(true);
+      expect(rebuilt.cache.blockedSubtreePlan?.fullRebuildRequired).toBe(true);
+      expect(rebuilt.cache.blockedSubtreePlan?.topologyShapeChanged).toBe(true);
+      expect((rebuilt.cache.blockedSubtreePlan?.addedDeclarationIds.length ?? 0) > 0).toBe(true);
+      expect(rebuilt.cache.snapshotHash).not.toBe(warm.cache.snapshotHash);
     } finally {
       clearProofDatasetCacheForTests();
       if (previousCacheDir === undefined) {

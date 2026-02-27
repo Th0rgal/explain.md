@@ -22,6 +22,33 @@ describe("proof cache benchmark", () => {
     expect((report.scenarios.invalidation.afterChangeTopologyPlan?.blockedDeclarationCount ?? 0) > 0).toBe(true);
     expect(report.scenarios.invalidation.afterChangeTopologyPlan?.planHash).toHaveLength(64);
     expect(report.scenarios.invalidation.recoveryStatus).toBe("hit");
+
+    expect(report.scenarios.topologyShapeInvalidation.beforeChangeStatus).toBe("hit");
+    expect(report.scenarios.topologyShapeInvalidation.afterChangeStatus).toBe("hit");
+    expect(report.scenarios.topologyShapeInvalidation.afterChangeDiagnostics).toContain("cache_miss");
+    expect(report.scenarios.topologyShapeInvalidation.afterChangeDiagnostics).toContain(
+      "cache_topology_regeneration_rebuild_hit",
+    );
+    expect(report.scenarios.topologyShapeInvalidation.afterChangeRegenerationRecovery?.regenerationHash).toHaveLength(64);
+    expect(
+      (report.scenarios.topologyShapeInvalidation.afterChangeRegenerationRecovery?.reusedParentSummaryByGroundingCount ??
+        0) +
+        (report.scenarios.topologyShapeInvalidation.afterChangeRegenerationRecovery
+          ?.reusedParentSummaryByStatementSignatureCount ?? 0),
+    ).toBe(report.scenarios.topologyShapeInvalidation.afterChangeRegenerationRecovery?.reusedParentSummaryCount ?? 0);
+    expect(
+      report.scenarios.topologyShapeInvalidation.afterChangeRegenerationRecovery?.skippedAmbiguousStatementSignatureReuseCount ??
+        0,
+    ).toBeGreaterThanOrEqual(0);
+    expect(
+      report.scenarios.topologyShapeInvalidation.afterChangeRegenerationRecovery
+        ?.skippedUnrebasableStatementSignatureReuseCount ?? 0,
+    ).toBeGreaterThanOrEqual(0);
+    expect(report.scenarios.topologyShapeInvalidation.afterChangeTopologyPlan?.fullRebuildRequired).toBe(true);
+    expect(report.scenarios.topologyShapeInvalidation.afterChangeTopologyPlan?.topologyShapeChanged).toBe(true);
+    expect((report.scenarios.topologyShapeInvalidation.afterChangeTopologyPlan?.addedDeclarationCount ?? 0) > 0).toBe(true);
+    expect(report.scenarios.topologyShapeInvalidation.afterChangeTopologyPlan?.planHash).toHaveLength(64);
+    expect(report.scenarios.topologyShapeInvalidation.recoveryStatus).toBe("hit");
   });
 
   it("keeps deterministic outcome hash across reruns for identical inputs", async () => {
