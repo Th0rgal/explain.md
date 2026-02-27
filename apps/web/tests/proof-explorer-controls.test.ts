@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_CONFIG, DIFF_PANEL_SETTINGS, ENTAILMENT_MODE_OPTIONS, LANGUAGE_OPTIONS } from "../components/proof-explorer";
+import {
+  DEFAULT_CONFIG,
+  DIFF_PANEL_SETTINGS,
+  ENTAILMENT_MODE_OPTIONS,
+  LANGUAGE_OPTIONS,
+  shouldEmitDirectTreeInteractionTelemetry,
+} from "../components/proof-explorer";
 
 describe("proof explorer controls contract", () => {
   it("defaults to calibrated entailment mode", () => {
@@ -22,5 +28,14 @@ describe("proof explorer controls contract", () => {
       { value: "en", label: "English" },
       { value: "fr", label: "French" },
     ]);
+  });
+
+  it("does not double-emit direct tree telemetry for keyboard interactions", () => {
+    expect(shouldEmitDirectTreeInteractionTelemetry("keyboard")).toBe(false);
+  });
+
+  it("keeps direct tree telemetry enabled for mouse/programmatic interactions", () => {
+    expect(shouldEmitDirectTreeInteractionTelemetry("mouse")).toBe(true);
+    expect(shouldEmitDirectTreeInteractionTelemetry("programmatic")).toBe(true);
   });
 });

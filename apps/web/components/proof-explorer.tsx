@@ -70,6 +70,11 @@ export const LANGUAGE_OPTIONS: Array<{ value: "en" | "fr"; label: string }> = [
 export const TREE_RENDER_SETTINGS = resolveTreeRenderSettings(process.env);
 export const TREE_VIRTUALIZATION_SETTINGS = resolveTreeVirtualizationSettings(process.env);
 export const DIFF_PANEL_SETTINGS = resolveExplanationDiffPanelSettings(process.env);
+export type ExplorerInteractionSource = "mouse" | "keyboard" | "programmatic";
+
+export function shouldEmitDirectTreeInteractionTelemetry(source: ExplorerInteractionSource): boolean {
+  return source !== "keyboard";
+}
 
 interface ProofExplorerProps {
   proofId: string;
@@ -119,7 +124,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
       | "profile_save"
       | "profile_delete"
       | "profile_apply";
-    source: "mouse" | "keyboard" | "programmatic";
+    source: ExplorerInteractionSource;
     success?: boolean;
     durationMs?: number;
     parentTraceId?: string;
@@ -508,7 +513,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
   function updateConfig<Key extends keyof ProofConfigInput>(
     key: Key,
     value: ProofConfigInput[Key],
-    source: "mouse" | "keyboard" | "programmatic" = "programmatic",
+    source: ExplorerInteractionSource = "programmatic",
   ): void {
     setConfig((current) => ({
       ...current,
@@ -521,7 +526,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
     });
   }
 
-  function toggleExpansion(nodeId: string): void {
+  function toggleExpansion(nodeId: string, source: ExplorerInteractionSource = "mouse"): void {
     const node = nodesById[nodeId];
     setExpandedNodeIds((current) => {
       if (current.includes(nodeId)) {
@@ -530,16 +535,18 @@ export function ProofExplorer(props: ProofExplorerProps) {
       return [...current, nodeId].sort((left, right) => left.localeCompare(right));
     });
     if (node?.kind === "parent" && !childrenByParentId[nodeId]) {
-      void loadChildrenPage(nodeId);
+      void loadChildrenPage(nodeId, source);
     }
-    emitUiInteraction({
-      interaction: "tree_expand_toggle",
-      source: "mouse",
-      success: true,
-    });
+    if (shouldEmitDirectTreeInteractionTelemetry(source)) {
+      emitUiInteraction({
+        interaction: "tree_expand_toggle",
+        source,
+        success: true,
+      });
+    }
   }
 
-  async function loadChildrenPage(nodeId: string): Promise<void> {
+  async function loadChildrenPage(nodeId: string, source: ExplorerInteractionSource = "mouse"): Promise<void> {
     const startedAt = Date.now();
     const existing = childrenByParentId[nodeId];
     if (existing?.loading) {
@@ -594,7 +601,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
       });
       emitUiInteraction({
         interaction: "tree_load_more",
-        source: "mouse",
+        source,
         success: true,
         durationMs: Date.now() - startedAt,
       });
@@ -613,14 +620,14 @@ export function ProofExplorer(props: ProofExplorerProps) {
       setError(childrenError instanceof Error ? childrenError.message : String(childrenError));
       emitUiInteraction({
         interaction: "tree_load_more",
-        source: "mouse",
+        source,
         success: false,
         durationMs: Date.now() - startedAt,
       });
     }
   }
 
-  async function selectLeaf(nodeId: string): Promise<void> {
+  async function selectLeaf(nodeId: string, source: ExplorerInteractionSource = "mouse"): Promise<boolean> {
     const startedAt = Date.now();
     setSelectedLeafId(nodeId);
     try {
@@ -637,21 +644,27 @@ export function ProofExplorer(props: ProofExplorerProps) {
           }
         }
       }
-      emitUiInteraction({
-        interaction: "tree_select_leaf",
-        source: "mouse",
-        success: true,
-        durationMs: Date.now() - startedAt,
-      });
+      if (shouldEmitDirectTreeInteractionTelemetry(source)) {
+        emitUiInteraction({
+          interaction: "tree_select_leaf",
+          source,
+          success: true,
+          durationMs: Date.now() - startedAt,
+        });
+      }
+      return true;
     } catch (pathError) {
       setPathResult(null);
       setError(pathError instanceof Error ? pathError.message : String(pathError));
-      emitUiInteraction({
-        interaction: "tree_select_leaf",
-        source: "mouse",
-        success: false,
-        durationMs: Date.now() - startedAt,
-      });
+      if (shouldEmitDirectTreeInteractionTelemetry(source)) {
+        emitUiInteraction({
+          interaction: "tree_select_leaf",
+          source,
+          success: false,
+          durationMs: Date.now() - startedAt,
+        });
+      }
+      return false;
     }
   }
 
@@ -735,7 +748,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
       }
 
       if (intent.kind === "expand" && activeRow.node.kind === "parent") {
-        toggleExpansion(activeRow.node.id);
+        toggleExpansion(activeRow.node.id, "keyboard");
         setActiveTreeNodeId(activeRow.node.id);
         setRenderAnchorRowIndex(intent.index);
         setTreeA11yAnnouncement(
@@ -755,7 +768,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
       }
 
       if (intent.kind === "collapse" && activeRow.node.kind === "parent") {
-        toggleExpansion(activeRow.node.id);
+        toggleExpansion(activeRow.node.id, "keyboard");
         setActiveTreeNodeId(activeRow.node.id);
         setRenderAnchorRowIndex(intent.index);
         setTreeA11yAnnouncement(
@@ -794,7 +807,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
           childCount: childrenByParentId[activeRow.node.id]?.childIds.length ?? 0,
         }),
       );
-      toggleExpansion(activeRow.node.id);
+      toggleExpansion(activeRow.node.id, "keyboard");
       emitUiInteraction({
         interaction: "tree_keyboard",
         source: "keyboard",
@@ -809,11 +822,11 @@ export function ProofExplorer(props: ProofExplorerProps) {
         depthFromRoot: activeRow.depthFromRoot,
       }),
     );
-    await selectLeaf(activeRow.node.id);
+    const leafSelectionOk = await selectLeaf(activeRow.node.id, "keyboard");
     emitUiInteraction({
       interaction: "tree_keyboard",
       source: "keyboard",
-      success: true,
+      success: leafSelectionOk,
     });
   }
 
@@ -1174,7 +1187,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
               >
                 <div className="tree-row" style={indentStyle}>
                   {node.kind === "parent" ? (
-                    <button type="button" onClick={() => toggleExpansion(node.id)} aria-label={`Toggle ${node.id}`}>
+                    <button type="button" onClick={() => toggleExpansion(node.id, "mouse")} aria-label={`Toggle ${node.id}`}>
                       {isExpanded ? "Collapse" : "Expand"}
                     </button>
                   ) : (
@@ -1187,7 +1200,7 @@ export function ProofExplorer(props: ProofExplorerProps) {
                     onClick={() => {
                       setActiveTreeNodeId(node.id);
                       if (node.kind === "leaf") {
-                        void selectLeaf(node.id);
+                        void selectLeaf(node.id, "mouse");
                       } else {
                         setSelectedLeafId(null);
                       }

@@ -60,6 +60,7 @@ The tree panel uses incremental root/children/path queries:
   - `POST /api/observability/ui-interactions`
     - accepted `interaction` values: `config_update`, `tree_expand_toggle`, `tree_load_more`, `tree_select_leaf`, `tree_keyboard`, `verification_run`, `verification_job_select`, `profile_save`, `profile_delete`, `profile_apply`
     - emits deterministic `requestId` and `traceId`
+    - keyboard navigation/activation emits `tree_keyboard`; direct tree actions (`tree_expand_toggle`, `tree_select_leaf`) emit only on non-keyboard sources to prevent duplicate request counting and source drift
   - `GET /api/observability/ui-interaction-metrics`
     - deterministic rolling-window aggregates (`requestCount`, `successCount`, `failureCount`, `uniqueTraceCount`, parent-trace rate, per-interaction `meanDurationMs`/`p95DurationMs`) + `snapshotHash`
   - `GET /api/observability/ui-interaction-ledger`

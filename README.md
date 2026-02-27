@@ -41,6 +41,7 @@ Inductive explanation trees from Lean specifications (Verity -> Yul case study).
 - Issue #24: research dossier with machine-checkable issue-to-evidence mapping for inductive tree design decisions, pedagogy controls, and evaluation strategy.
 - Issue #24 follow-up: research dossier decisions now include pinned artifact-hash evidence checks plus pinned command-replay outcome hashes, fail-closed in CI via `eval:research-dossier`.
 - Issue #15 follow-up: deterministic tree accessibility benchmark is now fail-closed in CI via baseline hash checks (`web:eval:tree-a11y:ci`).
+- Issue #20 follow-up: Proof Explorer telemetry now avoids keyboard double-emission drift by recording keyboard actions as `tree_keyboard` and emitting direct tree action events only for non-keyboard sources.
 
 ## Local checks
 ```bash
