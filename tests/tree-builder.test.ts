@@ -594,7 +594,12 @@ describe("tree builder", () => {
 
     expect(thrown).toBeInstanceOf(TreeFrontierPartitionError);
     const partitionError = thrown as TreeFrontierPartitionError;
-    expect(partitionError.blockedGroups.length).toBeGreaterThan(0);
+    expect(partitionError.blockedGroups.length).toBeGreaterThan(1);
+    for (const blockedGroup of partitionError.blockedGroups) {
+      expect(blockedGroup.frontierLeafIds.length).toBeGreaterThan(0);
+      const sortedLeafIds = blockedGroup.frontierLeafIds.slice().sort((left, right) => left.localeCompare(right));
+      expect(blockedGroup.frontierLeafIds).toEqual(sortedLeafIds);
+    }
     expect(provider.counter.count).toBe(0);
   });
 });

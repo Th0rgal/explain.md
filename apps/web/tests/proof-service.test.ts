@@ -442,6 +442,8 @@ describe("proof service", () => {
       expect(typeof topologyDiagnostic?.details?.skippedAmbiguousChildStatementHashReuseCount).toBe("number");
       expect(typeof topologyDiagnostic?.details?.frontierPartitionLeafCount).toBe("number");
       expect(typeof topologyDiagnostic?.details?.frontierPartitionBlockedGroupCount).toBe("number");
+      expect(typeof topologyDiagnostic?.details?.frontierPartitionRecoveredLeafCount).toBe("number");
+      expect(typeof topologyDiagnostic?.details?.frontierPartitionRecoveryPassCount).toBe("number");
       expect(typeof topologyDiagnostic?.details?.frontierPartitionFallbackUsed).toBe("boolean");
       expect((topologyDiagnostic?.details?.reusedParentNodeCount as number) >= 0).toBe(true);
       expect((topologyDiagnostic?.details?.generatedParentNodeCount as number) >= 0).toBe(true);
@@ -454,6 +456,8 @@ describe("proof service", () => {
       expect((topologyDiagnostic?.details?.skippedAmbiguousChildStatementHashReuseCount as number) >= 0).toBe(true);
       expect((topologyDiagnostic?.details?.frontierPartitionLeafCount as number) >= 0).toBe(true);
       expect((topologyDiagnostic?.details?.frontierPartitionBlockedGroupCount as number) >= 0).toBe(true);
+      expect((topologyDiagnostic?.details?.frontierPartitionRecoveredLeafCount as number) >= 0).toBe(true);
+      expect((topologyDiagnostic?.details?.frontierPartitionRecoveryPassCount as number) >= 0).toBe(true);
     } finally {
       clearProofDatasetCacheForTests();
       if (previousCacheDir === undefined) {

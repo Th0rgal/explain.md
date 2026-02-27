@@ -76,6 +76,8 @@ export interface ProofCacheBenchmarkReport {
       skippedAmbiguousChildStatementHashReuseCount: number;
       frontierPartitionLeafCount: number;
       frontierPartitionBlockedGroupCount: number;
+      frontierPartitionRecoveredLeafCount: number;
+      frontierPartitionRecoveryPassCount: number;
       frontierPartitionFallbackUsed: boolean;
       recoveryStatus: "hit" | "miss";
       recoverySnapshotHash: string;
@@ -221,6 +223,14 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
         afterTopologyChange.cache.diagnostics,
         "frontierPartitionBlockedGroupCount",
       ),
+      frontierPartitionRecoveredLeafCount: readNumericTopologyDetail(
+        afterTopologyChange.cache.diagnostics,
+        "frontierPartitionRecoveredLeafCount",
+      ),
+      frontierPartitionRecoveryPassCount: readNumericTopologyDetail(
+        afterTopologyChange.cache.diagnostics,
+        "frontierPartitionRecoveryPassCount",
+      ),
       frontierPartitionFallbackUsed: readBooleanTopologyDetail(
         afterTopologyChange.cache.diagnostics,
         "frontierPartitionFallbackUsed",
@@ -263,6 +273,8 @@ export async function runProofCacheBenchmark(options: ProofCacheBenchmarkOptions
         skippedAmbiguousChildStatementHashReuseCount: topologyChange.skippedAmbiguousChildStatementHashReuseCount,
         frontierPartitionLeafCount: topologyChange.frontierPartitionLeafCount,
         frontierPartitionBlockedGroupCount: topologyChange.frontierPartitionBlockedGroupCount,
+        frontierPartitionRecoveredLeafCount: topologyChange.frontierPartitionRecoveredLeafCount,
+        frontierPartitionRecoveryPassCount: topologyChange.frontierPartitionRecoveryPassCount,
         frontierPartitionFallbackUsed: topologyChange.frontierPartitionFallbackUsed,
         recoveryStatus: topologyChange.recoveryStatus,
         snapshotChangedOnMutation: topologyChange.afterChangeSnapshotHash !== beforeTopologyChange.cache.snapshotHash,
@@ -328,7 +340,9 @@ function readNumericTopologyDetail(
     | "skippedAmbiguousChildHashReuseCount"
     | "skippedAmbiguousChildStatementHashReuseCount"
     | "frontierPartitionLeafCount"
-    | "frontierPartitionBlockedGroupCount",
+    | "frontierPartitionBlockedGroupCount"
+    | "frontierPartitionRecoveredLeafCount"
+    | "frontierPartitionRecoveryPassCount",
 ): number {
   const topologyDiagnostic = diagnostics.find((diagnostic) => diagnostic.code === "cache_incremental_topology_rebuild");
   const value = topologyDiagnostic?.details?.[key];

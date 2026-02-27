@@ -77,6 +77,7 @@ Request shape:
 - `generationFrontierLeafIds?`: optional deterministic generation frontier (leaf IDs)
   - when set, parent-summary generation is allowed only for groups whose descendant leaf frontier intersects this set
   - groups outside the frontier must reuse an existing parent summary or the build fails fast with `TreeFrontierPartitionError`
+  - `TreeFrontierPartitionError.blockedGroups[]` includes deterministic blocked group metadata (`depth`, `groupIndex`, `parentId`, `frontierLeafIds`) for caller-side frontier expansion/retry scheduling
   - this enables minimal-subtree topology recompute scheduling with explicit fallback control in callers
 
 Output includes:

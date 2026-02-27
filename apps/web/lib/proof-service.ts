@@ -1046,6 +1046,8 @@ async function buildDataset(proofId: string, config: ExplanationConfig, configHa
             skippedAmbiguousChildStatementHashReuseCount: topologyRebuild.skippedAmbiguousChildStatementHashReuseCount,
             frontierPartitionLeafCount: topologyRebuild.frontierPartitionLeafCount,
             frontierPartitionBlockedGroupCount: topologyRebuild.frontierPartitionBlockedGroupCount,
+            frontierPartitionRecoveredLeafCount: topologyRebuild.frontierPartitionRecoveredLeafCount,
+            frontierPartitionRecoveryPassCount: topologyRebuild.frontierPartitionRecoveryPassCount,
             frontierPartitionFallbackUsed: topologyRebuild.frontierPartitionFallbackUsed,
             previousParentCount: topologyRebuild.previousParentCount,
             nextParentCount: topologyRebuild.nextParentCount,
@@ -1632,6 +1634,8 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
       skippedAmbiguousChildStatementHashReuseCount: number;
       frontierPartitionLeafCount: number;
       frontierPartitionBlockedGroupCount: number;
+      frontierPartitionRecoveredLeafCount: number;
+      frontierPartitionRecoveryPassCount: number;
       frontierPartitionFallbackUsed: boolean;
       previousParentCount: number;
       nextParentCount: number;
@@ -1651,42 +1655,72 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
     .sort((left, right) => left.localeCompare(right));
   let frontierPartitionFallbackUsed = false;
   let frontierPartitionBlockedGroupCount = 0;
+  let frontierPartitionRecoveredLeafCount = 0;
+  let frontierPartitionRecoveryPassCount = 0;
 
-  let tree: ExplanationTree;
-  try {
-    tree = await buildRecursiveExplanationTree(createDeterministicSummaryProvider(), {
-      leaves: mapTheoremLeavesToTreeLeaves(input.leaves),
-      config: input.config,
-      reusableParentSummaries,
-      generationFrontierLeafIds: changedFrontierLeafIds,
-    });
-  } catch (error) {
-    if (!(error instanceof TreeFrontierPartitionError)) {
-      throw error;
+  let tree: ExplanationTree | undefined;
+  const nextLeafIdSetForRecovery = new Set(input.leaves.map((leaf) => leaf.id));
+  let frontierLeafIds = changedFrontierLeafIds.slice();
+  if (frontierLeafIds.length > 0) {
+    for (;;) {
+      try {
+        tree = await buildRecursiveExplanationTree(createDeterministicSummaryProvider(), {
+          leaves: mapTheoremLeavesToTreeLeaves(input.leaves),
+          config: input.config,
+          reusableParentSummaries,
+          generationFrontierLeafIds: frontierLeafIds,
+        });
+        break;
+      } catch (error) {
+        if (!(error instanceof TreeFrontierPartitionError)) {
+          throw error;
+        }
+        frontierPartitionBlockedGroupCount += error.blockedGroups.length;
+        const expandedFrontier = new Set(frontierLeafIds);
+        for (const blockedGroup of error.blockedGroups) {
+          for (const leafId of blockedGroup.frontierLeafIds) {
+            if (nextLeafIdSetForRecovery.has(leafId)) {
+              expandedFrontier.add(leafId);
+            }
+          }
+        }
+        const expandedFrontierLeafIds = [...expandedFrontier].sort((left, right) => left.localeCompare(right));
+        if (expandedFrontierLeafIds.length === frontierLeafIds.length) {
+          frontierPartitionFallbackUsed = true;
+          break;
+        }
+        frontierPartitionRecoveryPassCount += 1;
+        frontierPartitionRecoveredLeafCount += expandedFrontierLeafIds.length - frontierLeafIds.length;
+        frontierLeafIds = expandedFrontierLeafIds;
+      }
     }
-    frontierPartitionFallbackUsed = true;
-    frontierPartitionBlockedGroupCount = error.blockedGroups.length;
+  }
+  if (!tree) {
     tree = await buildRecursiveExplanationTree(createDeterministicSummaryProvider(), {
       leaves: mapTheoremLeavesToTreeLeaves(input.leaves),
       config: input.config,
       reusableParentSummaries,
     });
   }
-  const validation = validateExplanationTree(tree, input.config.maxChildrenPerParent);
+  if (!tree) {
+    throw new Error("Topology-aware rebuild failed to produce a tree.");
+  }
+  const builtTree = tree;
+  const validation = validateExplanationTree(builtTree, input.config.maxChildrenPerParent);
   if (!validation.ok) {
     throw new Error(
       `Topology-aware rebuild validation failed: ${validation.issues.map((issue) => issue.code).join(", ")}`,
     );
   }
 
-  const snapshot = exportTreeStorageSnapshot(tree, {
+  const snapshot = exportTreeStorageSnapshot(builtTree, {
     proofId: input.proofId,
     leaves: input.leaves,
     config: input.config,
   });
-  const reuseStats = summarizeTreeSummaryReuse(tree.groupingDiagnostics);
+  const reuseStats = summarizeTreeSummaryReuse(builtTree.groupingDiagnostics);
   return {
-    tree,
+    tree: builtTree,
     snapshot,
     snapshotHash: computeTreeStorageSnapshotHash(snapshot),
     reusedParentSummaryCount: reuseStats.reusedGroupCount,
@@ -1702,9 +1736,11 @@ async function rebuildSnapshotWithParentSummaryReuse(input: {
     skippedAmbiguousChildStatementHashReuseCount: reuseStats.skippedAmbiguousChildStatementHashGroupCount,
     frontierPartitionLeafCount: changedFrontierLeafIds.length,
     frontierPartitionBlockedGroupCount,
+    frontierPartitionRecoveredLeafCount,
+    frontierPartitionRecoveryPassCount,
     frontierPartitionFallbackUsed,
     previousParentCount: Object.values(imported.tree.nodes).filter((node) => node.kind === "parent").length,
-    nextParentCount: Object.values(tree.nodes).filter((node) => node.kind === "parent").length,
+    nextParentCount: Object.values(builtTree.nodes).filter((node) => node.kind === "parent").length,
   };
 }
 

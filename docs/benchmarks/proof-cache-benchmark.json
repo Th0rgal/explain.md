@@ -1,18 +1,18 @@
 {
   "schemaVersion": "1.0.0",
-  "generatedAt": "2026-02-27T11:24:02.140Z",
+  "generatedAt": "2026-02-27T11:29:07.554Z",
   "proofId": "lean-verity-fixture",
   "configHash": "1b1e2b9ff73897b141a9f88c8d23a3b884495340813865fd955fa8fc3eaa4da2",
   "requestHash": "e6f53e14545f9579927084e1924992e7294f331551f9b89f4e93dc25669d6696",
-  "outcomeHash": "b6c10633c528c4c6a740ab73ec00254f98615cf8b113e6f1d58f6f2b40ad26eb",
+  "outcomeHash": "f09af0bb07c88dca1fe69b38cea80536f01f7dc25d3c88938e4ae88638c757e0",
   "parameters": {
     "coldIterations": 3,
     "warmIterations": 3,
     "mutationTargetPath": "Verity/Core.lean"
   },
   "paths": {
-    "fixtureProjectRootHash": "c40c6bfabfde2b1e4af47cd1e4d3ec159577a6d2a716c81220671e4af6a1e749",
-    "cacheDirHash": "256ba8326b821dc7d64ac586699c41015e4b07ab0b10ef1178698fa671006b27"
+    "fixtureProjectRootHash": "eaabeb7ca664a8f132786107f42c05bc65ad1c55baaf51bdc6f7e9d3d4bbd101",
+    "cacheDirHash": "f508da949b5f333c4597f6850a7c2c6ea453b6e0f6ebd2b279513a285fa43315"
   },
   "scenarios": {
     "coldNoPersistentCache": {
@@ -22,10 +22,10 @@
         "miss",
         "miss"
       ],
-      "meanMs": 12.414,
-      "medianMs": 5.293,
-      "minMs": 3.712,
-      "maxMs": 28.236
+      "meanMs": 17.677,
+      "medianMs": 7.349,
+      "minMs": 6.17,
+      "maxMs": 39.513
     },
     "warmPersistentCache": {
       "iterations": 3,
@@ -34,10 +34,10 @@
         "hit",
         "hit"
       ],
-      "meanMs": 1.6,
-      "medianMs": 1.442,
-      "minMs": 1.39,
-      "maxMs": 1.968
+      "meanMs": 2.308,
+      "medianMs": 2.321,
+      "minMs": 2.202,
+      "maxMs": 2.401
     },
     "semanticNoop": {
       "beforeChangeStatus": "hit",
@@ -76,6 +76,8 @@
       "skippedAmbiguousChildStatementHashReuseCount": 0,
       "frontierPartitionLeafCount": 1,
       "frontierPartitionBlockedGroupCount": 0,
+      "frontierPartitionRecoveredLeafCount": 0,
+      "frontierPartitionRecoveryPassCount": 0,
       "frontierPartitionFallbackUsed": false,
       "recoveryStatus": "hit",
       "recoverySnapshotHash": "40996c1ce2f9bdae613d9c4e1b905a1a654a9732ec5e0e8afa6dadaf9050f454"

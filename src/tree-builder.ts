@@ -138,6 +138,7 @@ export interface FrontierGenerationBlockedGroup {
   depth: number;
   groupIndex: number;
   parentId: string;
+  frontierLeafIds: string[];
 }
 
 export class TreeFrontierPartitionError extends Error {
@@ -261,6 +262,7 @@ export async function buildRecursiveExplanationTree(
     const reusedByFrontierChildStatementHashGroupIndexes: number[] = [];
     const skippedAmbiguousChildHashGroupIndexes: number[] = [];
     const skippedAmbiguousChildStatementHashGroupIndexes: number[] = [];
+    const blockedGenerationGroups: FrontierGenerationBlockedGroup[] = [];
 
     for (let index = 0; index < groups.length; index += 1) {
       const groupNodeIds = groups[index];
@@ -424,10 +426,13 @@ export async function buildRecursiveExplanationTree(
       }
 
       if (!canGenerateSummary) {
-        throw new TreeFrontierPartitionError(
-          "Deterministic frontier-partition mode blocked summary generation outside changed frontier.",
-          [{ depth, groupIndex: index, parentId }],
-        );
+        blockedGenerationGroups.push({
+          depth,
+          groupIndex: index,
+          parentId,
+          frontierLeafIds: collectGroupFrontierLeafIds(orderedGroupNodeIds, nodes, frontierSignatureMemo),
+        });
+        continue;
       }
 
       summaryTasks.push({
@@ -439,6 +444,13 @@ export async function buildRecursiveExplanationTree(
         complexitySpread: groupingResult.diagnostics.complexitySpreadByGroup[index] ?? 0,
       });
       generatedGroupIndexes.push(index);
+    }
+
+    if (blockedGenerationGroups.length > 0) {
+      throw new TreeFrontierPartitionError(
+        "Deterministic frontier-partition mode blocked summary generation outside changed frontier.",
+        blockedGenerationGroups,
+      );
     }
 
     const summaryBatches: SummaryBatchDiagnostics[] = [];
@@ -573,6 +585,21 @@ function groupIntersectsGenerationFrontier(
     }
   }
   return false;
+}
+
+function collectGroupFrontierLeafIds(
+  orderedGroupNodeIds: string[],
+  nodes: Record<string, ExplanationTreeNode>,
+  memo: Map<string, { leafIds: string[]; leafStatements: string[] }>,
+): string[] {
+  const leafIds = new Set<string>();
+  for (const nodeId of orderedGroupNodeIds) {
+    const frontier = collectLeafFrontier(nodeId, nodes, memo);
+    for (const leafId of frontier.leafIds) {
+      leafIds.add(leafId);
+    }
+  }
+  return [...leafIds].sort((left, right) => left.localeCompare(right));
 }
 
 function buildReusableSummaryPools(
